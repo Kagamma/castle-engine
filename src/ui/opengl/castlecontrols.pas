@@ -51,6 +51,8 @@ type
   {$I castlecontrols_edit.inc}
   {$I castlecontrols_groups.inc}
   {$I castlecontrols_design.inc}
+  {$I castlecontrols_memoundo.inc}
+  {$I castlecontrols_memo.inc}
   // Add more UI controls include files here.
 
   // Keep the following (theme, uifont...) at the end, as they end the "type" clause.
@@ -92,6 +94,8 @@ uses SysUtils, Math, CastleControlsImages, CastleTextureFont_DjvSans_20,
 {$I castlecontrols_design.inc}
 {$I castlecontrols_theme.inc}
 {$I castlecontrols_clipboard.inc}
+{$I castlecontrols_memoundo.inc}
+{$I castlecontrols_memo.inc}
 {$undef read_implementation}
 
 procedure Register;
@@ -125,6 +129,7 @@ initialization
   RegisterSerializableComponent(TCastleScrollViewManual, 'Scroll View Manual');
   RegisterSerializableComponent(TCastleCheckbox, 'Checkbox');
   RegisterSerializableComponent(TCastleSwitchControl, 'Switch');
+  RegisterSerializableComponent(TCastleMemo, 'Memo');
   RegisterSerializableComponent(TCastleDesign, 'Design (Reference Another castle-user-interface File)');
 finalization
   FreeAndNil(FTheme);

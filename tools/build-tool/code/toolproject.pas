@@ -1391,7 +1391,9 @@ const
         [ERR] FMOD_JNI_GetEnv                          : JNI_OnLoad has not run, should have occurred during System.LoadLibrary.
       and reports internal error even from FMOD_System_Create. }
     if AndroidServices.HasService('fmod') then
-      Result += 'safeLoadLibrary("fmod");' + NL;
+      Result += 'safeLoadLibrary("fmod");' + NL; 
+    if AndroidServices.HasService('effekseer') then
+      Result += 'safeLoadLibrary("effekseer");' + NL;
   end;
 
   { Android ABI list like '"armeabi-v7a","arm64-v8a"' }
