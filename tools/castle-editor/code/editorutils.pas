@@ -118,7 +118,7 @@ type
     var
       Queue: TQueueItemList;
       OutputList: TOutputList;
-      OnSuccessfullyFinishedAll: TNotifyEvent;
+      OnFinished, OnSuccessfullyFinishedAll: TNotifyEvent;
 
     constructor Create;
     destructor Destroy; override;
@@ -151,8 +151,14 @@ const
 function ApiReference(const PropertyObject: TObject;
   const PropertyName, PropertyNameForLink: String): String;
 
+{ Add to given submenus (TMenuItem) items for each registered serializable
+  component. Thus it allows to construct menu to add all possible
+  TCastleTransform instances, all possible TCastleUserInterface instances etc.
+  Any ParentXxx may be nil, then relevant components are not added.
+
+  All created menu items have OnClick set to OnClickEvent. }
 procedure BuildComponentsMenu(
-  const ParentUserInterface, ParentTransform: TMenuItem;
+  const ParentUserInterface, ParentTransform, ParentBehavior, ParentNonVisual: TMenuItem;
   const OnClickEvent: TNotifyEvent);
 
 type
@@ -174,10 +180,31 @@ var
   { Code editor used to open project, when CodeEditor = ceCustom. }
   CodeEditorCommandProject: String;
 
+const
+  DefaultMuteOnRun = true;
+  DefaultEditorVolume = 1.0;
+
+var
+  { Mute/restore when you run the application. }
+  MuteOnRun: Boolean;
+  EditorVolume: Single;
+
+  { Current state on "running application" for the purpose of implementing
+    MuteOnRun. }
+  RunningApplication: Boolean;
+
+{ Update SoundEngine.Volume based on
+  global MuteOnRun, EditorVolume, RunningApplication. }
+procedure SoundEngineSetVolume;
+
+{ Update SoundEngine.Volume based on
+  global MuteOnRun, RunningApplication and parameter FakeVolume. }
+procedure SoundEngineSetVolume(const FakeVolume: Single);
+
 implementation
 
 uses SysUtils, Dialogs, Graphics, TypInfo, Generics.Defaults,
-  CastleUtils, CastleLog,
+  CastleUtils, CastleLog, CastleSoundEngine,
   CastleComponentSerialize, CastleUiControls, CastleCameras, CastleTransform,
   ToolCompilerInfo;
 
@@ -266,7 +293,13 @@ begin
 
       // create next process in queue
       if FQueuePosition < Queue.Count then
-        CreateAsyncProcess;
+        CreateAsyncProcess
+      else
+      begin
+        // no more processes (regardless if we done all, or interrupted because of some error)
+        if Assigned(OnFinished) then
+          OnFinished(Self);
+      end;
 
       if SuccessfullyFinishedAll and Assigned(OnSuccessfullyFinishedAll) then
         OnSuccessfullyFinishedAll(Self);
@@ -702,24 +735,30 @@ begin
   Result := AnsiCompareStr(Left.Caption, Right.Caption);
 end;
 
-procedure BuildComponentsMenu(const ParentUserInterface, ParentTransform: TMenuItem; const OnClickEvent: TNotifyEvent);
+procedure BuildComponentsMenu(
+  const ParentUserInterface, ParentTransform, ParentBehavior, ParentNonVisual: TMenuItem;
+  const OnClickEvent: TNotifyEvent);
 
-  function CreateMenuItemForComponent(const Owner: TComponent; const R: TRegisteredComponent): TMenuItem;
+  function CreateMenuItemForComponent(const OwnerAndParent: TMenuItem;
+    const R: TRegisteredComponent): TMenuItem;
   var
     S: String;
   begin
-    Result := TMenuItem.Create(Owner);
+    if OwnerAndParent = nil then
+      Exit; // exit if relevant ParentXxx is nil
+    Result := TMenuItem.Create(OwnerAndParent);
     S := R.Caption + ' (' + R.ComponentClass.ClassName + ')';
     if R.IsDeprecated then
       S := '(Deprecated) ' + S;
     Result.Caption := S;
     Result.Tag := PtrInt(Pointer(R));
+    Result.OnClick := OnClickEvent;
+    OwnerAndParent.Add(Result);
   end;
 
 type
   TRegisteredComponentComparer = specialize TComparer<TRegisteredComponent>;
 var
-  MenuItem: TMenuItem;
   R: TRegisteredComponent;
 begin
   { While RegisteredComponents is documented as "read-only",
@@ -732,23 +771,24 @@ begin
   for R in RegisteredComponents do
     if not R.IsDeprecated then
     begin
-      if R.ComponentClass.InheritsFrom(TCastleUserInterface) and
-         not R.ComponentClass.InheritsFrom(TCastleNavigation) then
+      if R.ComponentClass.InheritsFrom(TCastleNavigation) then
       begin
-        MenuItem := CreateMenuItemForComponent(ParentUserInterface, R);
-        MenuItem.OnClick := OnClickEvent;
-        ParentUserInterface.Add(MenuItem);
+        { do nothing, TCastleNavigation are in viewport "hamburger" menu }
       end else
+      if R.ComponentClass.InheritsFrom(TCastleUserInterface) then
+        CreateMenuItemForComponent(ParentUserInterface, R)
+      else
       if R.ComponentClass.InheritsFrom(TCastleTransform) then
-      begin
-        MenuItem := CreateMenuItemForComponent(ParentTransform, R);
-        MenuItem.OnClick := OnClickEvent;
-        ParentTransform.Add(MenuItem);
-      end;
+        CreateMenuItemForComponent(ParentTransform, R)
+      else
+      if R.ComponentClass.InheritsFrom(TCastleBehavior) then
+        CreateMenuItemForComponent(ParentBehavior, R)
+      else
+        CreateMenuItemForComponent(ParentNonVisual, R);
     end;
 
   (*
-  Don't show deprecated -- at least in initial CGE release, keep the menu clean.
+  Don't show deprecated for now, keep the menu clean.
 
   { add separators from deprecated }
   MenuItem := TMenuItem.Create(ParentUserInterface);
@@ -763,21 +803,22 @@ begin
   for R in RegisteredComponents do
     if R.IsDeprecated then
     begin
-      if R.ComponentClass.InheritsFrom(TCastleUserInterface) and
-         not R.ComponentClass.InheritsFrom(TCastleNavigation) then
-      begin
-        MenuItem := CreateMenuItemForComponent(ParentUserInterface, R);
-        MenuItem.OnClick := OnClickEvent;
-        ParentUserInterface.Add(MenuItem);
-      end else
-      if R.ComponentClass.InheritsFrom(TCastleTransform) then
-      begin
-        MenuItem := CreateMenuItemForComponent(ParentTransform, R);
-        MenuItem.OnClick := OnClickEvent;
-        ParentTransform.Add(MenuItem);
-      end;
+      ... same code as above
     end;
   *)
+end;
+
+procedure SoundEngineSetVolume;
+begin
+  SoundEngineSetVolume(EditorVolume);
+end;
+
+procedure SoundEngineSetVolume(const FakeVolume: Single);
+begin
+  if MuteOnRun and RunningApplication then
+    SoundEngine.Volume := 0
+  else
+    SoundEngine.Volume := FakeVolume;
 end;
 
 end.

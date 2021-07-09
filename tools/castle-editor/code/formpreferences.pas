@@ -1,5 +1,5 @@
 {
-  Copyright 2019-2019 Michalis Kamburelis.
+  Copyright 2019-2021 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -20,19 +20,22 @@ interface
 
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, EditBtn, StdCtrls,
-  ExtCtrls, ButtonPanel;
+  ExtCtrls, ButtonPanel, ComCtrls;
 
 type
   TPreferencesForm = class(TForm)
     ButtonPanel1: TButtonPanel;
+    CheckBoxMuteOnRun: TCheckBox;
     DirectoryEditFpc: TDirectoryEdit;
     DirectoryEditLazarus: TDirectoryEdit;
     EditCodeEditorCommand: TFileNameEdit;
     EditCodeEditorCommandProject: TFileNameEdit;
+    LabelVolume: TLabel;
     LabelCodeEditorCommandInstructions: TLabel;
     LabelCodeEditorCommand: TLabel;
     LabelCodeEditorCommandProjectInstructions: TLabel;
     LabelCodeEditorHeader: TLabel;
+    LabelSound: TLabel;
     LabelFpc: TLabel;
     LabelFpcAutoDetectedCaption: TLabel;
     LabelInstructions0: TLabel;
@@ -46,9 +49,11 @@ type
     LabelLazarusWebsite: TLabel;
     ListPages: TListBox;
     PanelCodeEditor: TPanel;
+    PanelSound: TPanel;
     PanelFpcLazarusConfig: TPanel;
     RadioCodeEditorLazarus: TRadioButton;
     RadioCodeEditorCustom: TRadioButton;
+    TrackVolume: TTrackBar;
     procedure DirectoryEditFpcChange(Sender: TObject);
     procedure DirectoryEditLazarusChange(Sender: TObject);
     procedure EditCodeEditorCommandAcceptFileName(Sender: TObject;
@@ -61,6 +66,7 @@ type
     procedure LabelLazarusWebsiteClick(Sender: TObject);
     procedure ListPagesClick(Sender: TObject);
     procedure RadioCodeEditorAnyChange(Sender: TObject);
+    procedure TrackVolumeChange(Sender: TObject);
   private
     OriginalFpcCustomPath, OriginalLazarusCustomPath: String;
     procedure UpdateAutoDetectedLabels;
@@ -74,7 +80,7 @@ var
 
 implementation
 
-uses CastleOpenDocument, CastleUtils, CastleLog,
+uses CastleOpenDocument, CastleUtils, CastleLog, CastleSoundEngine,
   ToolCompilerInfo, ToolFpcVersion,
   EditorUtils;
 
@@ -96,6 +102,14 @@ procedure TPreferencesForm.RadioCodeEditorAnyChange(Sender: TObject);
 begin
   EditCodeEditorCommand.Enabled := RadioCodeEditorCustom.Checked;
   EditCodeEditorCommandProject.Enabled := RadioCodeEditorCustom.Checked;
+end;
+
+procedure TPreferencesForm.TrackVolumeChange(Sender: TObject);
+begin
+  { While the volume will be adjusted in TPreferencesForm.FormClose too,
+    along with EditorVolume, but it is natural to also modify the audible
+    volume immediately. }
+  SoundEngineSetVolume(TrackVolume.Position / TrackVolume.Max);
 end;
 
 procedure TPreferencesForm.UpdateAutoDetectedLabels;
@@ -158,6 +172,10 @@ begin
   end;
   EditCodeEditorCommand.Text := CodeEditorCommand;
   EditCodeEditorCommandProject.Text := CodeEditorCommandProject;
+
+  // sound tab
+  TrackVolume.Position := Round(EditorVolume * TrackVolume.Max);
+  CheckBoxMuteOnRun.Checked := MuteOnRun;
 end;
 
 procedure TPreferencesForm.FormClose(Sender: TObject;
@@ -166,12 +184,18 @@ begin
   if ModalResult = mrOK then
   begin
     { copy UI -> global variables }
+
+    // code editor tab
     if RadioCodeEditorCustom.Checked then
       CodeEditor := ceCustom
     else
       CodeEditor := ceLazarus;
     CodeEditorCommand := EditCodeEditorCommand.Text;
     CodeEditorCommandProject := EditCodeEditorCommandProject.Text;
+
+    // sound tab
+    EditorVolume := TrackVolume.Position / TrackVolume.Max;
+    MuteOnRun := CheckBoxMuteOnRun.Checked;
   end else
   begin
     { XxxCustomPath are special.
@@ -182,6 +206,11 @@ begin
     FpcCustomPath := OriginalFpcCustomPath;
     LazarusCustomPath := OriginalLazarusCustomPath;
   end;
+
+  { Set SoundEngine.Volume regardless if we accepted
+    (so MuteOnRun, EditorVolume changed) or not (so they are unchanged)
+    to revert any immediate changes to volume in TPreferencesForm.TrackVolumeChange. }
+  SoundEngineSetVolume;
 end;
 
 procedure TPreferencesForm.FormCloseQuery(Sender: TObject; var CanClose: boolean);
@@ -231,10 +260,12 @@ begin
   case ListPages.ItemIndex of
     0: SelectedPage := PanelFpcLazarusConfig;
     1: SelectedPage := PanelCodeEditor;
+    2: SelectedPage := PanelSound;
     else raise Exception.CreateFmt('Unexpected ListPages.ItemIndex %d', [ListPages.ItemIndex]);
   end;
   SetEnabledVisible(PanelFpcLazarusConfig, PanelFpcLazarusConfig = SelectedPage);
   SetEnabledVisible(PanelCodeEditor      , PanelCodeEditor       = SelectedPage);
+  SetEnabledVisible(PanelSound           , PanelSound            = SelectedPage);
 end;
 
 end.

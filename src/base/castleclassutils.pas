@@ -383,8 +383,64 @@ type
   TTranslatePropertyEvent = procedure (const Sender: TCastleComponent;
     const PropertyName: String; var PropertyValue: String) of object;
 
-  { Component with small CGE extensions. }
+  { Call methods of this class within @link(TCastleComponent.CustomSerialization) override.
+    Do not create instances of this class yourself. }
+  TSerializationProcess = class abstract
+  public
+    type
+      TListEnumerateEvent = procedure (const Proc: TGetChildProc) of object;
+      TListAddEvent = procedure (const NewComponent: TComponent) of object;
+      TListClearEvent = procedure of object;
+
+    { Make a list serialized and deserialized.
+      The definition of list is very flexible here, you provide callbacks
+      that should, when called,
+
+      @unorderedList(
+        @itemSpacing compact
+        @item enumerate (call other callback for each item),
+        @item clear all items (that were possibly added by previous deserialization),
+        @item add new item.
+      )
+
+      Do not worry about conflict between Key and some published property.
+      We internally "mangle" keys to avoid it. }
+    procedure ReadWrite(const Key: String;
+      const ListEnumerate: TListEnumerateEvent; const ListAdd: TListAddEvent;
+      const ListClear: TListClearEvent); virtual; abstract;
+  end;
+
+  { Component with various CGE extensions: can be a parent of other non-visual components
+    (to display them in CGE editor and serialize them to files), can be translated.
+
+    Note that everywhere in CGE (in particular in editor and when serializing) we handle
+    a standard Pascal TComponent. There's no need to derive all your components from
+    TCastleComponent. Use TCastleComponent only if you want to benefit from some extra
+    features in this class. }
   TCastleComponent = class(TComponent)
+  strict private
+    type
+      { Used by @link(TCastleComponent.NonVisualComponentsEnumerate).
+        Do not use this type explicitly, it should only be used by for..in
+        construction like "for C in MyComponent.NonVisualComponentsEnumerate do ...".
+        @exclude }
+      TNonVisualComponentsEnumerator = record
+      strict private
+        FParent: TCastleComponent;
+        FPosition: Integer;
+        function GetCurrent: TComponent; inline;
+      public
+        constructor Create(const AParent: TCastleComponent);
+        function MoveNext: Boolean; inline;
+        property Current: TComponent read GetCurrent;
+        function GetEnumerator: TNonVisualComponentsEnumerator;
+      end;
+    var
+      FNonVisualComponents: TComponentList;
+    function GetNonVisualComponents(const Index: Integer): TComponent;
+    procedure SerializeNonVisualComponentsEnumerate(const Proc: TGetChildProc);
+    procedure SerializeNonVisualComponentsAdd(const C: TComponent);
+    procedure SerializeNonVisualComponentsClear;
   protected
     function GetInternalText: String; virtual;
     procedure SetInternalText(const Value: String); virtual;
@@ -415,14 +471,17 @@ type
       @exclude }
     InternalOriginalName: String;
 
+    destructor Destroy; override;
+
+    { Override this method to call various methods of SerializationProcess,
+      which in turn allows to serialize/deserialize things that are not published.
+      This allows to serialize/deserialize with more freedom, e.g. to serialize/deserialize
+      some private field. }
+    procedure CustomSerialization(const SerializationProcess: TSerializationProcess); virtual;
+
     { Main text property, that is synchronized with Name initially.
       @exclude }
     property InternalText: String read GetInternalText write SetInternalText;
-
-    { Deserialization will use this to add components that were previously
-      returned by GetChildren method.
-      @exclude }
-    procedure InternalAddChild(const C: TComponent); virtual;
 
     { Add csLoading. Used when deserializing.
       @exclude }
@@ -463,6 +522,32 @@ type
       and do not publish it.
     }
     procedure SetTransient;
+
+    { Use this component as a container to easily reference any other TComponent instances,
+      and add given TComponent to it.
+      This is useful to group non-visual components, esp. in CGE editor.
+
+      @seealso NonVisualComponentsCount
+      @seealso NonVisualComponent
+      @seealso NonVisualComponentsEnumerate }
+    procedure AddNonVisualComponent(const NonVisualComponent: TComponent);
+
+    { Count of components added by AddNonVisualComponent.
+
+      @seealso AddNonVisualComponent
+      @seealso NonVisualComponentsCount
+      @seealso NonVisualComponentsEnumerate }
+    function NonVisualComponentsCount: Integer;
+
+    { Components added by AddNonVisualComponent. }
+    property NonVisualComponents [const Index: Integer]: TComponent read GetNonVisualComponents;
+
+    { You can enumerate current non-visual components using loop like
+      @code(for C in MyComponent.NonVisualComponentsEnumerate do ...).
+      Do not call this method in other contexts, it is only useful for "for..in" construction.
+
+      @seealso AddNonVisualComponent }
+    function NonVisualComponentsEnumerate: TNonVisualComponentsEnumerator;
   end;
 
 { Enumerate all properties that are possible to translate in this component
@@ -1349,7 +1434,42 @@ begin
     Component := ComponentClass.Create(Owner);
 end;
 
+{ TCastleComponent.TNonVisualComponentsEnumerator ------------------------------------------------- }
+
+{ TNonVisualComponentsEnumerator is optimized to be a record, following
+  https://hallvards.blogspot.com/2007/10/more-fun-with-enumerators.html }
+
+constructor TCastleComponent.TNonVisualComponentsEnumerator.Create(const AParent: TCastleComponent);
+begin
+//  inherited Create;
+  FParent := AParent;
+  FPosition := -1;
+end;
+
+function TCastleComponent.TNonVisualComponentsEnumerator.GetCurrent: TComponent;
+begin
+  Result := FParent.NonVisualComponents[FPosition];
+end;
+
+function TCastleComponent.TNonVisualComponentsEnumerator.MoveNext: Boolean;
+begin
+  Inc(FPosition);
+  Result := FPosition < FParent.NonVisualComponentsCount;
+end;
+
+function TCastleComponent.TNonVisualComponentsEnumerator.GetEnumerator: TNonVisualComponentsEnumerator;
+begin
+  // Returns itself. See https://wiki.freepascal.org/for-in_loop
+  Result := Self;
+end;
+
 { TCastleComponent ----------------------------------------------------------- }
+
+destructor TCastleComponent.Destroy;
+begin
+  FreeAndNil(FNonVisualComponents);
+  inherited;
+end;
 
 procedure TCastleComponent.SetTransient;
 begin
@@ -1363,12 +1483,6 @@ end;
 
 procedure TCastleComponent.SetInternalText(const Value: String);
 begin
-end;
-
-procedure TCastleComponent.InternalAddChild(const C: TComponent);
-begin
-  raise Exception.CreateFmt('Component of class %s is not expected to have children',
-    [ClassName]);
 end;
 
 procedure TCastleComponent.InternalLoading;
@@ -1426,6 +1540,69 @@ procedure TCastleComponent.TranslateProperties(
   const TranslatePropertyEvent: TTranslatePropertyEvent);
 begin
   // nothing to do in this class
+end;
+
+function TCastleComponent.NonVisualComponentsCount: Integer;
+begin
+  if FNonVisualComponents = nil then
+    Result := 0
+  else
+    Result := FNonVisualComponents.Count;
+end;
+
+function TCastleComponent.GetNonVisualComponents(const Index: Integer): TComponent;
+begin
+  { showing ERangeError will be nicer
+    than showing EAccessViolation when accessing FNonVisualComponents below }
+  if FNonVisualComponents = nil then
+    System.Error(reRangeError);
+  Result := FNonVisualComponents[Index];
+end;
+
+procedure TCastleComponent.AddNonVisualComponent(const NonVisualComponent: TComponent);
+begin
+  // create FNonVisualComponents on-demand, to not burden typical TCastleComponent that doesn't need this
+  if FNonVisualComponents = nil then
+    FNonVisualComponents := TComponentList.Create(false);
+  FNonVisualComponents.Add(NonVisualComponent);
+end;
+
+function TCastleComponent.NonVisualComponentsEnumerate: TNonVisualComponentsEnumerator;
+begin
+  Result := TNonVisualComponentsEnumerator.Create(Self);
+end;
+
+procedure TCastleComponent.CustomSerialization(const SerializationProcess: TSerializationProcess);
+begin
+  SerializationProcess.ReadWrite('NonVisualComponents',
+    @SerializeNonVisualComponentsEnumerate,
+    @SerializeNonVisualComponentsAdd,
+    @SerializeNonVisualComponentsClear);
+end;
+
+procedure TCastleComponent.SerializeNonVisualComponentsEnumerate(const Proc: TGetChildProc);
+var
+  I: Integer;
+begin
+  if FNonVisualComponents <> nil then
+    for I := 0 to FNonVisualComponents.Count - 1 do
+      if FNonVisualComponents[I].ComponentStyle * [csSubComponent, csTransient] = [] then
+        Proc(FNonVisualComponents[I]);
+end;
+
+procedure TCastleComponent.SerializeNonVisualComponentsAdd(const C: TComponent);
+begin
+  AddNonVisualComponent(C);
+end;
+
+procedure TCastleComponent.SerializeNonVisualComponentsClear;
+var
+  I: Integer;
+begin
+  if FNonVisualComponents <> nil then
+    for I := FNonVisualComponents.Count - 1 downto 0 do // downto, as list may shrink during loop
+      if FNonVisualComponents[I].ComponentStyle * [csSubComponent, csTransient] = [] then
+        FNonVisualComponents[I].Free; // will remove itself from Behaviors list
 end;
 
 { TComponent routines -------------------------------------------------------- }

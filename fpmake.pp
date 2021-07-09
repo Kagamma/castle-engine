@@ -119,7 +119,6 @@ begin
 
     P.SourcePath.Add('src' + PathDelim + 'audio');
     P.Targets.AddUnit('castleinternalsoundfile.pas');
-    P.Targets.AddUnit('castlesoundallocator.pas');
     P.Targets.AddUnit('castlesoundengine.pas');
     P.Targets.AddUnit('castlesoundbase.pas');
     P.Targets.AddUnit('castleinternalabstractsoundbackend.pas');
@@ -142,6 +141,7 @@ begin
     P.Targets.AddUnit('castleinternalvorbisfile.pas');
 
     P.SourcePath.Add('src' + PathDelim + 'deprecated_units');
+    P.Targets.AddUnit('castlefontfamily.pas');
     P.Targets.AddUnit('castle2dscenemanager.pas');
     P.Targets.AddUnit('castle3d.pas');
     P.Targets.AddUnit('castlegenericlists.pas');
@@ -154,10 +154,13 @@ begin
     P.Targets.AddUnit('castlerenderer.pas');
     P.Targets.AddUnit('castlerendererbasetypes.pas');
     P.Targets.AddUnit('castlescenemanager.pas');
+    P.Targets.AddUnit('castlesoundallocator.pas');
     P.Targets.AddUnit('castleshaders.pas');
     P.Targets.AddUnit('castlewarnings.pas');
     P.Targets.AddUnit('castlewindowmodes.pas');
     P.Targets.AddUnit('castlewindowtouch.pas');
+    if Defaults.OS in AllWindowsOSes then
+      P.Targets.AddUnit('castlewindowsfonts.pas');
 
     P.SourcePath.Add('src' + PathDelim + 'base');
     P.Targets.AddUnit('castleapplicationproperties.pas');
@@ -252,15 +255,10 @@ begin
     P.Targets.AddUnit('castletexturefont_djvserifbi_20.pas');
     P.Targets.AddUnit('castletexturefont_djvserifi_20.pas');
     P.Targets.AddUnit('castletexturefontdata.pas');
-    if Defaults.OS in AllWindowsOSes then
-    begin
-      P.SourcePath.Add('src' + PathDelim + 'fonts' + PathDelim + 'windows');
-      P.Targets.AddUnit('castlewindowsfonts.pas');
-    end;
 
     P.SourcePath.Add('src' + PathDelim + 'fonts' + PathDelim + 'opengl');
     P.Targets.AddUnit('castlefonts.pas');
-    P.Targets.AddUnit('castlefontfamily.pas');
+    P.Targets.AddUnit('castleinternalrichtext.pas');
 
     P.SourcePath.Add('src' + PathDelim + 'game');
     P.Targets.AddUnit('castlebehaviors.pas');

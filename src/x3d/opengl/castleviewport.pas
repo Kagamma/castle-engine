@@ -3261,7 +3261,7 @@ begin
       '- (if you use CastleWindow) Application.OnInitialize' + NL +
       '- (if you use CastleWindow) TCastleWindowBase.OnOpen' + NL +
       '- (if you use LCL CastleControl) TCastleControlBase.OnOpen' + NL +
-      '- TCasleUserInterface.GLContextOpen'
+      '- TCastleUserInterface.GLContextOpen'
     );
 
   if GLFeatures.ShadowVolumesPossible and
@@ -3450,7 +3450,9 @@ end;
 
 procedure TCastleViewport.PointingDevicePressFailed;
 begin
-  SoundEngine.Sound(stPlayerInteractFailed);
+  {$warnings off} // just to keep deprecated working
+  SoundEngine.Play(stPlayerInteractFailed);
+  {$warnings on}
 end;
 
 function TCastleViewport.PointingDeviceRelease: Boolean;
@@ -3586,7 +3588,7 @@ begin
       Inc(Items.InternalVisibleNonGeometryStateId);
 
     Camera.GetView(Pos, Dir, Up);
-    SoundEngine.UpdateListener(Pos, Dir, Up);
+    SoundEngine.InternalUpdateListener(Pos, Dir, Up);
   end;
 
   if Assigned(OnCameraChanged) then

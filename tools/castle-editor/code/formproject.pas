@@ -32,6 +32,10 @@ type
   TProjectForm = class(TForm)
     ActionNewSpriteSheet: TAction;
     ActionList: TActionList;
+    MenuItemDesignNewNonVisualCustomRoot: TMenuItem;
+    MenuItemDesignNewNonVisual: TMenuItem;
+    MenuItemDesignAddNonVisual: TMenuItem;
+    MenuItemDesignAddBehavior: TMenuItem;
     MenuItemNewCastleSpriteSheet: TMenuItem;
     MenuItemData: TMenuItem;
     MenuItemNewSpriteSheet: TMenuItem;
@@ -168,6 +172,7 @@ type
     procedure FormHide(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure ListOutputClick(Sender: TObject);
+    procedure MenuItemDesignNewNonVisualClick(Sender: TObject);
     procedure MenuItemNewDirectoryClick(Sender: TObject);
     procedure MenuItemRenameClick(Sender: TObject);
     procedure MenuItemShellTreeRefreshClick(Sender: TObject);
@@ -238,6 +243,7 @@ type
       SplitterBetweenViewFile: TSplitter;
     procedure BuildToolCall(const Commands: array of String;
       const ExitOnSuccess: Boolean = false);
+    procedure BuildToolCallFinished(Sender: TObject);
     procedure MenuItemAddComponentClick(Sender: TObject);
     procedure MenuItemDesignNewCustomRootClick(Sender: TObject);
     procedure OpenPascal(const FileName: String);
@@ -293,6 +299,7 @@ uses TypInfo, LCLType,
   CastleTransform, CastleControls, CastleDownload, CastleApplicationProperties,
   CastleLog, CastleComponentSerialize, CastleSceneCore, CastleStringUtils,
   CastleFonts, X3DLoad, CastleFileFilters, CastleImages, CastleSoundEngine,
+  CastleClassUtils,
   FormAbout, FormChooseProject, FormPreferences, FormSpriteSheetEditor,
   ToolCompilerInfo, ToolCommonUtils;
 
@@ -351,7 +358,10 @@ begin
     SaveDesignDialog.DefaultExt := 'castle-transform';
     SaveDesignDialog.Filter := 'CGE Transform Design (*.castle-transform)|*.castle-transform|All Files|*';
   end else
-    raise EInternalError.Create('DesignRoot does not descend from TCastleUserInterface or TCastleTransform');
+  begin
+    SaveDesignDialog.DefaultExt := 'castle-component';
+    SaveDesignDialog.Filter := 'CGE Component Design (*.castle-component)|*.castle-component|All Files|*';
+  end;
 
   SaveDesignDialog.Url := Design.DesignUrl;
   if SaveDesignDialog.Execute then
@@ -473,12 +483,7 @@ begin
       begin
         Exe := FindExeLazarusIDE;
 
-        { Prefer to open using LPR (ProjectStandaloneSource) instead of LPI
-          (ProjectLazarus), see OpenPascal comments for reasons. }
-
-        if ProjectStandaloneSource <> '' then
-          RunCommandNoWait(CreateTemporaryDir, Exe, [ProjectStandaloneSource])
-        else
+        { Open through LPI to change the project. }
         if ProjectLazarus <> '' then
           RunCommandNoWait(CreateTemporaryDir, Exe, [ProjectLazarus])
         else
@@ -694,8 +699,18 @@ procedure TProjectForm.FormCreate(Sender: TObject);
 
 begin
   OutputList := TOutputList.Create(ListOutput);
-  BuildComponentsMenu(MenuItemDesignNewUserInterfaceCustomRoot, MenuItemDesignNewTransformCustomRoot, @MenuItemDesignNewCustomRootClick);
-  BuildComponentsMenu(MenuItemDesignAddUserInterface, MenuItemDesignAddTransform, @MenuItemAddComponentClick);
+  BuildComponentsMenu(
+    MenuItemDesignNewUserInterfaceCustomRoot,
+    MenuItemDesignNewTransformCustomRoot,
+    nil,
+    MenuItemDesignNewNonVisualCustomRoot,
+    @MenuItemDesignNewCustomRootClick);
+  BuildComponentsMenu(
+    MenuItemDesignAddUserInterface,
+    MenuItemDesignAddTransform,
+    MenuItemDesignAddBehavior,
+    MenuItemDesignAddNonVisual,
+    @MenuItemAddComponentClick);
   CreateShellViews;
   ApplicationProperties.OnWarning.Add(@WarningNotification);
 end;
@@ -779,6 +794,12 @@ end;
 procedure TProjectForm.ListOutputClick(Sender: TObject);
 begin
   // TODO: just to source code line in case of error message here
+end;
+
+procedure TProjectForm.MenuItemDesignNewNonVisualClick(Sender: TObject);
+begin
+  if ProposeSaveDesign then
+    NewDesign(TCastleComponent, nil);
 end;
 
 procedure TProjectForm.MenuItemNewDirectoryClick(Sender: TObject);
@@ -898,7 +919,11 @@ end;
 procedure TProjectForm.MenuItemCompileRunClick(Sender: TObject);
 begin
   if ProposeSaveDesign then
+  begin
+    RunningApplication := true;
+    SoundEngineSetVolume;
     BuildToolCall(['compile', 'run']);
+  end;
 end;
 
 procedure TProjectForm.MenuItemCopyComponentClick(Sender: TObject);
@@ -962,6 +987,7 @@ begin
 
   UpdateUndo(nil);
   UpdateRenameItem(nil);
+  UpdateFormCaption(nil);
 
   if (Design <> nil) and UserConfig.GetValue('ProjectForm_DesignSaved', false) then
   begin
@@ -1048,7 +1074,11 @@ end;
 procedure TProjectForm.MenuItemOnlyRunClick(Sender: TObject);
 begin
   if ProposeSaveDesign then
+  begin
+    RunningApplication := true;
+    SoundEngineSetVolume;
     BuildToolCall(['run']);
+  end;
 end;
 
 procedure TProjectForm.MenuItemOpenDesignClick(Sender: TObject);
@@ -1287,28 +1317,28 @@ begin
 
         { It would be cleaner to use LPI file, like this:
 
-        // pass both project name, and particular filename, to open file within this project.
-        RunCommandNoWait(CreateTemporaryDir, Exe, [ProjectLazarus, FileName]);
+            if ProjectLazarus <> '' then
+              // pass both project name, and particular filename, to open file within this project.
+              RunCommandNoWait(CreateTemporaryDir, Exe, [ProjectLazarus, FileName])
+            else
+            begin
+              WritelnWarning('Lazarus project not defined (neither "standalone_source" nor "lazarus_project" were specified in CastleEngineManifest.xml), the file will be opened without changing Lazarus project.');
+              RunCommandNoWait(CreateTemporaryDir, Exe, [FileName]);
+            end;
 
-          But it doesn't work nicely: Lazarus asks for confirmation whether to open
-          LPI as XML file, or a project.
-          Instead opening LPR works better, i.e. just switches project (if necessary)
-          to new one.
+          But it doesn't work: Lazarus opens LPI as a regular XML file then,
+          without changing the project.
+          There seems to be no solution:
+          - using LPR doesn't change the project either
+          - using *only* LPI asks to change the project, even if it's already the current project
+            (so we cannot fix the problem by executing it twice in a row, once with LPI once with PAS
+            -- it would show dialog box every time)
         }
 
-        //if ProjectLazarus = '' then
-        if ProjectStandaloneSource = '' then // see comments below, we use ProjectStandaloneSource
-        begin
-          //WritelnWarning('Lazarus project not defined (neither "standalone_source" nor "lazarus_project" were specified in CastleEngineManifest.xml), the file will be opened without changing Lazarus project.');
-          WritelnWarning('Lazarus project not defined ("standalone_source" was not specified in CastleEngineManifest.xml), the file will be opened without changing Lazarus project.');
-        end;
+        // if ProjectStandaloneSource = '' then // see comments below, we use ProjectStandaloneSource
+        //   WritelnWarning('Lazarus project not defined ("standalone_source" was not specified in CastleEngineManifest.xml), the file will be opened without changing Lazarus project.');
 
-        if (ProjectStandaloneSource = '') or
-           SameFileName(ProjectStandaloneSource, FileName) then
-          RunCommandNoWait(CreateTemporaryDir, Exe, [FileName])
-        else
-          { pass both project name, and particular filename, to open file within this project. }
-          RunCommandNoWait(CreateTemporaryDir, Exe, [ProjectStandaloneSource, FileName]);
+        RunCommandNoWait(CreateTemporaryDir, Exe, [FileName]);
       end;
     else raise EInternalError.Create('CodeEditor?');
   end;
@@ -1381,7 +1411,8 @@ begin
     end;
 
     if AnsiSameText(Ext, '.castle-user-interface') or
-       AnsiSameText(Ext, '.castle-transform') then
+       AnsiSameText(Ext, '.castle-transform') or
+       AnsiSameText(Ext, '.castle-component') then
     begin
       if ProposeSaveDesign then
         OpenDesign(SelectedURL);
@@ -1450,9 +1481,18 @@ begin
   end;
 
   if ExitOnSuccess then
-    RunningProcess.OnSuccessfullyFinishedAll := @MenuItemQuitClick;
+    RunningProcess.OnSuccessfullyFinishedAll := @MenuItemQuitClick
+  else
+    RunningProcess.OnFinished := @BuildToolCallFinished;
 
   RunningProcess.Start;
+end;
+
+procedure TProjectForm.BuildToolCallFinished(Sender: TObject);
+begin
+  // bring back volume, in case MuteOnRun
+  RunningApplication := false;
+  SoundEngineSetVolume;
 end;
 
 procedure TProjectForm.MenuItemAddComponentClick(Sender: TObject);
@@ -1572,7 +1612,7 @@ begin
   MenuItemModeDebug.Checked := true;
 
   DesignExistenceChanged;
-  UpdateFormCaption(nil); // make form Caption reflect project name
+  UpdateFormCaption(nil); // make form Caption reflect project name (although this is now done also by DesignExistenceChanged)
 end;
 
 procedure TProjectForm.RefreshFiles(const RefreshNecessary: TRefreshFiles);
