@@ -224,6 +224,7 @@ var
         as Lazarus packages could not compile otherwise. }
 
       AddEnginePath('base');
+      AddEnginePath('common_includes');
       AddEnginePath('base/android');
       AddEnginePath('base/windows');
       AddEnginePath('base/unix');
@@ -234,6 +235,7 @@ var
       AddEnginePath('window/gtk');
       AddEnginePath('window/windows');
       AddEnginePath('window/unix');
+      AddEnginePath('window/deprecated_units');
       AddEnginePath('images');
       AddEnginePath('images/opengl');
       AddEnginePath('images/opengl/glsl/generated-pascal');
