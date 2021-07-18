@@ -718,19 +718,28 @@ begin
     Exit;
   end;
 
+  { for Android, the packaging process is special }
+  if (Target = targetAndroid) or (OS = Android) then
+  begin
+    if (PackageFormat = pfDefault) then
+      PackageFormatFinal := pfAndroidApk
+    else
+      PackageFormatFinal := PackageFormat;
+    if not (PackageFormatFinal in [pfAndroidApk, pfAndroidAppBundle]) then
+      raise Exception.Create('Trying to package for Android, but package format is ' +
+        PackageFormatToString(PackageFormatFinal) + '. Expected: ' +
+        PackageFormatToString(pfAndroidApk) + ' or ' +
+        PackageFormatToString(pfAndroidAppBundle) + '.');
+    if Target = targetAndroid then
+      AndroidCPUS := DetectAndroidCPUS
+    else
+      AndroidCPUS := [CPU];
+    PackageAndroid(Self, OS, AndroidCPUS, Mode, PackageFormatFinal);
+    Exit;
+  end;
+
   if PackageFormat = pfDefault then
   begin
-    { for Android, the packaging process is special }
-    if (Target = targetAndroid) or (OS = Android) then
-    begin
-      if Target = targetAndroid then
-        AndroidCPUS := DetectAndroidCPUS
-      else
-        AndroidCPUS := [CPU];
-      PackageAndroid(Self, OS, AndroidCPUS, Mode);
-      Exit;
-    end;
-
     { for Nintendo Switch, the packaging process is special }
     if Target = targetNintendoSwitch then
     begin
@@ -1849,6 +1858,8 @@ begin
   if { avoid Android packages }
      SameFileName(FileName, Name + '-debug.apk') or
      SameFileName(FileName, Name + '-release.apk') or
+     SameFileName(FileName, Name + '-debug.aab') or
+     SameFileName(FileName, Name + '-release.aab') or
      { do not pack AndroidAntProperties.txt with private stuff }
      SameFileName(FileName, 'AndroidAntProperties.txt') then
     Exit(true);
