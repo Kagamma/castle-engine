@@ -2374,7 +2374,10 @@ begin
   { When lighting is off (for either shaders or fixed-function),
     there is no point in setting up lights. }
   if NewBaseLights = nil then
+  begin
     NewBaseLights := TLightInstancesList.Create;
+    NewBaseLights.Capacity := 128;
+  end;
   if Lighting then
   begin
     if RenderOptions.SceneLights then
@@ -2407,7 +2410,7 @@ begin
   end;
 
   RenderShapeFog(Shape, Shader, Lighting);
-  NewBaseLights.Clear;
+  NewBaseLights.Count := 0;
 end;
 
 procedure TGLRenderer.RenderShapeFog(const Shape: TX3DRendererShape;
