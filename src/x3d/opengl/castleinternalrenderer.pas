@@ -2390,7 +2390,7 @@ begin
     for I := 0 to BaseLights.Count - 1 do
     begin
       LightInstance := BaseLights.Ptr(I);
-      if LightInstance^.Node is TPointLightNode then
+      if (LightInstance^.Node is TPointLightNode) or (LightInstance^.Node is TSpotLightNode) then
       begin
         ShapePos := Vector3(MS[3,0], MS[3,1], MS[3,2]);
         ML := TMatrix4.Identity;
