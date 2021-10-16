@@ -2349,11 +2349,19 @@ begin
   RenderShapeLights(Shape, Shader, Lighting);
 end;
 
+var
+  NewBaseLights: TLightInstancesList = nil;
+
 procedure TGLRenderer.RenderShapeLights(const Shape: TX3DRendererShape;
   const Shader: TShader;
   const Lighting: boolean);
 var
   SceneLights: TLightInstancesList;
+  LightInstance: PLightInstance;
+  MS, ML: TMatrix4;
+  ShapePos, LightPos: TVector3;
+  ShapeRadius, Distance: Single;
+  I: Integer;
 begin
   { This is done after setting Shader.MaterialSpecularColor
     by RenderMaterialsBegin,
@@ -2365,6 +2373,8 @@ begin
 
   { When lighting is off (for either shaders or fixed-function),
     there is no point in setting up lights. }
+  if NewBaseLights = nil then
+    NewBaseLights := TLightInstancesList.Create;
   if Lighting then
   begin
     if RenderOptions.SceneLights then
@@ -2372,10 +2382,32 @@ begin
     else
       SceneLights := nil;
 
-    LightsRenderer.Render(BaseLights, SceneLights, Shader);
+    { Hackjob to exclude lights that are out-of-range }
+    MS := Shape.ModelView;
+    for I := 0 to BaseLights.Count - 1 do
+    begin
+      LightInstance := BaseLights.Ptr(I);
+      if LightInstance^.Node is TPointLightNode then
+      begin
+        ShapePos := Vector3(MS[3,0], MS[3,1], MS[3,2]);
+        ML := TMatrix4.Identity;
+        ML[3,0] := TPointLightNode(LightInstance^.Node).Location[0];
+        ML[3,1] := TPointLightNode(LightInstance^.Node).Location[1];
+        ML[3,2] := TPointLightNode(LightInstance^.Node).Location[2];
+        ML := Shader.RenderingCamera.Matrix * ML;
+        LightPos := Vector3(ML[3,0], ML[3,1], ML[3,2]);
+        ShapeRadius := Shape.LocalBoundingBox.Radius;
+        Distance := Abs((ShapePos - LightPos).Length - ShapeRadius);
+        if Distance <= TPointLightNode(LightInstance^.Node).Radius then
+          NewBaseLights.Add(LightInstance^);
+      end else
+        NewBaseLights.Add(LightInstance^);
+    end;
+    LightsRenderer.Render(NewBaseLights, SceneLights, Shader);
   end;
 
   RenderShapeFog(Shape, Shader, Lighting);
+  NewBaseLights.Clear;
 end;
 
 procedure TGLRenderer.RenderShapeFog(const Shape: TX3DRendererShape;
