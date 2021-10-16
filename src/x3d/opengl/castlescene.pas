@@ -1299,6 +1299,7 @@ var
 begin
   inherited;
 
+  NewBaseLightsMVPositionUpdated := False;
   if InternalDirty <> 0 then Exit;
 
   if not ApplicationProperties.IsGLContextOpen then

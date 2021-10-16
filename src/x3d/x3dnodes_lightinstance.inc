@@ -32,6 +32,7 @@
     { Light location, already transformed by the @link(Transform) matrix.
       For TAbstractPositionalLightNode lights. }
     Location: TVector3;
+    LocationViewSpace: TVector3;
 
     { Light direction, already normalized and
       transformed by the @link(Transform) matrix.

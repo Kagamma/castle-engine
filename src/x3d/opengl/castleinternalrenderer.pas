@@ -738,6 +738,9 @@ var
     Meaningful only if you initialized log (see CastleLog unit) by InitializeLog first. }
   LogRenderer: boolean = false;
 
+  NewBaseLights: TLightInstancesList = nil;
+  NewBaseLightsMVPositionUpdated: Boolean = False;
+
 {$undef read_interface}
 
 implementation
@@ -2177,9 +2180,32 @@ procedure TGLRenderer.RenderBegin(
     end;
   end;
 
+var
+  SceneLights: TLightInstancesList;
+  LightInstance: PLightInstance;
+  ML: TMatrix4;
+  I: Integer;
+
 begin
   BaseLights := ABaseLights;
   RenderingCamera := ARenderingCamera;
+  if not NewBaseLightsMVPositionUpdated then
+  begin
+    for I := 0 to BaseLights.Count - 1 do
+    begin
+      LightInstance := BaseLights.Ptr(I);
+      if (LightInstance^.Node is TPointLightNode) or (LightInstance^.Node is TSpotLightNode) then
+      begin
+        ML := TMatrix4.Identity;
+        ML[3,0] := TAbstractPositionalLightNode(LightInstance^.Node).Location[0];
+        ML[3,1] := TAbstractPositionalLightNode(LightInstance^.Node).Location[1];
+        ML[3,2] := TAbstractPositionalLightNode(LightInstance^.Node).Location[2];
+        ML := RenderingCamera.Matrix * ML;
+        LightInstance^.LocationViewSpace := Vector3(ML[3,0], ML[3,1], ML[3,2]);
+      end;
+    end;
+    NewBaseLightsMVPositionUpdated := True;
+  end;
   Assert(RenderingCamera <> nil);
 
   Pass := GetTotalPass(
@@ -2349,17 +2375,14 @@ begin
   RenderShapeLights(Shape, Shader, Lighting);
 end;
 
-var
-  NewBaseLights: TLightInstancesList = nil;
-
 procedure TGLRenderer.RenderShapeLights(const Shape: TX3DRendererShape;
   const Shader: TShader;
   const Lighting: boolean);
 var
   SceneLights: TLightInstancesList;
   LightInstance: PLightInstance;
-  MS, ML: TMatrix4;
-  ShapePos, LightPos: TVector3;
+  MS: TMatrix4;
+  ShapePos: TVector3;
   ShapeRadius, Distance: Single;
   I: Integer;
 begin
@@ -2373,11 +2396,6 @@ begin
 
   { When lighting is off (for either shaders or fixed-function),
     there is no point in setting up lights. }
-  if NewBaseLights = nil then
-  begin
-    NewBaseLights := TLightInstancesList.Create;
-    NewBaseLights.Capacity := 128;
-  end;
   if Lighting then
   begin
     if RenderOptions.SceneLights then
@@ -2393,18 +2411,14 @@ begin
       if (LightInstance^.Node is TPointLightNode) or (LightInstance^.Node is TSpotLightNode) then
       begin
         ShapePos := Vector3(MS[3,0], MS[3,1], MS[3,2]);
-        ML := TMatrix4.Identity;
-        ML[3,0] := TAbstractPositionalLightNode(LightInstance^.Node).Location[0];
-        ML[3,1] := TAbstractPositionalLightNode(LightInstance^.Node).Location[1];
-        ML[3,2] := TAbstractPositionalLightNode(LightInstance^.Node).Location[2];
-        ML := Shader.RenderingCamera.Matrix * ML;
-        LightPos := Vector3(ML[3,0], ML[3,1], ML[3,2]);
         ShapeRadius := Shape.LocalBoundingBox.Radius;
-        Distance := Abs((ShapePos - LightPos).Length - ShapeRadius);
+        Distance := Abs((ShapePos - LightInstance^.LocationViewSpace).Length - ShapeRadius);
         if Distance <= TAbstractPositionalLightNode(LightInstance^.Node).Radius then
           NewBaseLights.Add(LightInstance^);
       end else
+      begin
         NewBaseLights.Add(LightInstance^);
+      end;
     end;
     LightsRenderer.Render(NewBaseLights, SceneLights, Shader);
   end;
@@ -3556,4 +3570,10 @@ end;
 initialization
   TCastleRenderOptions.DefaultMinificationFilter := minLinearMipmapLinear;
   TCastleRenderOptions.DefaultMagnificationFilter := magLinear;
+  NewBaseLights := TLightInstancesList.Create;
+  NewBaseLights.Capacity := 128;
+
+finalization
+  NewBaseLights.Free;
+
 end.
