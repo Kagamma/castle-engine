@@ -2394,14 +2394,14 @@ begin
       begin
         ShapePos := Vector3(MS[3,0], MS[3,1], MS[3,2]);
         ML := TMatrix4.Identity;
-        ML[3,0] := TPointLightNode(LightInstance^.Node).Location[0];
-        ML[3,1] := TPointLightNode(LightInstance^.Node).Location[1];
-        ML[3,2] := TPointLightNode(LightInstance^.Node).Location[2];
+        ML[3,0] := TAbstractPositionalLightNode(LightInstance^.Node).Location[0];
+        ML[3,1] := TAbstractPositionalLightNode(LightInstance^.Node).Location[1];
+        ML[3,2] := TAbstractPositionalLightNode(LightInstance^.Node).Location[2];
         ML := Shader.RenderingCamera.Matrix * ML;
         LightPos := Vector3(ML[3,0], ML[3,1], ML[3,2]);
         ShapeRadius := Shape.LocalBoundingBox.Radius;
         Distance := Abs((ShapePos - LightPos).Length - ShapeRadius);
-        if Distance <= TPointLightNode(LightInstance^.Node).Radius then
+        if Distance <= TAbstractPositionalLightNode(LightInstance^.Node).Radius then
           NewBaseLights.Add(LightInstance^);
       end else
         NewBaseLights.Add(LightInstance^);
