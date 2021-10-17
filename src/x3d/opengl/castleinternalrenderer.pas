@@ -2189,7 +2189,7 @@ var
 begin
   BaseLights := ABaseLights;
   RenderingCamera := ARenderingCamera;
-  if not NewBaseLightsMVPositionUpdated then
+  if (not NewBaseLightsMVPositionUpdated) and (BaseLights.Count > 0) then
   begin
     for I := 0 to BaseLights.Count - 1 do
     begin

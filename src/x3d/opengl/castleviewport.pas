@@ -1289,7 +1289,7 @@ implementation
 // TODO: This unit temporarily uses RenderingCamera singleton,
 // to keep it working for backward compatibility.
 uses DOM, Math,
-  CastleRenderingCamera,
+  CastleRenderingCamera, CastleInternalRenderer,
   CastleGLUtils, CastleProgress, CastleLog, CastleStringUtils,
   CastleSoundEngine, CastleGLVersion, CastleShapes, CastleTextureImages,
   CastleInternalSettings, CastleXMLUtils, CastleURIUtils,
@@ -3337,6 +3337,7 @@ begin
     PrepareResources;
     PrepareResourcesDone := true;
   end;
+  NewBaseLightsMVPositionUpdated := False;
 end;
 
 function TCastleViewport.GetMousePosition(out MousePosition: TVector2): Boolean;
