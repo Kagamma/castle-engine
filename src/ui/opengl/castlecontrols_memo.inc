@@ -612,7 +612,7 @@ procedure TCastleMemo.PreferredSize(var PreferredWidth, PreferredHeight: Single)
 var
   PaddingVerticalScaled, HeightScaled: Single;
   US: Single;
-  FrameCorners: TVector4;
+  FrameCorners: TBorder;
 begin
   inherited;
 
@@ -624,10 +624,10 @@ begin
     HeightScaled := Font.RowHeight + 2 * PaddingVerticalScaled;
     if Frame then
     begin
-      FrameCorners := Theme.Corners[tiMemo];
+      FrameCorners := Theme.ImagesPersistent[tiMemo].ProtectedSides;
       HeightScaled := HeightScaled +
-        US * FrameCorners[0] +
-        US * FrameCorners[2];
+        US * FrameCorners.Top +
+        US * FrameCorners.Bottom;
     end;
 
     PreferredHeight := HeightScaled;
@@ -639,10 +639,10 @@ begin
     HeightScaled := Height;
     if Frame then
     begin
-      FrameCorners := Theme.Corners[tiMemo];
+      FrameCorners := Theme.ImagesPersistent[tiMemo].ProtectedSides;
       HeightScaled := HeightScaled +
-        US * FrameCorners[0] +
-        US * FrameCorners[2];
+        US * FrameCorners.Top +
+        US * FrameCorners.Bottom;
     end;
 
     PreferredHeight := HeightScaled;
@@ -1036,7 +1036,7 @@ var
   SR, MainSelectRect,AddSelectRec,AddLastSelectRec: TFloatRectangle;
   PaddingHorizontalScaled, PaddingVerticalScaled: Single;
   US,  TextBottom: Single;
-  FrameCorners: TVector4;
+  FrameCorners: TBorder;
   CaretVisible: boolean;
   S, S1: string;
   Color: TCastleColor;
@@ -1052,12 +1052,12 @@ begin
   if Frame then
   begin
     { make smaller RectInside, by frame size }
-    FrameCorners := Theme.Corners[tiMemo];
+    FrameCorners := Theme.ImagesPersistent[tiMemo].ProtectedSides;
     RectInside := RectInside.
-      RemoveTop(FrameCorners[0] * US).
-      RemoveRight(FrameCorners[1] * US).
-      RemoveBottom(FrameCorners[2] * US).
-      RemoveLeft(FrameCorners[3] * US);
+      RemoveTop(FrameCorners.Top * US).
+      RemoveRight(FrameCorners.Right * US).
+      RemoveBottom(FrameCorners.Bottom * US).
+      RemoveLeft(FrameCorners.Left * US);
 
     { draw frame }
     Theme.Draw(SR, tiMemo, US);

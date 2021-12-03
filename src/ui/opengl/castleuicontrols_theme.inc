@@ -59,7 +59,7 @@
     tiLoading,
 
     { TCastleEdit frame. }
-    tiEdit
+    tiEdit, tiMemo
   );
 
   { Theme for user interface controls.
