@@ -36,12 +36,6 @@
     function DeepCopy(OriginalNode: TX3DNode): TX3DNode;
   end;
 
-  { X3D node interface.
-    All other interfaces for X3D nodes descend from this. }
-  IX3DNode = interface
-  ['{5BD33327-430F-47EC-9241-AD899F072BF8}']
-  end;
-
   { Simple component system inside TX3DNode.
     See @link(TX3DNode.Functionality). }
   TNodeFunctionality = class
@@ -52,10 +46,16 @@
     property Parent: TX3DNode read FParent;
   end;
 
+  TNodeFunctionalityList = {$ifdef CASTLE_OBJFPC}specialize{$endif} TObjectList<TNodeFunctionality>;
+
   TNodeFunctionalityClass = class of TNodeFunctionality;
 
   { X3D node. Every VRML/X3D node class descends from this. }
-  TX3DNode = class(TX3DFileItem, IX3DNode)
+  TX3DNode = class(TX3DFileItem)
+  strict private
+    FFunctionalityList: TNodeFunctionalityList; //< may be @nil if none
+    FTransformFunctionality: TTransformFunctionality;
+    FTimeFunctionality: TTimeDependentFunctionality;
   private
     FX3DName: string;
     FBaseUrl: string;
@@ -125,6 +125,10 @@
       like TX3DPrototypeNode or TX3DUnknownNode, that simply cannot
       be created by default constructor. They need to override this. }
     function DeepCopyCreate(CopyState: TX3DNodeDeepCopyState): TX3DNode; virtual;
+
+    { Register new TNodeFunctionality instance to be returned by @link(Functionality),
+      and automatically freed when this node is freed. }
+    procedure AddFunctionality(const F: TNodeFunctionality);
   protected
     { Are VRML 1.0 children allowed.
       This condition is checked in VRML1ChildAdd, so it's strictly
@@ -259,7 +263,7 @@
     function ParseNodeBodyElement(Lexer: TX3DLexer; Reader: TX3DReaderNames;
       const APositionInParent: Integer): boolean; virtual;
 
-    { Called at the end of parsing (in both classic and XML encoding). }
+    { Called at the end of parsing this node (including children) in any encoding. }
     procedure ParseAfter(Reader: TX3DReaderNames); virtual;
 
     procedure CreateNode; virtual;
@@ -1039,8 +1043,7 @@
     { What happens when transformation of the node changes.
       This is internally used by TCastleSceneCore when Transform (or similar)
       node affecting this node changes. It's an important optimization,
-      to avoid large if clause with many "is" and "Supports" checks
-      that would be quite slow.
+      to avoid large if clause with many "is" checks that would be quite slow.
       @exclude }
     function TransformationChange: TNodeTransformationChange; virtual;
 
@@ -1094,9 +1097,17 @@
       (like a fog, transformation, material...), or @nil if none.
       This implements a simple component system inside TX3DNode,
       allowing some functionality to have common interface and implementation
-      across a few nodes that are not otherwise related in the ancestor hierarchy. }
+      across a few nodes that are not otherwise related in the ancestor hierarchy.
+
+      Descendants should register TNodeFunctionality classes using
+      @link(AddFunctionality). }
     function Functionality(
-      const FunctionalityClass: TNodeFunctionalityClass): TNodeFunctionality; virtual;
+      const FunctionalityClass: TNodeFunctionalityClass): TNodeFunctionality;
+
+    { Fast shortcut to Functionality(TTransformFunctionality). }
+    property TransformFunctionality: TTransformFunctionality read FTransformFunctionality;
+    { Fast shortcut to Functionality(TTimeDependentFunctionality). }
+    property TimeFunctionality: TTimeDependentFunctionality read FTimeFunctionality;
   end;
 
   TX3DNodeList = class({$ifdef CASTLE_OBJFPC}specialize{$endif} TObjectList<TX3DNode>)
@@ -1221,6 +1232,7 @@ begin
   FreeAndNil(FExports);
   FreeAndNil(FFieldsSFNode);
   FreeAndNil(FFieldsMFNode);
+  FreeAndNil(FFunctionalityList);
 
   { First free Fields and Events, before freeing InterfaceDeclarations.
     Reason: Fields and Events may contains references to InterfaceDeclarations
@@ -3282,6 +3294,11 @@ end;
 function TX3DNode.NiceName: string;
 begin
   Result := X3DType;
+
+  // show ClassName *and* X3DType e.g. for Group:TX3DRootNode
+  if not SameText(ClassName, 'T' + X3DType + 'Node') then
+    Result := SAppendPart(Result, ':', ClassName);
+
   if X3DName <> '' then
     Result := Result + '(' + X3DName + ')';
 end;
@@ -3476,10 +3493,39 @@ begin
   Result := nil;
 end;
 
+procedure TX3DNode.AddFunctionality(const F: TNodeFunctionality);
+
+  procedure RefreshShortcuts;
+  begin
+    FTransformFunctionality := Functionality(TTransformFunctionality) as TTransformFunctionality;
+    FTimeFunctionality := Functionality(TTimeDependentFunctionality) as TTimeDependentFunctionality;
+  end;
+
+begin
+  Assert(not ( (F is TTransformFunctionality) and (FTransformFunctionality <> nil) ), 'Do not add 2 functionalities implementing TTransformFunctionality');
+  Assert(not ( (F is TTimeDependentFunctionality) and (FTimeFunctionality <> nil) ), 'Do not add 2 functionalities implementing TTimeDependentFunctionality');
+
+  if FFunctionalityList = nil then
+    FFunctionalityList := TNodeFunctionalityList.Create(true);
+  FFunctionalityList.Add(F);
+
+  RefreshShortcuts;
+end;
+
 function TX3DNode.Functionality(
   const FunctionalityClass: TNodeFunctionalityClass): TNodeFunctionality;
+var
+  I: Integer;
+  MaybeResult: TNodeFunctionality;
 begin
   Result := nil;
+  if FFunctionalityList <> nil then
+    for I := 0 to FFunctionalityList.Count - 1 do
+    begin
+      MaybeResult := FFunctionalityList[I];
+      if MaybeResult.InheritsFrom(FunctionalityClass) then
+        Exit(MaybeResult);
+    end;
 end;
 
 procedure TX3DNode.GroupBeforeTraverse(const State: TX3DGraphTraverseState; var WasPointingDeviceSensor: Boolean);

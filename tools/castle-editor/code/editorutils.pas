@@ -20,7 +20,7 @@ interface
 
 uses Classes, Types, Controls, StdCtrls, Process, Menus, Generics.Collections,
   CastleStringUtils,
-  ToolArchitectures;
+  ToolArchitectures, ToolManifest;
 
 type
   TMenuItemHelper = class helper for TMenuItem
@@ -169,14 +169,20 @@ procedure BuildComponentsMenu(
 
 type
   TCodeEditor = (
+    { Autodetect one of the below (Lazarus, Delphi, VS Code) and use hardcoded logic suitable for it. }
+    ceAutodetect,
     { Use hardcoded logic suitable for Lazarus. }
     ceLazarus,
+    { Use hardcoded logic suitable for Delphi. }
+    ceDelphi,
+    { Use hardcoded logic suitable for Visual Studio Code. }
+    ceVSCode,
     { Use custom commands from CodeEditor, CodeEditorProject. }
     ceCustom
   );
 
 const
-  DefaultCodeEditor = ceLazarus;
+  DefaultCodeEditor = ceAutodetect;
 
 var
   { Which code editor to use. Current user preference. }
@@ -185,6 +191,10 @@ var
   CodeEditorCommand: String;
   { Code editor used to open project, when CodeEditor = ceCustom. }
   CodeEditorCommandProject: String;
+
+var
+  { Which compiler to use (passed to build tool). Current user preference. }
+  Compiler: TCompiler;
 
 const
   DefaultMuteOnRun = true;
@@ -207,10 +217,17 @@ procedure SoundEngineSetVolume;
   global MuteOnRun, RunningApplication and parameter FakeVolume. }
 procedure SoundEngineSetVolume(const FakeVolume: Single);
 
+{ Find Visual Studio Code, or '' if cannot find. }
+function FindExeVSCode(const ExceptionWhenMissing: Boolean): String;
+
+{ Return auto-detected code editor, never ceAutodetect.
+  @eaises Exception if cannot autodetect, no IDE available. }
+function AutodetectCodeEditor: TCodeEditor;
+
 implementation
 
 uses SysUtils, Dialogs, Graphics, TypInfo, Generics.Defaults,
-  CastleUtils, CastleLog, CastleSoundEngine,
+  CastleUtils, CastleLog, CastleSoundEngine, CastleFilesUtils,
   CastleComponentSerialize, CastleUiControls, CastleCameras, CastleTransform,
   ToolCompilerInfo;
 
@@ -869,6 +886,64 @@ begin
     SoundEngine.Volume := 0
   else
     SoundEngine.Volume := FakeVolume;
+end;
+
+function FindExeVSCode(const ExceptionWhenMissing: Boolean): String;
+begin
+  Result := FindExe('code');
+
+  (*Failed workaround to fix handling filenames/dirnames with spaces inside
+    as "code" arguments.
+    I hoped that calling code.exe directly, instead of code.cmd, will help
+    -- it doesn't.
+
+  {$ifdef MSWINDOWS}
+  if (Result <> '') and (SameText(ExtractFileName(Result), 'code.cmd')) then
+    Result := ParentPath(ExtractFileDir(Result), false) + 'code.exe';
+  {$endif}
+  *)
+
+  if (Result = '') and ExceptionWhenMissing then
+    raise EExecutableNotFound.Create('Cannot find Visual Studio Code. Make sure it is installed, and available on environment variable $PATH (there should be an option to set this up during VS Code installlation).');
+end;
+
+(*Another failed workaround to fix handling filenames/dirnames with spaces inside
+  as "code" arguments.
+  I hoped that using URL, with spaces encoded as %20, will solve the problem.
+  Unfortunately VS code doesn't seem to understand %20 in URLs at all.
+
+function PathToVSCode(const Path: String): String;
+var
+  URI: TURI;
+begin
+  Result := Path;
+  Assert(IsPathAbsolute(Path));
+
+  FillByte(URI, SizeOf(URI), 0);
+  URI.Protocol := 'vscode';
+  { We want // between vscode and "file", see
+    https://code.visualstudio.com/docs/editor/command-line }
+  URI.HasAuthority := true;
+  URI.Document := 'file' +
+    {$ifdef MSWINDOWS} '/' + SReplaceChars(Path, '\', '/')
+    {$else} Path
+    {$endif};
+  Result := EncodeURI(URI);
+end;
+*)
+
+function AutodetectCodeEditor: TCodeEditor;
+begin
+  if FindExeLazarusIDE(false) <> '' then
+    Result := ceLazarus
+  else
+  if FindDelphiPath(false) <> '' then
+    Result := ceDelphi
+  else
+  if FindExeVSCode(false) <> '' then
+    Result := ceVSCode
+  else
+    raise Exception.Create('Cannot auto-detect IDE. Install one of the supported IDEs: Lazarus, Delphi or Visual Studio Code.');
 end;
 
 end.
