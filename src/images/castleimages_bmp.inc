@@ -15,25 +15,25 @@
 
 type
   TBitmapFileHeader = packed record
-    bfType: array[0..1]of char;
-    bfSize: LongWord;
+    bfType: array[0..1]of AnsiChar;
+    bfSize: UInt32;
     bfReserved1: Word;
     bfReserved2: Word;
-    bfOffBits: LongWord;
+    bfOffBits: UInt32;
   end;
 
   TBitmapInfoHeader = packed record
-    biSize: LongWord;
-    biWidth: Longint;
-    biHeight: Longint;
+    biSize: UInt32;
+    biWidth: Int32;
+    biHeight: Int32;
     biPlanes: Word;
     biBitCount: Word;
-    biCompression: LongWord;
-    biSizeImage: LongWord;
-    biXPelsPerMeter: Longint;
-    biYPelsPerMeter: Longint;
-    biClrUsed: LongWord;
-    biClrImportant: LongWord;
+    biCompression: UInt32;
+    biSizeImage: UInt32;
+    biXPelsPerMeter: Int32;
+    biYPelsPerMeter: Int32;
+    biClrUsed: UInt32;
+    biClrImportant: UInt32;
   end;
 
   TRGBQuad = packed record blue, green, red, reserved : byte end;
@@ -109,9 +109,11 @@ var fhead: TBitmapFileHeader;
         PutPaletteColor(bmprow^[bmpi], rgbrow^[bmpi]);
     16:for rgbi := 0 to ihead.biWidth-1 do
        begin
+        {$ifndef FPC}{$POINTERMATH ON}{$endif}
         rgbrow^[rgbi].Data[0] := FiveBitsToByte((PWord(bmprow)[rgbi] and $7C00) shr 10);
         rgbrow^[rgbi].Data[1] := FiveBitsToByte((PWord(bmprow)[rgbi] and $03E0) shr 5);
         rgbrow^[rgbi].Data[2] := FiveBitsToByte(PWord(bmprow)[rgbi] and $001F);
+        {$ifndef FPC}{$POINTERMATH OFF}{$endif}
        end;
     24:{ bmprow in 24 bit bitmap have almost the same format as rgbrow  -
          we only have to swap bgr to rgb }
@@ -141,10 +143,10 @@ var fhead: TBitmapFileHeader;
     Result := CastleImages.ClassAllowed(ImageClass, AllowedImageClasses);
   end;
 
-var i: integer;
-    rowsGoingUp: boolean;
-    rowdata: PByteArray;
-    NewResult: TEncodedImage;
+var
+  i: integer;
+  rowsGoingUp: boolean;
+  rowdata: PByteArray;
 begin
  try
   { read and check headers }
@@ -220,27 +222,12 @@ begin
 
      { We always allocate Result most matching to file format
        (biBitCount = 32 is RGBA, else RGB).
-
-       We also check AllowedImageClasses, to see if they can
-       be satisfied. There's no point in loading if we would later
-       be unable to convert to requested class.
-
-       However, actual conversion to satisfy AllowedImageClasses
-       (adding/stripping alpha channel) will be done (if needed) later,
-       after reading BMP file. }
+       We let LoadEncodedImage to later fix the output type
+       to satisfy AllowedImageClasses. }
      if biBitCount = 32 then
-     begin
-       if ClassAllowed(TRGBAlphaImage) or
-          ClassAllowed(TRGBImage) then
-         Result := TRGBAlphaImage.Create(biWidth, biHeight) else
-         raise EUnableToLoadImage.CreateFmt('Cannot load BMP file (with alpha channel) to %s', [LoadEncodedImageParams(AllowedImageClasses)]);
-     end else
-     begin
-       if ClassAllowed(TRGBImage) or
-          ClassAllowed(TRGBAlphaImage) then
-         Result := TRGBImage.Create(biWidth, biHeight) else
-         raise EUnableToLoadImage.CreateFmt('Cannot load BMP file (without alpha channel) to %s', [LoadEncodedImageParams(AllowedImageClasses)]);
-     end;
+       Result := TRGBAlphaImage.Create(biWidth, biHeight)
+     else
+       Result := TRGBImage.Create(biWidth, biHeight);
 
      for i := 0 to biHeight - 1 do
      begin
@@ -249,23 +236,6 @@ begin
       with Stream do Position := Position + DivRoundUp(rowLength, 4)*4 - rowLength;
       if rowsGoingUp then rownum := i else rownum := biHeight-i-1;
       WriteRow(TCastleImage(Result).RowPtr(rownum), rowData);
-     end;
-
-     { Convert now to satisfy AllowedImageClasses }
-     if (Result is TRGBAlphaImage) and
-        (not ClassAllowed(TRGBAlphaImage)) then
-     begin
-       NewResult := TRGBAlphaImage(Result).ToRGBImage;
-       FreeAndNil(Result);
-       Result := NewResult;
-     end;
-
-     if (Result is TRGBImage) and
-        (not ClassAllowed(TRGBImage)) then
-     begin
-       NewResult := TRGBImage(Result).ToRGBAlphaImage;
-       FreeAndNil(Result);
-       Result := NewResult;
      end;
 
     finally

@@ -1,5 +1,5 @@
 {
-  Copyright 2001-2018 Michalis Kamburelis.
+  Copyright 2001-2021 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -26,6 +26,8 @@
   /usr/share/pixmaps/EasyTAG_icon.xpm
   /usr/share/pixmaps/flamerobin.xpm
 }
+
+{$ifdef FPC} // FpImage is only available in FPC
 
 { TInternalCastleFpImage ----------------------------------------------------- }
 
@@ -139,6 +141,26 @@ begin
     end;
 end;
 
+procedure TRGBFloatImage.FromFpImage(const FPImage: TInternalCastleFpImage);
+var
+  X, Y: Integer;
+  ResultPixels: PVector3;
+  Color: TFPCompactImgRGBA8BitValue;
+begin
+  SetSize(FPImage.Width, FPImage.Height);
+
+  ResultPixels := Pixels;
+  for Y := FPImage.Height - 1 downto 0 do
+    for X := 0 to FPImage.Width - 1 do
+    begin
+      Color := FPImage.Colors8Bit[X, Y];
+      ResultPixels^.Data[0] := Color.R / 255;
+      ResultPixels^.Data[1] := Color.G / 255;
+      ResultPixels^.Data[2] := Color.B / 255;
+      Inc(ResultPixels);
+    end;
+end;
+
 { Convert TInternalCastleFpImage to the best TCastleImage class. }
 function CreateFromFpImage(const FPImage: TInternalCastleFpImage;
   const AllowedImageClasses: array of TEncodedImageClass): TEncodedImage;
@@ -223,7 +245,7 @@ begin
   except FreeAndNil(Result); raise end;
 end;
 
-function LoadFpImage(const Stream: TStream;
+function Load_FpImage(const Stream: TStream;
   const AllowedImageClasses: array of TEncodedImageClass;
   const Reader: TFPCustomImageReader;
   const ImageFormat: TImageFormat): TEncodedImage;
@@ -377,7 +399,32 @@ begin
   except FreeAndNil(Result); raise end;
 end;
 
-procedure SaveFpImage(Img: TEncodedImage; Stream: TStream;
+function TRGBFloatImage.ToFpImage: TInternalCastleFpImage;
+var
+  X, Y: Integer;
+  P: PVector3;
+  Col: TVector3Byte;
+  Color: TFPCompactImgRGBA8BitValue;
+begin
+  Result := CreateFpImage(Width, Height);
+  try
+    Result.UsePalette := false;
+    P := Pixels;
+    for Y := Result.Height - 1 downto 0 do
+      for X := 0 to Result.Width - 1 do
+      begin
+        Col := Vector3Byte(P^);
+        Color.R := Col.Data[0];
+        Color.G := Col.Data[1];
+        Color.B := Col.Data[2];
+        Color.A := $FF;
+        Result.Colors8Bit[X, Y] := Color;
+        Inc(P);
+      end;
+  except FreeAndNil(Result); raise end;
+end;
+
+procedure Save_FpImage(Img: TEncodedImage; Stream: TStream;
   Writer: TFPCustomImageWriter);
 var
   FPImage: TInternalCastleFpImage;
@@ -394,87 +441,6 @@ begin
     FreeAndNil(FPImage);
     FreeAndNil(Writer);
   end;
-end;
-
-{ LoadXxx, SaveXxx for particular image file formats ------------------------- }
-
-function LoadGIF(const Stream: TStream;
-  const AllowedImageClasses: array of TEncodedImageClass): TEncodedImage;
-begin
-  Result := LoadFpImage(Stream, AllowedImageClasses, TFPReaderGIF.Create, ifGIF);
-end;
-
-function LoadTGA(const Stream: TStream;
-  const AllowedImageClasses: array of TEncodedImageClass): TEncodedImage;
-begin
-  Result := LoadFpImage(Stream, AllowedImageClasses, TFPReaderTarga.Create, ifTGA);
-end;
-
-{
-TIFF reader from FPReadTiff fails on ~/images/test_images/lena.tif
-with "missing RowsPerStrip.."
-
-function LoadTIFF(Stream: TStream;
-  const AllowedImageClasses: array of TEncodedImageClass): TEncodedImage;
-begin
-  Result := LoadFpImage(Stream, AllowedImageClasses, TFPReaderTIFF.Create, ifTIFF);
-end;
-}
-
-function LoadXPM(const Stream: TStream;
-  const AllowedImageClasses: array of TEncodedImageClass): TEncodedImage;
-begin
-  Result := LoadFpImage(Stream, AllowedImageClasses, TFPReaderXPM.Create, ifXPM);
-end;
-
-function LoadPSD(const Stream: TStream;
-  const AllowedImageClasses: array of TEncodedImageClass): TEncodedImage;
-begin
-  Result := LoadFpImage(Stream, AllowedImageClasses, TFPReaderPSD.Create, ifPSD);
-end;
-
-function LoadPCX(const Stream: TStream;
-  const AllowedImageClasses: array of TEncodedImageClass): TEncodedImage;
-begin
-  Result := LoadFpImage(Stream, AllowedImageClasses, TFPReaderPCX.Create, ifPCX);
-end;
-
-function LoadJPEG(const Stream: TStream;
-  const AllowedImageClasses: array of TEncodedImageClass): TEncodedImage;
-begin
-  Result := LoadFpImage(Stream, AllowedImageClasses, TFPReaderJPEG.Create, ifJPEG);
-end;
-
-function LoadPNG_FPImage(const Stream: TStream;
-  const AllowedImageClasses: array of TEncodedImageClass): TEncodedImage;
-begin
-  Result := LoadFpImage(Stream, AllowedImageClasses, TFPReaderPNG.Create, ifPNG);
-end;
-
-function LoadPNM(const Stream: TStream;
-  const AllowedImageClasses: array of TEncodedImageClass): TEncodedImage;
-begin
-  Result := LoadFpImage(Stream, AllowedImageClasses, TFPReaderPNM.Create, ifPNM);
-end;
-
-procedure SaveJPEG(const Img: TEncodedImage; const Stream: TStream);
-begin
-  SaveFpImage(Img, Stream, TFPWriterJPEG.Create);
-end;
-
-procedure SavePNG_FPImage(const Img: TEncodedImage; const Stream: TStream);
-var
-  Writer: TFPWriterPNG;
-begin
-  Writer := TFPWriterPNG.Create;
-  { without this, Writer.UseAlpha is always false and TFPWriterPNG never
-    stores alpha channel of png image. }
-  Writer.UseAlpha := Img.HasAlpha;
-  { By default, we produce 16-bit PNG. Which usually is useless
-    (as our inputs is 8-bit), and makes "nvcompress" on macOS fail
-    on PNG files produced by our "downscaling". }
-  Writer.WordSized := false;
-  SaveFpImage(Img, Stream, Writer);
 end;
 
 { resizing ------------------------------------------------------------------- }
@@ -530,3 +496,5 @@ begin
     finally FreeAndNil(Interpolator) end;
   finally FreeAndNil(FPImageSource) end;
 end;
+
+{$endif FPC}
