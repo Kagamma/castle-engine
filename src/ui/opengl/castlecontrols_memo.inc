@@ -1828,7 +1828,7 @@ end;
 
   { TMemoUndo }
 
-  TMemoUndo = class({$ifdef CASTLE_OBJFPC}specialize{$endif} TStructList<TMemoUndoAction>)
+  TMemoUndo = class(specialize TStructList<TMemoUndoAction>)
     public
     Memo:^TCastleMemo;
     IndexAct:integer;
