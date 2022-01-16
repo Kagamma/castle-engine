@@ -129,6 +129,7 @@ initialization
   RegisterSerializableComponent(TCastleDesign,
     'Design (Reference Another castle-user-interface File)');
 
+  RegisterSerializableComponent(TCastleDesign, 'Design (Use Another castle-user-interface File)');
 finalization
   FinalizationUIFonts;
   FinalizationClipboard;

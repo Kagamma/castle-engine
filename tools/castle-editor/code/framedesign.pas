@@ -1,5 +1,5 @@
 {
-  Copyright 2018-2018 Michalis Kamburelis.
+  Copyright 2018-2022 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -529,12 +529,29 @@ end;
 
 function TDesignFrame.TDesignerLayer.HoverTransform(
   const AMousePosition: TVector2): TCastleTransform;
+
+  function SelectionFromRayHit(const RayHit: TRayCollision): TCastleTransform;
+  var
+    I: Integer;
+  begin
+    // set outer-most TCastleTransformReference, if any, to show selection at TCastleTransformReference
+    for I := RayHit.Count - 1 downto 0 do
+      if (RayHit[I].Item is TCastleTransformReference) and Selectable(RayHit[I].Item) then
+        Exit(RayHit[I].Item);
+
+    // set the inner-most TCastleTransform hit, but not anything transient (to avoid hitting gizmo)
+    for I := 0 to RayHit.Count - 1 do
+      if Selectable(RayHit[I].Item) then
+        Exit(RayHit[I].Item);
+
+    Result := nil;
+  end;
+
 var
   UI: TCastleUserInterface;
   Viewport: TCastleViewport;
   RayOrigin, RayDirection: TVector3;
   RayHit: TRayCollision;
-  I: Integer;
 begin
   UI := HoverUserInterface(AMousePosition);
   if UI is TCastleViewport then // also checks UI <> nil
@@ -556,15 +573,10 @@ begin
   Viewport.PositionToRay(AMousePosition, true, RayOrigin, RayDirection);
   RayHit := Viewport.Items.WorldRay(RayOrigin, RayDirection);
   try
-    Result := nil;
-    // set the inner-most TCastleTransform hit, but not anything transient (to avoid hitting gizmo)
     if RayHit <> nil then
-      for I := 0 to RayHit.Count - 1 do
-        if Selectable(RayHit[I].Item) then
-        begin
-          Result := RayHit[I].Item;
-          Break;
-        end;
+      Result := SelectionFromRayHit(RayHit)
+    else
+      Result := nil;
   finally FreeAndNil(RayHit) end;
 end;
 
@@ -1754,7 +1766,7 @@ procedure TDesignFrame.DuplicateComponent;
     ComponentString: String;
     InsertIndex: Integer;
   begin
-    ParentComp := Selected.UniqueParent;
+    ParentComp := Selected.Parent;
     if ParentComp = nil then
     begin
       ErrorBox('To duplicate, select component with exactly one parent');
@@ -2010,12 +2022,20 @@ begin
 end;
 
 procedure TDesignFrame.CastleControlUpdate(Sender: TObject);
+var
+  SavedErrorBox: String;
 begin
   { process PendingErrorBox }
   if PendingErrorBox <> '' then
   begin
-    ErrorBox(PendingErrorBox);
+    SavedErrorBox := PendingErrorBox;
+    { Clear PendingErrorBoxthis *before* doing ErrorBox, as on WinAPI,
+      the CastleControlUpdate will keep occurring underneath the box,
+      and we would spawn ~infinite number of ErrorBox.
+      This can happen e.g. in case of invalid CastleSettings.xml file,
+      that sets PendingErrorBox. }
     PendingErrorBox := '';
+    ErrorBox(SavedErrorBox);
   end;
 
   if InternalCastleDesignInvalidate then
@@ -3429,24 +3449,24 @@ var
         begin
           if not ContainsRecursive(Src, Dst) then
           begin
-            if Src.UniqueParent <> nil then
-              Src.UniqueParent.Remove(Src);
+            if Src.Parent <> nil then
+              Src.Parent.Remove(Src);
             Dst.Add(Src);
             Refresh;
           end;
         end;
       tnsBottom, tnsTop:
         begin
-          if (Dst.UniqueParent <> nil) and
-             not ContainsRecursive(Src, Dst.UniqueParent) then
+          if (Dst.Parent <> nil) and
+             not ContainsRecursive(Src, Dst.Parent) then
           begin
-            if Src.UniqueParent <> nil then
-              Src.UniqueParent.Remove(Src);
-            Index := Dst.UniqueParent.List.IndexOf(Dst);
+            if Src.Parent <> nil then
+              Src.Parent.Remove(Src);
+            Index := Dst.Parent.List.IndexOf(Dst);
             Assert(Index <> -1);
             if ControlsTreeNodeUnderMouseSide = tnsBottom then
               Inc(Index);
-            Dst.UniqueParent.Insert(Index, Src);
+            Dst.Parent.Insert(Index, Src);
             Refresh;
           end;
         end;
