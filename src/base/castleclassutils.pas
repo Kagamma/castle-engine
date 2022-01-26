@@ -1854,12 +1854,12 @@ procedure InitStdStreams;
   end;
   {$endif MSWINDOWS}
 
-  {$ifdef UNIX}
+  {$if defined(UNIX) or defined(WASI)}
   procedure InitStdStream(var Stream: TStream; Handle: THandle);
   begin
     Stream := THandleStream.Create(Handle);
   end;
-  {$endif UNIX}
+  {$endif}
 
 begin
   InitStdStream(StdInStream,  {$ifdef MSWINDOWS} STD_INPUT_HANDLE  {$else} StdInputHandle  {$endif});

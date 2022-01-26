@@ -24,7 +24,7 @@ type
   TProcessTimerResult = record
   private
     Value:
-      {$if defined(MSWINDOWS) or defined(CASTLE_NINTENDO_SWITCH)}
+      {$if defined(MSWINDOWS) or defined(CASTLE_NINTENDO_SWITCH) or defined(WASI)}
       QWord // ProcessTimer just does CastleGetTickCount64
       {$else}
       clock_t // Unix
@@ -34,6 +34,16 @@ type
       Equivalent to @code(ProcessTimerSeconds(ProcessTimer, Self)) }
     function ElapsedTime: TFloatTime;
   end;
+
+  // FIXME: WASI doesn't have tms
+  {$ifdef WASI}
+  tms = record
+    tms_utime: QWord;
+    tms_stime: QWord;
+    tms_cutime: QWord;
+    tms_cstime: QWord;
+  end;
+  {$endif}
 
 { Current time, local to this process.
   Use this to measure and compare the time it takes your program to do
@@ -90,6 +100,8 @@ function ProcessTimerEnd: TFloatTime; deprecated 'instead of this, better to use
 
 {$ifdef read_implementation}
 
+
+
 function ProcessTimer: TProcessTimerResult;
 {$if defined(MSWINDOWS) or defined(CASTLE_NINTENDO_SWITCH)}
 begin
@@ -105,7 +117,12 @@ begin
     tms.tms_utime, tms.tms_stime, clock() values are nonsense!
     This is not FPC bug as I tested this with C program too. }
 
-  Result.Value := {$ifdef FPC} FpTimes {$else} Times {$endif} (Dummy);
+  // FIXME: WASI doesn't have FpTimes
+  {$ifndef WASI}
+    Result.Value := {$ifdef FPC} FpTimes {$else} Times {$endif} (Dummy);
+  {$else}
+    Result.Value := 0;
+  {$endif}
 {$endif}
 end;
 

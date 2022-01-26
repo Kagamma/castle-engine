@@ -118,4 +118,15 @@ end;
 {$I norqcheckend.inc}
 {$endif UNIX}
 
+{ WASI }
+
+{$ifdef WASI}
+
+function CastleGetTickCount64: TMilisecTime;
+begin
+  Result := GetTickCount64;
+end;
+
+{$endif}
+
 {$endif}

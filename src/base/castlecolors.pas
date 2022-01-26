@@ -434,30 +434,52 @@ begin
 end;
 
 function HexToColor(const S: string): TCastleColor;
+// Workaround for WASI internal error
+var
+  S1, S2, S3, S4: String;
 begin
   if Length(S) = 8 then
+  begin
+    S1 := Copy(S, 1, 2);
+    S2 := Copy(S, 3, 2);
+    S3 := Copy(S, 5, 2);
+    S4 := Copy(S, 7, 2);
     Result := Vector4(
-      StrHexToInt(Copy(S, 1, 2)) / 255,
-      StrHexToInt(Copy(S, 3, 2)) / 255,
-      StrHexToInt(Copy(S, 5, 2)) / 255,
-      StrHexToInt(Copy(S, 7, 2)) / 255) else
+      StrHexToInt(S1) / 255,
+      StrHexToInt(S2) / 255,
+      StrHexToInt(S3) / 255,
+      StrHexToInt(S4) / 255);
+  end else
   if Length(S) = 6 then
+  begin
+    S1 := Copy(S, 1, 2);
+    S2 := Copy(S, 3, 2);
+    S3 := Copy(S, 5, 2);
     Result := Vector4(
-      StrHexToInt(Copy(S, 1, 2)) / 255,
-      StrHexToInt(Copy(S, 3, 2)) / 255,
-      StrHexToInt(Copy(S, 5, 2)) / 255,
-      1.0) else
+      StrHexToInt(S1) / 255,
+      StrHexToInt(S2) / 255,
+      StrHexToInt(S3) / 255,
+      1.0);
+  end else
     raise EConvertError.CreateFmt('Invalid color hex string: "%s"', [S]);
 end;
 
 function HexToColorRGB(const S: string): TCastleColorRGB;
+// Workaround for WASI internal error
+var
+  S1, S2, S3: String;
 begin
   if (Length(S) = 8) or
      (Length(S) = 6) then
+  begin
+    S1 := Copy(S, 1, 2);
+    S2 := Copy(S, 3, 2);
+    S3 := Copy(S, 5, 2);
     Result := Vector3(
-      StrHexToInt(Copy(S, 1, 2)) / 255,
-      StrHexToInt(Copy(S, 3, 2)) / 255,
-      StrHexToInt(Copy(S, 5, 2)) / 255) else
+      StrHexToInt(S1) / 255,
+      StrHexToInt(S2) / 255,
+      StrHexToInt(S3) / 255);
+  end else
     raise EConvertError.CreateFmt('Invalid color hex string: "%s"', [S]);
 end;
 
