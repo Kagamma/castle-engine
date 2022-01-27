@@ -335,7 +335,7 @@
     (or not use GLSL shaders at all),
     and never use GLSL ARB extensions available on some OpenGL 1.x implementations. }
   {$define ForceStandardGLSLApi}
-{$elseif FPC_WASI}
+{$elseif defined(FPC_WASI)}
   {$define CastleGL := WebOpenGLES}
 {$else}
   {$define CastleGL := GL, GLExt}
