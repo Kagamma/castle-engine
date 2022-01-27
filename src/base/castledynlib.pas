@@ -21,7 +21,7 @@ unit CastleDynLib;
 interface
 
 uses SysUtils
-  {$ifdef FPC}
+  {$if defined(FPC) and not defined(FPC_WASI)}
     { With FPC, use cross-platform DynLibs unit. }
     , DynLibs
   {$else}
@@ -30,11 +30,15 @@ uses SysUtils
   {$endif};
 
 type
+  { Dummy libhandle for wasi target }
+  {$ifdef FPC_WASI}
+  TLibHandle = NativeInt;
+  {$endif}
   TDynLibHandle = {$ifdef FPC} TLibHandle {$else} HModule {$endif};
 
 const
   { Invalid TDynLibHandle value (meaning : LoadLibrary failed) }
-  InvalidDynLibHandle: TDynLibHandle = {$ifdef FPC} DynLibs.NilHandle {$else} 0 {$endif};
+  InvalidDynLibHandle: TDynLibHandle = {$if defined(FPC) and not defined(FPC_WASI)} DynLibs.NilHandle {$else} 0 {$endif};
 
 type
   { }
@@ -178,7 +182,7 @@ var
       )
     )
   }
-  InternalDisableDynamicLibraries: Boolean = false;
+  InternalDisableDynamicLibraries: Boolean = {$ifdef FPC_WASI} true {$else} false {$endif};
 
 implementation
 

@@ -108,6 +108,7 @@ begin
     This is not FPC bug as I tested this with C program too. }
 
   Result.Value := {$ifdef FPC} FpTimes {$else} Times {$endif} (Dummy);
+{$endif}
 end;
 
 function ProcessTimerNow: TProcessTimerResult;
