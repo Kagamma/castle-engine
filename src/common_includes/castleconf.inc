@@ -135,7 +135,7 @@
 { New FPC_WASI target in case Delphi has it's own WASI target in the future }
 {$if defined(FPC) and defined(WASI)}
   {$define FPC_WASI}
-  {$define FPC_WASI_FIXME} { Need to visit places with this define enabled to to fix them }
+  {$define FPC_WASI_FIXME} { Need to visit places with this define enabled to fix them }
 {$endif}
 
 { We used to disable inline functions/methods when compiling from
@@ -294,6 +294,7 @@
 { $define OpenGLES}
 {$ifdef ANDROID} {$define OpenGLES} {$endif}
 {$ifdef CASTLE_IOS} {$define OpenGLES} {$endif}
+{$ifdef FPC_WASI} {$define OpenGLES} {$endif}
 
 { NX supports OpenGL and OpenGLES (that's public information,
   https://wccftech.com/nintendo-switch-supports-vulkan/ ).
@@ -334,6 +335,8 @@
     (or not use GLSL shaders at all),
     and never use GLSL ARB extensions available on some OpenGL 1.x implementations. }
   {$define ForceStandardGLSLApi}
+{$elseif FPC_WASI}
+  {$define CastleGL := WebOpenGLES}
 {$else}
   {$define CastleGL := GL, GLExt}
 {$endif}
