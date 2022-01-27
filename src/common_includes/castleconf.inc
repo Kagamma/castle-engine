@@ -132,6 +132,12 @@
   {$endif}
 {$endif}
 
+{ New FPC_WASI target in case Delphi has it's own WASI target in the future }
+{$if defined(FPC) and defined(WASI)}
+  {$define FPC_WASI}
+  {$define FPC_WASI_FIXME} { Need to visit places with this define enabled to to fix them }
+{$endif}
+
 { We used to disable inline functions/methods when compiling from
   Lazarus package (when CASTLE_ENGINE_LAZARUS_PACKAGE),
   to workaround FPC bug http://bugs.freepascal.org/view.php?id=12223 .

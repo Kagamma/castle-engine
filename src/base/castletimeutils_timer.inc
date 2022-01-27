@@ -118,7 +118,7 @@ begin
 end;
 {$endif}
 
-{$if (defined(UNIX) or defined(WASI)) and not defined(CASTLE_NINTENDO_SWITCH)}
+{$if (defined(UNIX) or defined(FPC_WASI)) and not defined(CASTLE_NINTENDO_SWITCH)}
 type
   TTimerFrequency = LongWord;
 const
@@ -149,7 +149,7 @@ var
 {$endif}
 begin
   // FIXME: WASI doesn't have FpGettimeofday or equivalent
-  {$ifndef WASI}
+  {$ifndef FPC_WASI}
     {$ifdef FPC}
     FpGettimeofday(@tv, nil);
     {$else}
@@ -158,8 +158,8 @@ begin
 
     { We can fit whole TTimeval inside QWord, no problem. }
     Result.Value := QWord(tv.tv_sec) * 1000000 + QWord(tv.tv_usec);
-  {$else}
-    Result.Value := 0;
+  {$elif defined(FPC_WASI_FIXME)}
+    Result.Value := GetTickCount64;
   {$endif}
 end;
 {$endif}

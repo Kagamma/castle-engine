@@ -97,7 +97,7 @@ uses
   {$ifdef MSWINDOWS} Windows, {$ifndef FPC} ShlObj, {$endif} {$endif}
   {$ifdef UNIX} {$ifdef FPC} BaseUnix, Unix, Dl, {$else} Posix.Unistd, {$endif} {$endif}
   {$ifndef FPC} Classes, {$endif}
-  {$ifndef WASI}Variants, {$endif}SysUtils, Math, Generics.Collections;
+  {$ifndef FPC_WASI}Variants, {$endif}SysUtils, Math, Generics.Collections;
 
 {$define read_interface}
 
@@ -147,7 +147,7 @@ implementation
   see ../packages/README. }
 {$ifdef UNIX}      {$I castleutils_os_specific_unix.inc}    {$endif}
 {$ifdef MSWINDOWS} {$I castleutils_os_specific_windows.inc} {$endif}
-{$ifdef WASI}      {$I castleutils_os_specific_wasi.inc} {$endif}
+{$ifdef FPC_WASI}      {$I castleutils_os_specific_wasi.inc} {$endif}
 
 {$I castleutils_pointers.inc}
 {$I castleutils_read_write.inc}
