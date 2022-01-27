@@ -538,7 +538,7 @@ implementation
 
 uses {$ifdef MSWINDOWS} ShlObj, {$endif}
   {$ifdef DARWIN} MacOSAll, {$endif} Classes,
-  {$ifdef FPC} Process, {$endif}
+  {$if defined(FPC) and not defined(FPC_WASI)} Process, {$endif}
   CastleStringUtils,
   {$ifdef MSWINDOWS} CastleDynLib, {$endif} CastleLog,
   CastleURIUtils, CastleFindFiles, CastleClassUtils, CastleDownload,
@@ -634,7 +634,7 @@ function ApplicationData(const Path: string): string;
 
   {$ifndef ANDROID}
   function GetApplicationDataPath: string;
-  {$ifdef MSWINDOWS}
+  {$if defined(MSWINDOWS) or defined(FPC_WASI)}
   var
     ExePath: string;
   begin

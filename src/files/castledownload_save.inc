@@ -77,9 +77,11 @@ begin
     begin
       UnderlyingStream := RegisteredProtocol.WriteEvent(URL);
       // Compress using gzip, if requested in Options
+      {$ifndef FPC_WASI_FIXME}
       if ssoGzip in Options then
         Result := TGZFileStream.Create(UnderlyingStream, true)
       else
+      {$endif}
         Result := UnderlyingStream;
     end else
       raise EDownloadError.CreateFmt('Cannot write URLs with protocol "%s"', [P]);

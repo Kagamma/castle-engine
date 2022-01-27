@@ -72,7 +72,9 @@ unit CastleImages;
 interface
 
 uses SysUtils, Classes, Math, Generics.Collections,
-  {$ifdef FPC}
+  {$if defined(FPC_WASI)}
+  WebImage,
+  {$elseif defined(FPC)}
   { FPImage and related units }
   FPImage, FPReadPCX, FPReadGIF, FPReadPSD, FPReadTGA, FPReadTiff, FPReadXPM,
   FPReadJPEG, FPWriteJPEG, FPReadPNM, FPReadPNG, FPWritePNG,
@@ -81,7 +83,7 @@ uses SysUtils, Classes, Math, Generics.Collections,
   Vcl.Imaging.PngImage,
   {$endif}
   { CGE units }
-  CastleInternalPng, CastleUtils, CastleVectors, CastleRectangles,
+  {$ifndef FPC_WASI}CastleInternalPng,{$endif} CastleUtils, CastleVectors, CastleRectangles,
   CastleFileFilters, CastleClassUtils, CastleColors;
 
 type
@@ -120,6 +122,15 @@ type
   EImageDrawError = class(Exception);
 
   {$ifdef FPC}
+  {$ifdef FPC_WASI}
+  { An internal class to communicate image data
+    between CastleImages and WemImage efficiently.
+    @exclude }
+  TInternalCastleWebImage = class(TWebImage)
+  strict private
+  public
+  end;
+  {$else}
   { An internal class to communicate image data
     between CastleImages and fcl-image efficiently.
     @exclude }
@@ -131,6 +142,7 @@ type
     property Colors8Bit[X, Y: Integer]: TFPCompactImgRGBA8BitValue
       read GetColors8Bit write SetColors8Bit;
   end;
+  {$endif}
   {$endif}
 
   { Abstract class for an image with unspecified, possibly compressed,

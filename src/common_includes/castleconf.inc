@@ -307,6 +307,8 @@
   {$else}
     {$ifdef CASTLE_NINTENDO_SWITCH}
       {$define CastleGL := CastleInternalNxGLES20}
+    {$elseif defined(FPC_WASI)}
+      {$define CastleGL := WebOpenGLES}
     {$else}
       {$define CastleGL := CastleGLES}
     {$endif}
@@ -335,8 +337,6 @@
     (or not use GLSL shaders at all),
     and never use GLSL ARB extensions available on some OpenGL 1.x implementations. }
   {$define ForceStandardGLSLApi}
-{$elseif defined(FPC_WASI)}
-  {$define CastleGL := WebOpenGLES}
 {$else}
   {$define CastleGL := GL, GLExt}
 {$endif}
@@ -473,7 +473,9 @@
 
 { Keep HAS_FP_HTTP_CLIENT defined for all platforms that have
   FpHttpClient implemented, if you use FPC. }
-{$define HAS_FP_HTTP_CLIENT}
+{$ifndef FPC_WASI}
+  {$define HAS_FP_HTTP_CLIENT}
+{$endif}
 {$ifdef CASTLE_NINTENDO_SWITCH} {$undef HAS_FP_HTTP_CLIENT} {$endif}
 {$ifdef ANDROID} {$undef HAS_FP_HTTP_CLIENT} {$endif}
 {$ifndef FPC} {$undef HAS_FP_HTTP_CLIENT} {$endif}

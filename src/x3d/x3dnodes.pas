@@ -277,7 +277,7 @@ uses
   CastleTextureFont_DjvSerifBI_20,
   {$endif CASTLE_EMBED_ALL_3D_FONT_VARIATIONS}
 
-  Math, X3DLoad, CastleInternalZStream, X3DCameraUtils,
+  Math, X3DLoad, {$ifndef FPC_WASI}CastleInternalZStream,{$endif} X3DCameraUtils,
   CastleFilesUtils, StrUtils, CastleURIUtils, CastleUnicode, CastleCurves,
   CastleLog, {$ifdef FPC}CastleScriptParser,{$endif} CastleInternalDataUri, URIParser, CastleDownload,
   CastleNURBS, CastleQuaternions, CastleXMLUtils, CastleOpenDocument,

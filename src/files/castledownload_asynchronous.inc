@@ -507,6 +507,7 @@ procedure TCastleDownload.SetContentsApplyOptions(UnderlyingStream: TStream);
     end;
   end;
 
+  {$ifndef FPC_WASI_FIXME}
   { Decompress gzipped FileName.
     When ForceMemoryStream, always returns TMemoryStream.
     Sets given Stream to @nil (it is owned by us now, possibly it is freed by this function). }
@@ -531,12 +532,15 @@ procedure TCastleDownload.SetContentsApplyOptions(UnderlyingStream: TStream);
       FreeAndNil(Result); raise;
     end;
   end;
+  {$endif}
 
 begin
   // unpack gzip if requested
+  {$ifndef FPC_WASI_FIXME}
   if soGzip in Options then
     FContents := ReadGzipped(UnderlyingStream, soForceMemoryStream in Options)
   else
+  {$endif}
   if (soForceMemoryStream in Options) and
      // if UnderlyingStream is already TMemoryStream, like with data URI, then we're OK
      (not (UnderlyingStream is TMemoryStream)) then
