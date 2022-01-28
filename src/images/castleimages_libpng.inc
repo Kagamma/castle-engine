@@ -15,6 +15,8 @@
 
 { Handle PNG format using libpng. }
 
+{$ifndef FPC_WASI} // Not available in web target
+
 {$if defined(CASTLE_PNG_DYNAMIC) or defined(CASTLE_PNG_STATIC)}
 
 type
@@ -849,3 +851,5 @@ begin
 end;
 
 {$endif} // defined(CASTLE_PNG_DYNAMIC) or defined(CASTLE_PNG_STATIC)
+
+{$endif} // FPC_WASI

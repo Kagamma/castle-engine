@@ -540,6 +540,9 @@ begin
   if soGzip in Options then
     FContents := ReadGzipped(UnderlyingStream, soForceMemoryStream in Options)
   else
+  {$else}
+  if soGzip in Options then
+    WritelnWarning('Loading as gzip is not supported in web target');
   {$endif}
   if (soForceMemoryStream in Options) and
      // if UnderlyingStream is already TMemoryStream, like with data URI, then we're OK

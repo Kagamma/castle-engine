@@ -25,7 +25,9 @@
     TimeAccumulator: TFloatTime;
     FEnablePhysics: boolean;
     FMoveLimit: TBox3D;
+    {$ifndef FPC_WASI_FIXME}
     FPhysicsProperties: TPhysicsProperties;
+    {$endif}
     UpdateFrameId: TFrameId;
     FTimeScale: Single;
     FPaused: boolean;
@@ -36,11 +38,13 @@
     procedure SetMainCamera(const Value: TCastleCamera);
     procedure MainCameraFreeNotification(const Sender: TFreeNotificationObserver);
   private
+    {$ifndef FPC_WASI_FIXME}
     FKraftEngine: TKraft;
     { Create FKraftEngine, if not assigned yet. }
     procedure InitializePhysicsEngine;
     { Destroy everything related to physics, if present. }
     procedure DestroyPhysicsEngine;
+    {$endif}
     procedure RegisterPressRelease(const T: TCastleTransform);
     procedure UnregisterPressRelease(const T: TCastleTransform);
   public
@@ -338,7 +342,9 @@
     function CameraKnown: Boolean; deprecated 'use MainCamera <> nil';
   published
     { Adjust physics properties. }
+    {$ifndef FPC_WASI_FIXME}
     property PhysicsProperties: TPhysicsProperties read FPhysicsProperties;
+    {$endif}
 
     { Time scale used when not @link(Paused). }
     property TimeScale: Single read FTimeScale write FTimeScale {$ifdef FPC}default 1{$endif};
@@ -392,10 +398,12 @@ constructor TCastleAbstractRootTransform.Create(AOwner: TComponent);
 begin
   inherited;
 
+  {$ifndef FPC_WASI_FIXME}
   FPhysicsProperties := TPhysicsProperties.Create(Self);
   FPhysicsProperties.SetSubComponent(true);
   FPhysicsProperties.Name := 'PhysicsProperties';
   FPhysicsProperties.RootTransform := Self;
+  {$endif}
 
   FMainCameraObserver := TFreeNotificationObserver.Create(Self);
   FMainCameraObserver.OnFreeNotification := {$ifdef FPC}@{$endif}MainCameraFreeNotification;
@@ -410,7 +418,9 @@ end;
 
 destructor TCastleAbstractRootTransform.Destroy;
 begin
+  {$ifndef FPC_WASI_FIXME}
   DestroyPhysicsEngine;
+  {$endif}
   FreeAndNil(FInternalPressReleaseListeners);
   inherited;
 end;

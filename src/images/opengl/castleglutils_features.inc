@@ -526,9 +526,11 @@ begin
   // TODO: there is also such extension for OpenGL ES
   FEXT_texture_filter_anisotropic := {$ifdef OpenGLES} false {$else}
     Load_GL_EXT_texture_filter_anisotropic {$endif};
+  {$ifndef OpenGLES}
   if EXT_texture_filter_anisotropic then
     FMaxTextureMaxAnisotropyEXT := glGetFloat(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT)
   else
+  {$endif}
     FMaxTextureMaxAnisotropyEXT := 0.0;
 
   FARB_occlusion_query := false;

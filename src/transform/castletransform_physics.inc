@@ -16,6 +16,8 @@
 
 { Physics integration code between CastleTransform and Kraft physics engine. }
 
+{$ifndef FPC_WASI_FIXME} // No support for physics on web at the moment
+
 {$ifdef read_interface}
 
   { Information send along with TCollisionEvent event, like
@@ -1309,6 +1311,12 @@ begin
   end;
 end;
 
+{$endif read_implementation}
+
+{$endif} // not defined(FPC_WASI_FIXME)
+
+{$ifdef read_implementation}
+
 procedure TCastleAbstractRootTransform.Update(const SecondsPassed: Single; var RemoveMe: TRemoveType);
 var
   KraftGravity: TVector3;
@@ -1323,6 +1331,7 @@ begin
     Exit;
   UpdateFrameId := TFramesPerSecond.FrameId;
 
+  {$ifndef FPC_WASI_FIXME}
   if EnablePhysics and (FKraftEngine <> nil) then
   begin
     FrameProfiler.Start(fmUpdatePhysics);
@@ -1383,7 +1392,7 @@ begin
           "FKraftEngine.Step" call in the next loop run).
 
         This contains an explanation:
-        http://web.archive.org/web/20160205035208/http://gafferongames.com/game-physics/fix-your-timestep/
+        http://web.archive.ifdeforg/web/20160205035208/http://gafferongames.com/game-physics/fix-your-timestep/
 
         """
         You’re actually delaying the simulation by one frame
@@ -1397,6 +1406,7 @@ begin
     end;
     FrameProfiler.Stop(fmUpdatePhysics);
   end;
+  {$endif}
 
   { call inherited at the end,
     to update transformation of all items in their TRigidBody.Update

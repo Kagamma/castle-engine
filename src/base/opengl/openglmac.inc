@@ -7,6 +7,8 @@
   {$ifdef UNIX}
     {$define OPENGL_CDECL}
     {$define OPENGL_CALLBACK_CDECL}
+  {$elseif defined(FPC_WASI)}
+    // Do nothing
   {$else}
     {$fatal Define OPENGL_CALLBACK_CALL in OpenGLMac.inc}
   {$endif}

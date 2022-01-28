@@ -17,6 +17,8 @@ function LoadGIF(const Stream: TStream;
 begin
   {$if defined(USE_VAMPYRE_IMAGING)} // if available, prefer to use Vampyre
   Result := Load_VampyreImaging(Stream, AllowedImageClasses);
+  {$elseif defined(FPC_WASI)}
+  Result := Load_WebImage(Stream, AllowedImageClasses, ifGIF);
   {$elseif defined(FPC)}
   Result := Load_FpImage(Stream, AllowedImageClasses, TFPReaderGIF.Create, ifGIF);
   {$else}
@@ -29,6 +31,8 @@ function LoadTGA(const Stream: TStream;
 begin
   {$if defined(USE_VAMPYRE_IMAGING)} // if available, prefer to use Vampyre
   Result := Load_VampyreImaging(Stream, AllowedImageClasses);
+  {$elseif defined(FPC_WASI)}
+  Result := Load_WebImage(Stream, AllowedImageClasses, ifTGA);
   {$elseif defined(FPC)}
   Result := Load_FpImage(Stream, AllowedImageClasses, TFPReaderTarga.Create, ifTGA);
   {$else}
@@ -41,6 +45,8 @@ function LoadTIFF(const Stream: TStream;
 begin
   {$if defined(USE_VAMPYRE_IMAGING)} // if available, prefer to use Vampyre
   Result := Load_VampyreImaging(Stream, AllowedImageClasses);
+  {$elseif defined(FPC_WASI)}
+  Result := Load_WebImage(Stream, AllowedImageClasses, ifTIFF);
   {$else}
   raise EImageLoadError.Create('Cannot read TIFF (Vampyre Imaging Library not available at compile-time)');
   Result := nil; // just silence FPC warning
@@ -63,6 +69,8 @@ function LoadJPEG(const Stream: TStream;
 begin
   {$if defined(USE_VAMPYRE_IMAGING)} // if available, prefer to use Vampyre
   Result := Load_VampyreImaging(Stream, AllowedImageClasses);
+  {$elseif defined(FPC_WASI)}
+  Result := Load_WebImage(Stream, AllowedImageClasses, ifJPEG);
   {$elseif defined(FPC)}
   Result := Load_FpImage(Stream, AllowedImageClasses, TFPReaderJPEG.Create, ifJPEG);
   {$else}
@@ -89,7 +97,7 @@ function LoadPSD(const Stream: TStream;
 begin
   {$if defined(USE_VAMPYRE_IMAGING)} // if available, prefer to use Vampyre
   Result := Load_VampyreImaging(Stream, AllowedImageClasses);
-  {$elseif defined(FPC)}
+  {$elseif defined(FPC) and not defined(FPC_WASI)}
   Result := Load_FpImage(Stream, AllowedImageClasses, TFPReaderPSD.Create, ifPSD);
   {$else}
   raise EImageLoadError.Create('Cannot read PSD (neither FpImage nor Vampyre Imaging Library available at compile-time)');
@@ -101,7 +109,7 @@ function LoadPCX(const Stream: TStream;
 begin
   {$if defined(USE_VAMPYRE_IMAGING)} // if available, prefer to use Vampyre
   Result := Load_VampyreImaging(Stream, AllowedImageClasses);
-  {$elseif defined(FPC)}
+  {$elseif defined(FPC) and not defined(FPC_WASI)}
   Result := Load_FpImage(Stream, AllowedImageClasses, TFPReaderPCX.Create, ifPCX);
   {$else}
   raise EImageLoadError.Create('Cannot read PCX (neither FpImage nor Vampyre Imaging Library available at compile-time)');
@@ -115,7 +123,7 @@ function LoadPNM(const Stream: TStream;
 begin
   {$if defined(USE_VAMPYRE_IMAGING)} // if available, prefer to use Vampyre
   Result := Load_VampyreImaging(Stream, AllowedImageClasses);
-  {$elseif defined(FPC)}
+  {$elseif defined(FPC) and not defined(FPC_WASI)}
   Result := Load_FpImage(Stream, AllowedImageClasses, TFPReaderPNM.Create, ifPNM);
   {$else}
   raise EImageLoadError.Create('Cannot read PNM (neither FpImage nor Vampyre Imaging Library available at compile-time)');
@@ -145,7 +153,7 @@ procedure SaveJPEG(const Img: TEncodedImage; const Stream: TStream);
 begin
   {$if defined(USE_VAMPYRE_IMAGING)} // if available, prefer to use Vampyre
   Save_VampyreImaging(Img, Stream, 'jpg');
-  {$elseif defined(FPC)}
+  {$elseif defined(FPC) and not defined(FPC_WASI)}
   Save_FpImage(Img, Stream, TFPWriterJPEG.Create);
   {$else}
   raise Exception.Create('Cannot save JPEG (neither FpImage nor Vampyre Imaging Library available at compile-time)');

@@ -169,7 +169,7 @@ uses SysUtils, Generics.Collections, Classes, XMLRead, DOM,
   X3DFields, CastleBoxes, CastleImages, CastleColors, CastleCameras,
   CastleVideos, X3DTime, CastleTransform, CastleMaterialProperties,
   {$ifdef FPC}CastleScript, X3DCastleScript, {$endif} CastleInternalOctree, CastleInternalCompositeImage,
-  CastleTextureImages, CastleKeysMouse, CastleSoundEngine, CastleStringUtils,
+  CastleTextureImages, CastleKeysMouse, {$ifndef FPC_WASI}CastleSoundEngine,{$endif} CastleStringUtils,
   CastleTextureFontData, CastleRenderOptions, CastleProjection, CastleBehaviors;
 
 {$define read_interface}
@@ -379,7 +379,7 @@ uses
 {$I auto_generated_node_helpers/x3dnodes_appearance.inc}
 {$I auto_generated_node_helpers/x3dnodes_arc2d.inc}
 {$I auto_generated_node_helpers/x3dnodes_arcclose2d.inc}
-{$I auto_generated_node_helpers/x3dnodes_audioclip.inc}
+{$ifndef FPC_WASI_FIXME}{$I auto_generated_node_helpers/x3dnodes_audioclip.inc}{$endif}
 {$I auto_generated_node_helpers/x3dnodes_background.inc}
 {$I auto_generated_node_helpers/x3dnodes_balljoint.inc}
 {$I auto_generated_node_helpers/x3dnodes_billboard.inc}
@@ -576,7 +576,7 @@ uses
 {$I auto_generated_node_helpers/x3dnodes_signalpdu.inc}
 {$I auto_generated_node_helpers/x3dnodes_singleaxishingejoint.inc}
 {$I auto_generated_node_helpers/x3dnodes_sliderjoint.inc}
-{$I auto_generated_node_helpers/x3dnodes_sound.inc}
+{$ifndef FPC_WASI_FIXME}{$I auto_generated_node_helpers/x3dnodes_sound.inc}{$endif}
 {$I auto_generated_node_helpers/x3dnodes_sphere.inc}
 {$I auto_generated_node_helpers/x3dnodes_spheresensor.inc}
 {$I auto_generated_node_helpers/x3dnodes_splinepositioninterpolator.inc}
@@ -682,8 +682,8 @@ uses
 {$I auto_generated_node_helpers/x3dnodes_x3dsingletexturecoordinatenode.inc}
 {$I auto_generated_node_helpers/x3dnodes_x3dsingletexturenode.inc}
 {$I auto_generated_node_helpers/x3dnodes_x3dsingletexturetransformnode.inc}
-{$I auto_generated_node_helpers/x3dnodes_x3dsoundnode.inc}
-{$I auto_generated_node_helpers/x3dnodes_x3dsoundsourcenode.inc}
+{$ifndef FPC_WASI_FIXME}{$I auto_generated_node_helpers/x3dnodes_x3dsoundnode.inc}{$endif}
+{$ifndef FPC_WASI_FIXME}{$I auto_generated_node_helpers/x3dnodes_x3dsoundsourcenode.inc}{$endif}
 {$I auto_generated_node_helpers/x3dnodes_x3dtexture2dnode.inc}
 {$I auto_generated_node_helpers/x3dnodes_x3dtexture3dnode.inc}
 {$I auto_generated_node_helpers/x3dnodes_x3dtexturecoordinatenode.inc}
@@ -736,7 +736,9 @@ initialization
   RegisterGeometry3DNodes;
   RegisterGeometry2DNodes;
   RegisterTextNodes;
+  {$ifndef FPC_WASI_FIXME}
   RegisterSoundNodes;
+  {$endif}
   RegisterLightingNodes;
   RegisterTexturingNodes;
   RegisterInterpolationNodes;

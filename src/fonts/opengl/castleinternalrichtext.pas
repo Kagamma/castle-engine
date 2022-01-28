@@ -651,6 +651,8 @@ var
     out NextChar: Integer; out Color: TCastleColor): boolean;
   var
     EndPos: Integer;
+    // Avoid wasi target's internal errors
+    S1, S2, S3, S4: String;
   const
     HexDigits = ['0'..'9', 'a'..'f', 'A'..'F'];
   begin
@@ -659,11 +661,17 @@ var
     { we have to find ">, and have exactly 6 or 8 characters for color }
     Result := (EndPos = I + 6) or (EndPos = I + 8);
 
-    Color[0] := StrHexToInt(Copy(S, I    , 2)) / 255;
-    Color[1] := StrHexToInt(Copy(S, I + 2, 2)) / 255;
-    Color[2] := StrHexToInt(Copy(S, I + 4, 2)) / 255;
+    S1 := Copy(S, I    , 2);
+    S2 := Copy(S, I + 2, 2);
+    S3 := Copy(S, I + 4, 2);
+    Color[0] := StrHexToInt(S1) / 255;
+    Color[1] := StrHexToInt(S2) / 255;
+    Color[2] := StrHexToInt(S3) / 255;
     if EndPos = I + 8 then
-      Color[3] := StrHexToInt(Copy(S, I + 6, 2)) / 255 else
+    begin
+      S4 := Copy(S, I + 6, 2);
+      Color[3] := StrHexToInt(S4) / 255;
+    end else
       Color[3] := 1.0;
   end;
 

@@ -20,8 +20,10 @@
   TCastleAbstractRootTransform = class;
   TCastleTransform = class;
   TRenderingCamera = class;
+  {$ifndef FPC_WASI_FIXME}
   TRigidBody = class;
   TPhysicsProperties = class;
+  {$endif}
 
   TCastleTransformClass = class of TCastleTransform;
 

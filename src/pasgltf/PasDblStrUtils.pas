@@ -3179,110 +3179,110 @@ type TDoubleValue=record
   end;
  end;
  function BiggestPowerTen(Number:TPasDblStrUtilsUInt32;NumberBits:TPasDblStrUtilsInt32;var Power:TPasDblStrUtilsUInt32;var Exponent:TPasDblStrUtilsInt32):TPasDblStrUtilsBoolean;
- label c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11;
+ var
+   cw: Byte;
  begin
   result:=true;
-  case NumberBits of
-   30,31,32:begin
-    c1:
+  if ((NumberBits >= 30) and (NumberBits <= 32)) then
+   begin
     if 1000000000<=Number then begin
      Power:=1000000000;
      Exponent:=9;
     end else begin
-     goto c2;
+      cw := 2;
     end;
    end;
-   27,28,29:begin
-    c2:
+  if ((NumberBits >= 27) and (NumberBits <= 29)) or (cw = 2) then
+   begin
     if 100000000<=Number then begin
      Power:=100000000;
      Exponent:=8;
     end else begin
-     goto c3;
+     cw := 3;
     end;
    end;
-   24,25,26:begin
-    c3:
+  if ((NumberBits >= 24) and (NumberBits <= 26)) or (cw = 3) then
+   begin
     if 10000000<=Number then begin
      Power:=10000000;
      Exponent:=7;
     end else begin
-     goto c4;
+     cw := 4;
     end;
    end;
-   20,21,22,23:begin
-    c4:
+  if ((NumberBits >= 20) and (NumberBits <= 23)) or (cw = 4) then
+   begin
     if 1000000<=Number then begin
      Power:=1000000;
      Exponent:=6;
     end else begin
-     goto c5;
+     cw := 5;
     end;
    end;
-   17,18,19:begin
-    c5:
+  if ((NumberBits >= 17) and (NumberBits <= 19)) or (cw = 5) then
+   begin
     if 100000<=Number then begin
      Power:=100000;
      Exponent:=5;
     end else begin
-     goto c6;
+     cw := 6;
     end;
    end;
-   14,15,16:begin
-    c6:
+  if ((NumberBits >= 14) and (NumberBits <= 16)) or (cw = 6) then
+   begin
     if 10000<=Number then begin
      Power:=10000;
      Exponent:=4;
     end else begin
-     goto c7;
+     cw := 7;
     end;
    end;
-   10,11,12,13:begin
-    c7:
+  if ((NumberBits >= 10) and (NumberBits <= 13)) or (cw = 7) then
+   begin
     if 1000<=Number then begin
      Power:=1000;
      Exponent:=3;
     end else begin
-     goto c8;
+     cw := 8;
     end;
    end;
-   7,8,9:begin
-    c8:
+  if ((NumberBits >= 7) and (NumberBits <= 9)) or (cw = 8) then
+   begin
     if 100<=Number then begin
      Power:=100;
      Exponent:=2;
     end else begin
-     goto c9;
+     cw := 9;
     end;
    end;
-   4,5,6:begin
-    c9:
+  if ((NumberBits >= 4) and (NumberBits <= 6)) or (cw = 9) then
+   begin
     if 10<=Number then begin
      Power:=10;
      Exponent:=1;
     end else begin
-     goto c10;
+     cw := 10;
     end;
    end;
-   1,2,3:begin
-    c10:
+  if ((NumberBits >= 1) and (NumberBits <= 3)) or (cw = 10) then
+   begin
     if 1<=Number then begin
      Power:=1;
      Exponent:=0;
     end else begin
-     goto c11;
+     cw := 11;
     end;
    end;
-   0:begin
-    c11:
+  if (NumberBits = 0) or (cw = 11) then
+   begin
     Power:=0;
     Exponent:=-1;
    end;
-   else begin
+  if (NumberBits < 0) or (NumberBits > 32) then
+  begin
     Power:=0;
     Exponent:=0;
     result:=false;
-   end;
   end;
  end;
  function DigitGen(Low,w,High:TDoubleValue;var Buffer:TPasDblStrUtilsString;var Len,Capacity:TPasDblStrUtilsInt32):TPasDblStrUtilsBoolean;

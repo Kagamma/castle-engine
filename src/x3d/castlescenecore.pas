@@ -22,7 +22,7 @@ unit CastleSceneCore;
 
 interface
 
-uses SysUtils, Classes, Generics.Collections, Contnrs, Kraft,
+uses SysUtils, Classes, Generics.Collections, Contnrs, {$ifndef FPC_WASI_FIXME}Kraft,{$endif}
   CastleVectors, CastleBoxes, CastleTriangles, X3DFields, X3DNodes,
   CastleClassUtils, CastleUtils, CastleShapes, CastleInternalTriangleOctree,
   CastleInternalOctree, CastleInternalShapeOctree,

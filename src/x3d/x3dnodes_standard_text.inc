@@ -474,6 +474,7 @@ var
 var
   I: Integer;
   DisplayChars: Integer;
+  S: String;
 begin
   YScale := Size / Font.RowHeight;
   { TODO: Use maxEntent, length for VRML 2.0. Use width for VRML 1.0. }
@@ -485,7 +486,8 @@ begin
     MaxTextWidth := 0;
     for I := 0 to TextWidths.Count - 1 do
     begin
-      TextWidths.List^[I] := Font.TextWidth(Strings[I]);
+      S := Strings[I]; // Avoid WASI internal error
+      TextWidths.List^[I] := Font.TextWidth(S);
       MaxVar(MaxTextWidth, TextWidths.List^[I]);
     end;
 

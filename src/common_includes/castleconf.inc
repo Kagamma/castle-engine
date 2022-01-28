@@ -136,6 +136,7 @@
 {$if defined(FPC) and defined(WASI)}
   {$define FPC_WASI}
   {$define FPC_WASI_FIXME} { Need to visit places with this define enabled to fix them }
+  {$define CASTLE_DISABLE_LIBPNG} { Obviously there's no libpng on the web }
 {$endif}
 
 { We used to disable inline functions/methods when compiling from
@@ -527,7 +528,9 @@
   These introduce dependencies on deprecated units like CastleLevels etc.
   which can otherwise be usually avoided. }
 {$ifdef FPC}
-  {$define CASTLE_DEPRECATED_WINDOW_CLASSES}
+  {$ifndef FPC_WASI}
+    {$define CASTLE_DEPRECATED_WINDOW_CLASSES}
+  {$endif}
 {$endif}
 
 { Vampyre Imaging ------------------------------------------------------------ }

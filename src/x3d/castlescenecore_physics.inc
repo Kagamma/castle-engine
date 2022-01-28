@@ -15,6 +15,8 @@
 
 { Physics integration code between CastleSceneCore and Kraft physics engine. }
 
+{$ifndef FPC_WASI_FIXME} // WASI has not support for Kraft physics at the moment
+
 {$ifdef read_interface}
 
   { Collide as a mesh, constructed from the given scene shapes.
@@ -174,3 +176,5 @@ end;
 *)
 
 {$endif read_implementation}
+
+{$endif} // FPC_WASI_FIXME

@@ -30,8 +30,10 @@ begin
   begin
     {$if defined(USE_VAMPYRE_IMAGING)} // fallback LibPng -> Vampyre
     Result := Load_VampyreImaging(Stream, AllowedImageClasses);
+    {$elseif defined(FPC_WASI)} // fallback LibPng -> WebImage (Web target only)
+    Result := Load_WebImage(Stream, AllowedImageClasses, ifPNG);
     {$elseif defined(FPC)} // fallback LibPng -> FpImage (FPC only)
-    Result := Load_FpImage(Stream, AllowedImageClasses, TFPReaderPNG.Create, ifPNG)
+    Result := Load_FpImage(Stream, AllowedImageClasses, TFPReaderPNG.Create, ifPNG);
     {$else} // fallback LibPng -> PngImage (Delphi only)
     Result := LoadPNG_PngImage(Stream, AllowedImageClasses);
     {$endif}
@@ -40,7 +42,7 @@ end;
 
 procedure SavePNG(const Img: TEncodedImage; const Stream: TStream);
 
-  {$ifdef FPC}
+  {$if defined(FPC) and not defined(FPC_WASI)}
   procedure SavePNG_FPImage(const Img: TEncodedImage; const Stream: TStream);
   var
     Writer: TFPWriterPNG;
@@ -69,6 +71,8 @@ begin
   begin
     {$if defined(USE_VAMPYRE_IMAGING)} // fallback LibPng -> Vampyre
     Save_VampyreImaging(Img, Stream, 'jpg');
+    {$elseif defined(FPC)} // fallback LibPng -> WebImage TODO: Not working at the moment
+    Save_WebImage(Img, Stream);
     {$elseif defined(FPC)} // fallback LibPng -> FpImage
     SavePNG_FPImage(Img, Stream);
     {$else}

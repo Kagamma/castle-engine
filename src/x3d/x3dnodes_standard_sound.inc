@@ -13,6 +13,8 @@
   ----------------------------------------------------------------------------
 }
 
+{$ifndef FPC_WASI_FIXME} // No sound node for web target at the moment
+
 {$ifdef read_interface}
   { Base for all sound nodes. }
   TAbstractSoundNode = class(TAbstractChildNode)
@@ -365,3 +367,5 @@ begin
 end;
 
 {$endif read_implementation}
+
+{$endif}

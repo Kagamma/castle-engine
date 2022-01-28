@@ -208,9 +208,11 @@ end;
 
 procedure TexParameterMaxAnisotropy(const target: TGLenum; const Anisotropy: TGLfloat);
 begin
+  {$ifndef OpenGLES}
   if GLFeatures.EXT_texture_filter_anisotropic then
     glTexParameterf(Target, GL_TEXTURE_MAX_ANISOTROPY_EXT,
       Min(GLFeatures.MaxTextureMaxAnisotropyEXT, Anisotropy));
+  {$endif}
 end;
 
 {$endif read_implementation}

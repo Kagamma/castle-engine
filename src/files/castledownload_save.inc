@@ -81,6 +81,9 @@ begin
       if ssoGzip in Options then
         Result := TGZFileStream.Create(UnderlyingStream, true)
       else
+      {$else}
+      if ssoGzip in Options then
+        WritelnWarning('Saving as gzip is not supported in web target');
       {$endif}
         Result := UnderlyingStream;
     end else

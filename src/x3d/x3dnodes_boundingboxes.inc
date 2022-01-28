@@ -252,6 +252,7 @@ function Text_LocalBoundingBox(State: TX3DGraphTraverseState;
   const Strings: TCastleStringList): TBox3D;
 var
   YScale, XScale, MaxRowWidth, MinX, MinY, MaxX, MaxY, Descend: Single;
+  S: String;
   I: integer;
 begin
   YScale := Size / Font.RowHeight;
@@ -260,7 +261,10 @@ begin
 
   MaxRowWidth := 0;
   for I := 0 to Strings.Count - 1 do
-    MaxVar(MaxRowWidth, Font.TextWidth(Strings[I]) * XScale);
+  begin
+    S := Strings[I]; // Avoid WASI internal error
+    MaxVar(MaxRowWidth, Font.TextWidth(S) * XScale);
+  end;
 
   case Justify of
     fjBegin, fjFirst :

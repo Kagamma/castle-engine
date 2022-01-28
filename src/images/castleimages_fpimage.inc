@@ -27,7 +27,7 @@
   /usr/share/pixmaps/flamerobin.xpm
 }
 
-{$ifdef FPC} // FpImage is only available in FPC
+{$if defined(FPC) and not defined(FPC_WASI)} // FpImage is only available in FPC
 
 { TInternalCastleFpImage ----------------------------------------------------- }
 
@@ -497,4 +497,4 @@ begin
   finally FreeAndNil(FPImageSource) end;
 end;
 
-{$endif FPC}
+{$endif} // FPC and not FPC_WASI

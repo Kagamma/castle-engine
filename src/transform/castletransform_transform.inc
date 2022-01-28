@@ -140,7 +140,9 @@
     procedure SetTranslation(const Value: TVector3);
     function GetTranslationXY: TVector2;
     procedure SetTranslationXY(const Value: TVector2);
+    {$ifndef FPC_WASI_FIXME}
     procedure SetRigidBody(const Value: TRigidBody);
+    {$endif}
     function GetDirection: TVector3;
     function GetUp: TVector3;
     procedure SetDirection(const Value: TVector3);
@@ -149,13 +151,17 @@
     function RotationToDirection(const ARotation: TVector4): TVector3;
     function RotationToUp(const ARotation: TVector4): TVector3;
     procedure UpdateSimpleGravity(const SecondsPassed: Single);
+    {$ifndef FPC_WASI_FIXME}
     procedure UpdatePhysicsEngine(const SecondsPassed: Single);
+    {$endif}
     function GetItem(const I: Integer): TCastleTransform;
     procedure SetItem(const I: Integer; const Item: TCastleTransform);
+    {$ifndef FPC_WASI_FIXME}
     procedure PhysicsDestroy;
     procedure PhysicsNotification(AComponent: TComponent; Operation: TOperation);
     procedure PhysicsChangeWorldDetach;
     procedure PhysicsChangeWorldAttach;
+    {$endif}
     procedure InternalTransformationMult(var T: TTransformation);
     procedure InternalTransformation(out T: TTransformation);
     { Update our FWorldTransformation, FWorldTransformationId. }
@@ -176,7 +182,9 @@
     MeaningfulParent: Boolean;
 
     FBehaviors: TComponentList;
+    {$ifndef FPC_WASI_FIXME}
     FRigidBody: TRigidBody;
+    {$endif}
 
     { Update FWorld, FWorldReferences.
       This is recursively called on all children as well.
@@ -1546,7 +1554,9 @@
       to be a rigid body. Breaking this rule will cause the
       @link(EMultipleReferencesInWorld) exception at an undefined time.
     }
+    {$ifndef FPC_WASI_FIXME}
     property RigidBody: TRigidBody read FRigidBody write SetRigidBody;
+    {$endif}
 
     {$ifdef FPC}
     property Position: TVector3 read FTranslation write SetTranslation;
@@ -1822,7 +1832,9 @@ begin
   {$I auto_generated_persistent_vectors/tcastletransform_persistent_vectors.inc}
   {$undef read_implementation_destructor}
 
+  {$ifndef FPC_WASI_FIXME}
   PhysicsDestroy;
+  {$endif}
 
   if RegisteredGLContextCloseListener then
   begin
@@ -1978,7 +1990,9 @@ begin
       if ListenPressRelease then
         FWorld.UnregisterPressRelease(Self);
 
+      {$ifndef FPC_WASI_FIXME}
       PhysicsChangeWorldDetach;
+      {$endif}
 
       { Do not call RemoveFreeNotification when FWorld is also our list owner,
         this would prevent getting notification in TCastleTransform.Notification. }
@@ -1995,7 +2009,9 @@ begin
       //if FWorld <> Self then
       FWorld.FreeNotification(Self);
 
+      {$ifndef FPC_WASI_FIXME}
       PhysicsChangeWorldAttach;
+      {$endif}
 
       if ListenPressRelease then
         FWorld.RegisterPressRelease(Self);
@@ -2047,7 +2063,9 @@ begin
   if (Operation = opRemove) and (AComponent is TCastleTransform) and (List <> nil) then
     List.RemoveAll(AComponent);
 
+  {$ifndef FPC_WASI_FIXME}
   PhysicsNotification(AComponent, Operation);
+  {$endif}
 end;
 
 function TCastleTransform.Height(const MyPosition: TVector3;
@@ -2438,7 +2456,9 @@ begin
     if not CastleDesignMode then
     begin
       UpdateSimpleGravity(SecondsPassed);
+      {$ifndef FPC_WASI_FIXME}
       UpdatePhysicsEngine(SecondsPassed);
+      {$endif}
     end;
   end;
 end;

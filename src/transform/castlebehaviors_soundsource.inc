@@ -14,6 +14,8 @@
   ----------------------------------------------------------------------------
 }
 
+{$ifndef FPC_WASI_FIXME} // No sound for web target at the moment
+
 {$ifdef read_interface}
 
 type
@@ -482,3 +484,5 @@ begin
 end;
 
 {$endif read_implementation}
+
+{$endif} // FPC_WASI_FIXME

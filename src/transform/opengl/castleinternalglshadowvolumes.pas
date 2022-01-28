@@ -267,25 +267,29 @@ begin
       version is "1.5.8 NVIDIA 96.43.01").
     I guess that's OK (I mean, it's not Mesa/NVidia bug), as I should look
     for glStencilOpSeparate only if GL version is >= 2. }
+  {$ifndef FPC_WASI}
   if GLVersion.Major <= 1 then
     glStencilOpSeparate := nil;
+  {$endif}
 
   { This again looks hacky but is Ok, glStencilOpSeparateATI has the same
     call semantics as glStencilOpSeparate, in fact glStencilOpSeparate
     is just an extension promoted to standard in GL 2.0... }
-  if (not Assigned(glStencilOpSeparate)) and Load_GL_ATI_separate_stencil then
+  if {$ifndef FPC_WASI}(not Assigned(glStencilOpSeparate)) and{$endif} Load_GL_ATI_separate_stencil then
   begin
     if LogShadowVolumes then
       WritelnLog('Shadow volumes',
         'Real glStencilOpSeparate not available, ' +
         'but faking it by glStencilOpSeparateATI (since ' +
         'GL_ATI_separate_stencil available)');
+    {$ifndef FPC_WASI}
     glStencilOpSeparate := glStencilOpSeparateATI;
+    {$endif}
   end;
   {$endif}
 
-  // In case of Nintendo Switch, glStencilOpSeparate isn't a function pointer
-  FStencilTwoSided := {$ifdef CASTLE_NINTENDO_SWITCH} true {$else} {$ifndef FPC}@{$endif}glStencilOpSeparate <> nil {$endif};
+  // In case of Nintendo Switch & WASI, glStencilOpSeparate isn't a function pointer
+  FStencilTwoSided := {$if defined(CASTLE_NINTENDO_SWITCH) or defined(FPC_WASI)} true {$else} {$ifndef FPC}@{$endif}glStencilOpSeparate <> nil {$endif};
 
   if LogShadowVolumes then
     WritelnLogMultiline('Shadow volumes',

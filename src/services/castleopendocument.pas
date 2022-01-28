@@ -133,7 +133,7 @@ uses
     {$ifdef MSWINDOWS} Windows, {$endif}
     {$ifdef DARWIN} MacOSAll, {$endif}
   {$endif}
-  SysUtils, Classes, {$ifdef FPC} Process, {$else} ShellApi, {$endif}
+  SysUtils, Classes, {$if defined(FPC) and not defined(FPC_WASI)} Process, {$else}{$ifndef FPC_WASI} ShellApi, {$endif}{$endif}
   CastleURIUtils, CastleUtils, CastleFilesUtils, CastleLog, CastleMessaging;
 
 { lcl/lclstrconsts.pas ------------------------------------------------------- }
@@ -194,6 +194,18 @@ begin
 end;
 
 {$endif MSWINDOWS}
+
+{$ifdef FPC_WASI}
+function OpenURL(AURL: String): Boolean;
+begin
+  raise Exception.Create('Web target does not support OpenURL call');
+end;
+
+function OpenDocument(APath: String): Boolean;
+begin
+  raise Exception.Create('Web target does not support OpenDocument call');
+end;
+{$endif}
 
 {$ifdef UNIX}
 
