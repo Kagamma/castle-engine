@@ -22,7 +22,7 @@ unit CastleBehaviors;
 interface
 
 uses Classes, Generics.Collections,
-  CastleVectors, CastleTransform, CastleTimeUtils, CastleClassUtils, CastleSectors{$ifndef FPC_WASI_FIXME},
+  CastleVectors, CastleTransform, CastleTimeUtils, CastleClassUtils, CastleSectors{$ifndef FPC_WEB_FIXME},
   CastleSoundEngine{$endif};
 
 {$define read_interface}
@@ -46,7 +46,7 @@ uses SysUtils, Math,
 
 initialization
   // TODO-works but API not finalized yet: RegisterSerializableComponent(TCastleAliveBehavior, 'Alive');
-  {$ifndef FPC_WASI_FIXME}
+  {$ifndef FPC_WEB_FIXME}
   RegisterSerializableComponent(TCastleSoundSource, 'Sound Source');
   {$endif}
   RegisterSerializableComponent(TCastleBillboard, 'Billboard');

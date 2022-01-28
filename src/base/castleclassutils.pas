@@ -1854,7 +1854,7 @@ procedure InitStdStreams;
   end;
   {$endif MSWINDOWS}
 
-  {$if defined(UNIX) or defined(FPC_WASI)}
+  {$if defined(UNIX) or defined(FPC_WEB)}
   procedure InitStdStream(var Stream: TStream; Handle: THandle);
   begin
     Stream := THandleStream.Create(Handle);

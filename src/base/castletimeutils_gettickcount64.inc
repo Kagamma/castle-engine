@@ -120,7 +120,7 @@ end;
 
 { WASI }
 
-{$ifdef FPC_WASI}
+{$ifdef FPC_WEB}
 
 function CastleGetTickCount64: TMilisecTime;
 begin

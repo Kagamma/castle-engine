@@ -13,7 +13,7 @@
   ----------------------------------------------------------------------------
 }
 
-{$ifndef FPC_WASI_FIXME} // No sound node for web target at the moment
+{$ifndef FPC_WEB_FIXME} // No sound node for web target at the moment
 
 {$ifdef read_interface}
   { Base for all sound nodes. }

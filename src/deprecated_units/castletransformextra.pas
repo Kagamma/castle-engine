@@ -23,7 +23,7 @@ interface
 uses SysUtils, Classes, Math, Generics.Collections,
   CastleVectors, CastleFrustum, CastleBoxes, CastleClassUtils, CastleKeysMouse,
   CastleRectangles, CastleUtils, CastleTimeUtils,
-  {$ifndef FPC_WASI_FIXME}CastleSoundEngine,{$endif} CastleSectors, CastleCameras, CastleTriangles,
+  {$ifndef FPC_WEB_FIXME}CastleSoundEngine,{$endif} CastleSectors, CastleCameras, CastleTriangles,
   CastleTransform, CastleBehaviors;
 
 type
@@ -139,7 +139,7 @@ type
     FEndPosition: boolean;
     FEndPositionStateChangeTime: Single;
 
-    {$ifndef FPC_WASI_FIXME}
+    {$ifndef FPC_WEB_FIXME}
     FSoundGoBeginPosition: TCastleSound;
     FSoundGoEndPosition: TCastleSound;
     {$endif}
@@ -148,7 +148,7 @@ type
     FSoundTracksCurrentPosition: boolean;
 
     SoundSourceTransform: TCastleTransform;
-    {$ifndef FPC_WASI_FIXME}
+    {$ifndef FPC_WEB_FIXME}
     SoundSource: TCastleSoundSource;
     procedure PlaySound(const SoundType: TCastleSound; const Looping: boolean);
     {$endif}
@@ -201,7 +201,7 @@ type
       this goes back to @italic(end position). }
     procedure GoOtherPosition;
 
-    {$ifndef FPC_WASI_FIXME}
+    {$ifndef FPC_WEB_FIXME}
     property SoundGoBeginPosition: TCastleSound
       read FSoundGoBeginPosition write FSoundGoBeginPosition;
     property SoundGoEndPosition: TCastleSound
@@ -504,7 +504,7 @@ begin
   SoundSourceTransform := TCastleTransform.Create(Self);
   Add(SoundSourceTransform);
 
-  {$ifndef FPC_WASI_FIXME}
+  {$ifndef FPC_WEB_FIXME}
   SoundSource := TCastleSoundSource.Create(Self);
   SoundSourceTransform.AddBehavior(SoundSource);
   {$endif}
@@ -521,7 +521,7 @@ begin
   inherited;
 end;
 
-{$ifndef FPC_WASI_FIXME}
+{$ifndef FPC_WEB_FIXME}
 procedure TCastleLinearMoving.PlaySound(const SoundType: TCastleSound;
   const Looping: boolean);
 var
@@ -549,7 +549,7 @@ procedure TCastleLinearMoving.GoEndPosition;
 begin
   FEndPosition := true;
   FEndPositionStateChangeTime := AnimationTime;
-  {$ifndef FPC_WASI_FIXME}
+  {$ifndef FPC_WEB_FIXME}
   PlaySound(SoundGoEndPosition, SoundGoEndPositionLooping);
   {$endif}
 end;
@@ -558,7 +558,7 @@ procedure TCastleLinearMoving.GoBeginPosition;
 begin
   FEndPosition := false;
   FEndPositionStateChangeTime := AnimationTime;
-  {$ifndef FPC_WASI_FIXME}
+  {$ifndef FPC_WEB_FIXME}
   PlaySound(SoundGoBeginPosition, SoundGoBeginPositionLooping);
   {$endif}
 end;
@@ -570,7 +570,7 @@ begin
     (MoveTime - (AnimationTime - EndPositionStateChangeTime)) }
     { simplified : }
     2 * AnimationTime - MoveTime - EndPositionStateChangeTime;
-  {$ifndef FPC_WASI_FIXME}
+  {$ifndef FPC_WEB_FIXME}
   PlaySound(SoundGoEndPosition, SoundGoEndPositionLooping);
   {$endif}
 end;
@@ -582,7 +582,7 @@ begin
     (MoveTime - (AnimationTime - EndPositionStateChangeTime)) }
     { simplified : }
     2 * AnimationTime - MoveTime - EndPositionStateChangeTime;
-  {$ifndef FPC_WASI_FIXME}
+  {$ifndef FPC_WEB_FIXME}
   PlaySound(SoundGoEndPosition, SoundGoBeginPositionLooping);
   {$endif}
 end;
@@ -649,7 +649,7 @@ begin
   { If the SoundGoBegin/EndPosition is longer than the MoveTime
     (or it's looping),
     stop this sound once we're completely in Begin/EndPosition. }
-  {$ifndef FPC_WASI_FIXME}
+  {$ifndef FPC_WEB_FIXME}
   if AnimationTime - EndPositionStateChangeTime > MoveTime then
     SoundSource.Sound := nil;
   {$endif}

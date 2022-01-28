@@ -225,7 +225,7 @@ unit CastleWindow;
              { $define CASTLE_WINDOW_LIBRARY}
              { $define CASTLE_WINDOW_TEMPLATE} // only useful for developers
            {$endif}
-         {$elseif defined(FPC_WASI)}
+         {$elseif defined(FPC_WEB)}
            // backend for web target
            {$define CASTLE_WINDOW_WEB}
          {$endif} // end of UNIX possibilities
@@ -315,7 +315,7 @@ uses {$define read_interface_uses}
   CastleUtils, CastleClassUtils, CastleGLUtils, CastleImages, CastleGLImages,
   CastleKeysMouse, CastleStringUtils, CastleFilesUtils, CastleTimeUtils,
   CastleFileFilters, CastleUIControls,
-  CastleInternalPk3DConnexion, CastleParameters, {$ifndef FPC_WASI_FIXME}CastleSoundEngine,{$endif}
+  CastleInternalPk3DConnexion, CastleParameters, {$ifndef FPC_WEB_FIXME}CastleSoundEngine,{$endif}
   CastleApplicationProperties
   {$ifdef CASTLE_DEPRECATED_WINDOW_CLASSES},
   CastleCameras, X3DNodes, CastleScene, CastleViewport, CastleLevels
@@ -5276,7 +5276,7 @@ begin
           'Available command-line options:' + NL +
           HelpOptionHelp + NL +
           VersionOptionHelp + NL +
-          {$ifndef FPC_WASI_FIXME}
+          {$ifndef FPC_WEB_FIXME}
           SoundEngine.ParseParametersHelp + NL+
           {$endif}
           NL +
@@ -5306,7 +5306,7 @@ const
     (Short: #0 ; Long: 'log-file'; Argument: oaRequired)
   );
 begin
-  {$ifndef FPC_WASI_FIXME}
+  {$ifndef FPC_WEB_FIXME}
   SoundEngine.ParseParameters;
   {$endif}
   if MainWindow <> nil then

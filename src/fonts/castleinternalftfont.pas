@@ -31,10 +31,10 @@ unit CastleInternalFtFont;
 
 interface
 
-uses SysUtils, Classes, {$if defined(FPC) and not defined(FPC_WASI_FIXME)}FPCanvas, fpimgcmn,{$endif}
+uses SysUtils, Classes, {$if defined(FPC) and not defined(FPC_WEB_FIXME)}FPCanvas, fpimgcmn,{$endif}
   CastleInternalFreeType, CastleInternalFreeTypeH, CastleUtils;
 
-{$if defined(FPC) and not defined(FPC_WASI_FIXME)}
+{$if defined(FPC) and not defined(FPC_WEB_FIXME)}
 type
 
   FreeTypeFontException = class (TFPFontException);
@@ -85,7 +85,7 @@ procedure DoneEngine;
 
 implementation
 
-{$if defined(FPC) and not defined(FPC_WASI_FIXME)} uses fpimage; {$endif}
+{$if defined(FPC) and not defined(FPC_WEB_FIXME)} uses fpimage; {$endif}
 
 procedure InitEngine;
 
@@ -100,7 +100,7 @@ begin
     FontMgr.Free;
 end;
 
-{$if defined(FPC) and not defined(FPC_WASI_FIXME)}
+{$if defined(FPC) and not defined(FPC_WEB_FIXME)}
 constructor TFreeTypeFont.Create;
 begin
   inherited;

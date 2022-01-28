@@ -1264,7 +1264,7 @@ type
     property MainCamera: TCastleCamera read GetMainCamera write SetMainCamera;
       deprecated 'use Items.MainCamera';
 
-    {$ifndef FPC_WASI_FIXME}
+    {$ifndef FPC_WEB_FIXME}
     { See @link(TCastleAbstractRootTransform.PhysicsProperties). }
     function PhysicsProperties: TPhysicsProperties;
       deprecated 'use Items.PhysicsProperties';
@@ -1323,7 +1323,7 @@ implementation
 uses DOM, Math,
   CastleRenderingCamera,
   CastleGLUtils, CastleProgress, CastleLog, CastleStringUtils,
-  {$ifndef FPC_WASI_FIXME}CastleSoundEngine,{$endif} CastleGLVersion, CastleShapes, CastleTextureImages,
+  {$ifndef FPC_WEB_FIXME}CastleSoundEngine,{$endif} CastleGLVersion, CastleShapes, CastleTextureImages,
   CastleInternalSettings, CastleXMLUtils, CastleURIUtils,
   CastleRenderContext, CastleApplicationProperties;
 {$warnings on}
@@ -3536,7 +3536,7 @@ end;
 
 procedure TCastleViewport.PointingDevicePressFailed;
 begin
-  {$ifndef FPC_WASI_FIXME}
+  {$ifndef FPC_WEB_FIXME}
   {$warnings off} // just to keep deprecated working
   SoundEngine.Play(stPlayerInteractFailed);
   {$warnings on}
@@ -3676,7 +3676,7 @@ begin
       Inc(Items.InternalVisibleNonGeometryStateId);
 
     Camera.GetView(Pos, Dir, Up);
-    {$ifndef FPC_WASI_FIXME}
+    {$ifndef FPC_WEB_FIXME}
     SoundEngine.InternalUpdateListener(Pos, Dir, Up);
     {$endif}
   end;
@@ -3982,7 +3982,7 @@ begin
   Items.MoveLimit := Value;
 end;
 
-{$ifdef FPC}{$ifndef FPC_WASI_FIXME}
+{$ifdef FPC}{$ifndef FPC_WEB_FIXME}
 function TCastleSceneManager.PhysicsProperties: TPhysicsProperties;
 begin
   Result := Items.PhysicsProperties;

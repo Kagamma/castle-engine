@@ -19,7 +19,7 @@
   wrapper or various JS image decoders
 }
 
-{$if defined(FPC) and defined(FPC_WASI)} // WebImage is only available in FPC web target
+{$if defined(FPC) and defined(FPC_WEB)} // WebImage is only available in FPC web target
 
 function CreateWebImage(const Width, Height: Integer): TInternalCastleWebImage;
 begin
@@ -397,4 +397,4 @@ begin
   raise EImageSaveError.Create('Web target does not support saving image');
 end;
 
-{$endif} // defined(FPC) and defined(FPC_WASI)
+{$endif} // defined(FPC) and defined(FPC_WEB)

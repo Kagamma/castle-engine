@@ -37,7 +37,7 @@ unit CastleInternalFreeType;
 
 interface
 
-uses SysUtils, Classes, Types, {$if defined(FPC) and not defined(FPC_WASI_FIXME)}FPImgCmn,{$endif}
+uses SysUtils, Classes, Types, {$if defined(FPC) and not defined(FPC_WEB_FIXME)}FPImgCmn,{$endif}
   CastleInternalFreeTypeH, CastleUnicode, CastleUtils;
 
 { TODO : take resolution in account to find the size }

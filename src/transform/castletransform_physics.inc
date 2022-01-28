@@ -16,7 +16,7 @@
 
 { Physics integration code between CastleTransform and Kraft physics engine. }
 
-{$ifndef FPC_WASI_FIXME} // No support for physics on web at the moment
+{$ifndef FPC_WEB_FIXME} // No support for physics on web at the moment
 
 {$ifdef read_interface}
 
@@ -1313,7 +1313,7 @@ end;
 
 {$endif read_implementation}
 
-{$endif} // not defined(FPC_WASI_FIXME)
+{$endif} // not defined(FPC_WEB_FIXME)
 
 {$ifdef read_implementation}
 
@@ -1331,7 +1331,7 @@ begin
     Exit;
   UpdateFrameId := TFramesPerSecond.FrameId;
 
-  {$ifndef FPC_WASI_FIXME}
+  {$ifndef FPC_WEB_FIXME}
   if EnablePhysics and (FKraftEngine <> nil) then
   begin
     FrameProfiler.Start(fmUpdatePhysics);

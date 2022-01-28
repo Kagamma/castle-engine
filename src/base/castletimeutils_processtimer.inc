@@ -24,7 +24,7 @@ type
   TProcessTimerResult = record
   private
     Value:
-      {$if defined(MSWINDOWS) or defined(CASTLE_NINTENDO_SWITCH) or defined(FPC_WASI)}
+      {$if defined(MSWINDOWS) or defined(CASTLE_NINTENDO_SWITCH) or defined(FPC_WEB)}
       QWord // ProcessTimer just does CastleGetTickCount64
       {$else}
       clock_t // Unix
@@ -93,7 +93,7 @@ function ProcessTimerEnd: TFloatTime; deprecated 'instead of this, better to use
 
 
 function ProcessTimer: TProcessTimerResult;
-{$if defined(MSWINDOWS) or defined(CASTLE_NINTENDO_SWITCH) or defined(FPC_WASI)}
+{$if defined(MSWINDOWS) or defined(CASTLE_NINTENDO_SWITCH) or defined(FPC_WEB)}
 begin
   Result.Value := CastleGetTickCount64;
 {$else}
@@ -120,7 +120,7 @@ function ProcessTimerSeconds(const a, b: TProcessTimerResult): TFloatTime;
 const
   { Resolution of the timer used by @link(ProcessTimer). }
   ProcessTimersPerSec =
-    {$if defined(MSWINDOWS) or defined(CASTLE_NINTENDO_SWITCH) or defined(FPC_WASI)}
+    {$if defined(MSWINDOWS) or defined(CASTLE_NINTENDO_SWITCH) or defined(FPC_WEB)}
       1000 // miliseconds from CastleGetTickCount64
     {$else}
       { What is the frequency of FpTimes ?

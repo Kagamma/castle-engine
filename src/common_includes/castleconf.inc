@@ -132,10 +132,10 @@
   {$endif}
 {$endif}
 
-{ New FPC_WASI target in case Delphi has it's own WASI target in the future }
+{ New FPC_WEB target in case Delphi has it's own WASI target in the future }
 {$if defined(FPC) and defined(WASI)}
-  {$define FPC_WASI}
-  {$define FPC_WASI_FIXME} { Need to visit places with this define enabled to fix them }
+  {$define FPC_WEB}
+  {$define FPC_WEB_FIXME} { Need to visit places with this define enabled to fix them }
   {$define CASTLE_DISABLE_LIBPNG} { Obviously there's no libpng on the web }
 {$endif}
 
@@ -295,7 +295,7 @@
 { $define OpenGLES}
 {$ifdef ANDROID} {$define OpenGLES} {$endif}
 {$ifdef CASTLE_IOS} {$define OpenGLES} {$endif}
-{$ifdef FPC_WASI} {$define OpenGLES} {$endif}
+{$ifdef FPC_WEB} {$define OpenGLES} {$endif}
 
 { NX supports OpenGL and OpenGLES (that's public information,
   https://wccftech.com/nintendo-switch-supports-vulkan/ ).
@@ -308,7 +308,7 @@
   {$else}
     {$ifdef CASTLE_NINTENDO_SWITCH}
       {$define CastleGL := CastleInternalNxGLES20}
-    {$elseif defined(FPC_WASI)}
+    {$elseif defined(FPC_WEB)}
       {$define CastleGL := WebOpenGLES}
     {$else}
       {$define CastleGL := CastleGLES}
@@ -474,7 +474,7 @@
 
 { Keep HAS_FP_HTTP_CLIENT defined for all platforms that have
   FpHttpClient implemented, if you use FPC. }
-{$ifndef FPC_WASI}
+{$ifndef FPC_WEB}
   {$define HAS_FP_HTTP_CLIENT}
 {$endif}
 {$ifdef CASTLE_NINTENDO_SWITCH} {$undef HAS_FP_HTTP_CLIENT} {$endif}
@@ -528,7 +528,7 @@
   These introduce dependencies on deprecated units like CastleLevels etc.
   which can otherwise be usually avoided. }
 {$ifdef FPC}
-  {$ifndef FPC_WASI}
+  {$ifndef FPC_WEB}
     {$define CASTLE_DEPRECATED_WINDOW_CLASSES}
   {$endif}
 {$endif}

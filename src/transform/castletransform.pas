@@ -19,10 +19,10 @@ unit CastleTransform;
 
 interface
 
-uses SysUtils, Classes, Math, Generics.Collections, Contnrs, {$ifndef FPC_WASI_FIXME}Kraft,{$endif}
+uses SysUtils, Classes, Math, Generics.Collections, Contnrs, {$ifndef FPC_WEB_FIXME}Kraft,{$endif}
   CastleVectors, CastleFrustum, CastleBoxes, CastleClassUtils, CastleKeysMouse,
   CastleRectangles, CastleUtils, CastleTimeUtils, CastleComponentSerialize,
-  {$ifndef FPC_WASI_FIXME}CastleSoundEngine,{$endif} CastleCameras, CastleTriangles, CastleRenderOptions;
+  {$ifndef FPC_WEB_FIXME}CastleSoundEngine,{$endif} CastleCameras, CastleTriangles, CastleRenderOptions;
 
 type
   {$define read_interface}

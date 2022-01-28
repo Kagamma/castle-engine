@@ -21,7 +21,7 @@ const
   { Root dir name. Empty if not applicable to this OS. }
   RootDir = {$ifdef UNIX} '/' {$endif}
             {$ifdef MSWINDOWS} '' {$endif}
-            {$ifdef FPC_WASI} '' {$endif} ;
+            {$ifdef FPC_WEB} '' {$endif} ;
 
   ExeExtension = {$ifdef MSWINDOWS} '.exe' {$else} '' {$endif};
 
@@ -162,7 +162,7 @@ end;
 function IsPathAbsolute(const Path: string): boolean;
 begin
   Result := {$ifdef UNIX} SCharIs(Path, 1, PathDelim) {$endif}
-            {$ifdef FPC_WASI} SCharIs(Path, 1, PathDelim) {$endif}
+            {$ifdef FPC_WEB} SCharIs(Path, 1, PathDelim) {$endif}
             {$ifdef MSWINDOWS} SCharIs(Path, 2, DriveDelim) {$endif};
 end;
 

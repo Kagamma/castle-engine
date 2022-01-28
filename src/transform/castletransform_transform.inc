@@ -140,7 +140,7 @@
     procedure SetTranslation(const Value: TVector3);
     function GetTranslationXY: TVector2;
     procedure SetTranslationXY(const Value: TVector2);
-    {$ifndef FPC_WASI_FIXME}
+    {$ifndef FPC_WEB_FIXME}
     procedure SetRigidBody(const Value: TRigidBody);
     {$endif}
     function GetDirection: TVector3;
@@ -151,12 +151,12 @@
     function RotationToDirection(const ARotation: TVector4): TVector3;
     function RotationToUp(const ARotation: TVector4): TVector3;
     procedure UpdateSimpleGravity(const SecondsPassed: Single);
-    {$ifndef FPC_WASI_FIXME}
+    {$ifndef FPC_WEB_FIXME}
     procedure UpdatePhysicsEngine(const SecondsPassed: Single);
     {$endif}
     function GetItem(const I: Integer): TCastleTransform;
     procedure SetItem(const I: Integer; const Item: TCastleTransform);
-    {$ifndef FPC_WASI_FIXME}
+    {$ifndef FPC_WEB_FIXME}
     procedure PhysicsDestroy;
     procedure PhysicsNotification(AComponent: TComponent; Operation: TOperation);
     procedure PhysicsChangeWorldDetach;
@@ -182,7 +182,7 @@
     MeaningfulParent: Boolean;
 
     FBehaviors: TComponentList;
-    {$ifndef FPC_WASI_FIXME}
+    {$ifndef FPC_WEB_FIXME}
     FRigidBody: TRigidBody;
     {$endif}
 
@@ -1554,7 +1554,7 @@
       to be a rigid body. Breaking this rule will cause the
       @link(EMultipleReferencesInWorld) exception at an undefined time.
     }
-    {$ifndef FPC_WASI_FIXME}
+    {$ifndef FPC_WEB_FIXME}
     property RigidBody: TRigidBody read FRigidBody write SetRigidBody;
     {$endif}
 
@@ -1832,7 +1832,7 @@ begin
   {$I auto_generated_persistent_vectors/tcastletransform_persistent_vectors.inc}
   {$undef read_implementation_destructor}
 
-  {$ifndef FPC_WASI_FIXME}
+  {$ifndef FPC_WEB_FIXME}
   PhysicsDestroy;
   {$endif}
 
@@ -1990,7 +1990,7 @@ begin
       if ListenPressRelease then
         FWorld.UnregisterPressRelease(Self);
 
-      {$ifndef FPC_WASI_FIXME}
+      {$ifndef FPC_WEB_FIXME}
       PhysicsChangeWorldDetach;
       {$endif}
 
@@ -2009,7 +2009,7 @@ begin
       //if FWorld <> Self then
       FWorld.FreeNotification(Self);
 
-      {$ifndef FPC_WASI_FIXME}
+      {$ifndef FPC_WEB_FIXME}
       PhysicsChangeWorldAttach;
       {$endif}
 
@@ -2063,7 +2063,7 @@ begin
   if (Operation = opRemove) and (AComponent is TCastleTransform) and (List <> nil) then
     List.RemoveAll(AComponent);
 
-  {$ifndef FPC_WASI_FIXME}
+  {$ifndef FPC_WEB_FIXME}
   PhysicsNotification(AComponent, Operation);
   {$endif}
 end;
@@ -2456,7 +2456,7 @@ begin
     if not CastleDesignMode then
     begin
       UpdateSimpleGravity(SecondsPassed);
-      {$ifndef FPC_WASI_FIXME}
+      {$ifndef FPC_WEB_FIXME}
       UpdatePhysicsEngine(SecondsPassed);
       {$endif}
     end;

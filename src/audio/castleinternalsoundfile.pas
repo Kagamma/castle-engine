@@ -21,7 +21,7 @@ unit CastleInternalSoundFile;
 interface
 
 uses SysUtils, Classes,
-  CastleUtils, CastleTimeUtils, CastleSoundBase{$ifndef FPC_WASI_FIXME}, CastleInternalVorbisFile{$endif};
+  CastleUtils, CastleTimeUtils, CastleSoundBase{$ifndef FPC_WEB_FIXME}, CastleInternalVorbisFile{$endif};
 
 type
   ESoundFormatNotSupportedByOpenAL = class(ESoundFileError)
@@ -127,7 +127,7 @@ procedure RegisterSoundFormat(const MimeType: String;
 implementation
 
 uses Generics.Collections,
-  CastleStringUtils, {$ifndef FPC_WASI_FIXME}CastleInternalVorbisDecoder,{$endif}
+  CastleStringUtils, {$ifndef FPC_WEB_FIXME}CastleInternalVorbisDecoder,{$endif}
   CastleLog, CastleDownload, CastleURIUtils, CastleClassUtils;
 
 const

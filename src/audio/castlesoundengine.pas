@@ -22,7 +22,7 @@ unit CastleSoundEngine;
   // Nintendo Switch has different default backend
 {$else}
   { Full-featured backend using OpenAL. }
-  {$ifndef FPC_WASI_FIXME} // Web target has no OpenAL
+  {$ifndef FPC_WEB_FIXME} // Web target has no OpenAL
     {$define CASTLE_SOUND_BACKEND_DEFAULT_OPENAL}
   {$endif}
 {$endif}
@@ -53,7 +53,7 @@ implementation
 
 {$warnings off} // TODO: temporarily, this uses deprecated CastleProgress
 uses XMLRead, StrUtils, Generics.Defaults,
-  CastleUtils, CastleLog, CastleProgress, {$ifndef FPC_WASI_FIXME}CastleInternalVorbisFile,{$endif}
+  CastleUtils, CastleLog, CastleProgress, {$ifndef FPC_WEB_FIXME}CastleInternalVorbisFile,{$endif}
   CastleParameters, CastleXMLUtils, CastleFilesUtils, CastleConfig,
   CastleURIUtils, CastleDownload, CastleMessaging, CastleApplicationProperties
   {$ifdef CASTLE_SOUND_BACKEND_DEFAULT_OPENAL}, CastleOpenALSoundBackend{$endif}

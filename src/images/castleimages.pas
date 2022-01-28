@@ -72,7 +72,7 @@ unit CastleImages;
 interface
 
 uses SysUtils, Classes, Math, Generics.Collections,
-  {$if defined(FPC_WASI)}
+  {$if defined(FPC_WEB)}
   WebImage,
   {$elseif defined(FPC)}
   { FPImage and related units }
@@ -83,7 +83,7 @@ uses SysUtils, Classes, Math, Generics.Collections,
   Vcl.Imaging.PngImage,
   {$endif}
   { CGE units }
-  {$ifndef FPC_WASI}CastleInternalPng,{$endif} CastleUtils, CastleVectors, CastleRectangles,
+  {$ifndef FPC_WEB}CastleInternalPng,{$endif} CastleUtils, CastleVectors, CastleRectangles,
   CastleFileFilters, CastleClassUtils, CastleColors;
 
 type
@@ -122,7 +122,7 @@ type
   EImageDrawError = class(Exception);
 
   {$ifdef FPC}
-  {$ifdef FPC_WASI}
+  {$ifdef FPC_WEB}
   { An internal class to communicate image data
     between CastleImages and WemImage efficiently.
     @exclude }
@@ -151,7 +151,7 @@ type
     FURL: string;
     procedure NotImplemented(const AMethodName: string);
   {$ifdef FPC}
-    {$ifdef FPC_WASI}
+    {$ifdef FPC_WEB}
     procedure FromWebImage(const WebImage: TInternalCastleWebImage); virtual;
     {$else}
     procedure FromFpImage(const FPImage: TInternalCastleFpImage); virtual;
@@ -247,7 +247,7 @@ type
     {$ifdef FPC}
     { Convert image contents to WebImage instance.
       The resulting instance is owned by the caller. }
-    {$ifdef FPC_WASI}
+    {$ifdef FPC_WEB}
     function ToWebImage: TInternalCastleWebImage; virtual;
     {$else}
     { Convert image contents to FpImage instance.
@@ -438,7 +438,7 @@ type
       const Mode: TDrawMode); virtual;
 
     {$ifdef FPC}
-    {$ifdef FPC_WASI}
+    {$ifdef FPC_WEB}
     {$else}
     function MakeResizedToFpImage(ResizeWidth, ResizeHeight: Cardinal;
       const Interpolation: TResizeInterpolation): TInternalCastleFpImage;
@@ -1150,7 +1150,7 @@ type
     function GetPixels: PVector3Byte;
     function GetPixelsArray: PVector3ByteArray;
   {$ifdef FPC}
-    {$ifdef FPC_WASI}
+    {$ifdef FPC_WEB}
     procedure FromWebImage(const WebImage: TInternalCastleWebImage); override;
     {$else}
     procedure FromFpImage(const FPImage: TInternalCastleFpImage); override;
@@ -1207,7 +1207,7 @@ type
     function ToGrayscale: TGrayscaleImage;
 
     {$ifdef FPC}
-    {$ifdef FPC_WASI}
+    {$ifdef FPC_WEB}
     function ToWebImage: TInternalCastleWebImage; override;
     {$else}
     function ToFpImage: TInternalCastleFpImage; override;
@@ -1274,7 +1274,7 @@ type
     function GetPixels: PVector4Byte;
     function GetPixelsArray: PVector4ByteArray;
   {$ifdef FPC}
-    {$ifdef FPC_WASI}
+    {$ifdef FPC_WEB}
     procedure FromWebImage(const WebImage: TInternalCastleWebImage); override;
     {$else}
     procedure FromFpImage(const FPImage: TInternalCastleFpImage); override;
@@ -1341,7 +1341,7 @@ type
     { Flatten to grayscale and remove alpha channel. }
     function ToGrayscaleImage: TGrayscaleImage;
     {$ifdef FPC}
-    {$ifdef FPC_WASI}
+    {$ifdef FPC_WEB}
     function ToWebImage: TInternalCastleWebImage; override;
     {$else}
     function ToFpImage: TInternalCastleFpImage; override;
@@ -1385,7 +1385,7 @@ type
     function GetPixels: PVector3;
     function GetPixelsArray: PVector3Array;
   {$ifdef FPC}
-    {$ifdef FPC_WASI}
+    {$ifdef FPC_WEB}
     procedure FromWebImage(const WebImage: TInternalCastleWebImage); override;
     {$else}
     procedure FromFpImage(const FPImage: TInternalCastleFpImage); override;
@@ -1422,7 +1422,7 @@ type
       to 0..1. }
     function ToRGBImage: TRGBImage;
     {$ifdef FPC}
-    {$ifdef FPC_WASI}
+    {$ifdef FPC_WEB}
     function ToWebImage: TInternalCastleWebImage; override;
     {$else}
     function ToFpImage: TInternalCastleFpImage; override;
@@ -1451,7 +1451,7 @@ type
     function GetPixels: PByte;
     function GetPixelsArray: PByteArray;
   {$ifdef FPC}
-    {$ifdef FPC_WASI}
+    {$ifdef FPC_WEB}
     procedure FromWebImage(const WebImage: TInternalCastleWebImage); override;
     {$else}
     procedure FromFpImage(const FPImage: TInternalCastleFpImage); override;
@@ -1496,7 +1496,7 @@ type
     function ToGrayscaleAlphaImage: TGrayscaleAlphaImage;
 
     {$ifdef FPC}
-    {$ifdef FPC_WASI}
+    {$ifdef FPC_WEB}
     function ToWebImage: TInternalCastleWebImage; override;
     {$else}
     function ToFpImage: TInternalCastleFpImage; override;
@@ -1558,7 +1558,7 @@ type
     function GetPixels: PVector2Byte;
     function GetPixelsArray: PVector2ByteArray;
   {$ifdef FPC}
-    {$ifdef FPC_WASI}
+    {$ifdef FPC_WEB}
     procedure FromWebImage(const WebImage: TInternalCastleWebImage); override;
     {$else}
     procedure FromFpImage(const FPImage: TInternalCastleFpImage); override;
@@ -1600,7 +1600,7 @@ type
       const AlphaTolerance: Byte): TAlphaChannel; override;
 
     {$ifdef FPC}
-    {$ifdef FPC_WASI}
+    {$ifdef FPC_WEB}
     function ToWebImage: TInternalCastleWebImage; override;
     {$else}
     function ToFpImage: TInternalCastleFpImage; override;
@@ -2054,7 +2054,7 @@ function InternalDetectClassPNG(const Stream: TStream): TEncodedImageClass;
 implementation
 
 {$warnings off} // TODO: temporarily, this uses deprecated CastleProgress
-uses {$if defined(FPC) and not defined(FPC_WASI)} ExtInterpolation, FPCanvas, FPImgCanv, {$endif}
+uses {$if defined(FPC) and not defined(FPC_WEB)} ExtInterpolation, FPCanvas, FPImgCanv, {$endif}
   {$ifdef USE_VAMPYRE_IMAGING} Imaging, ImagingClasses, ImagingTypes, {$endif}
   CastleProgress, CastleStringUtils, CastleFilesUtils, CastleLog,
   CastleInternalCompositeImage, CastleDownload, CastleURIUtils, CastleTimeUtils,
@@ -2332,7 +2332,7 @@ procedure TCastleImage.Resize(ResizeWidth, ResizeHeight: Cardinal;
 var
   NewPixels: Pointer;
 {$ifdef FPC}
-  {$ifdef FPC_WASI}
+  {$ifdef FPC_WEB}
   NewWebImage: TInternalCastleWebImage;
   {$else}
   NewFpImage: TInternalCastleFpImage;
@@ -2343,7 +2343,7 @@ begin
      (Interpolation <= High(TResizeInterpolationFpImage)) then
   begin
     {$ifdef FPC}
-      {$ifdef FPC_WASI}
+      {$ifdef FPC_WEB}
       WritelnWarning('Resizing with interpolation %d not supported in web target, falling back to bilinear', [
         Ord(Interpolation)
       ]);
@@ -2387,7 +2387,7 @@ function TCastleImage.MakeResized(ResizeWidth, ResizeHeight: Cardinal;
   const Interpolation: TResizeInterpolation): TCastleImage;
 {$ifdef FPC}
 var
-  {$ifdef FPC_WASI}
+  {$ifdef FPC_WEB}
   NewWebImage: TInternalCastleWebImage;
   {$else}
   NewFpImage: TInternalCastleFpImage;
@@ -2398,7 +2398,7 @@ begin
      (Interpolation <= High(TResizeInterpolationFpImage)) then
   begin
     {$ifdef FPC}
-    {$ifdef FPC_WASI}
+    {$ifdef FPC_WEB}
     // FIXME:
     {$else}
     NewFpImage := MakeResizedToFpImage(ResizeWidth, ResizeHeight, Interpolation);
