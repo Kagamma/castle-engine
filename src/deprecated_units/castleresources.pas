@@ -1310,7 +1310,9 @@ end;
 initialization // Empty but Delphi need that
 
 finalization
+  {$ifndef FPC_WASI}
   UnitFinalization := true;
   FreeAndNil(FResources);
   FreeAndNil(FResourceClasses);
+  {$endif}
 end.

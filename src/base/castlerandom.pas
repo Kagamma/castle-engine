@@ -424,6 +424,8 @@ end;
 {$I norqcheckend.inc}
 
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(GlobalRandom);
+  {$endif}
 
 end.

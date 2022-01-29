@@ -290,7 +290,9 @@ initialization
   VorbisFileInitialization;
   {$endif}
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(VorbisFileLibrary);
+  {$endif}
 end.
 
 {$endif CASTLE_TREMOLO_STATIC}

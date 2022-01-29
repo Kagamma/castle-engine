@@ -256,5 +256,7 @@ end;
 
 initialization
 finalization
+  {$ifndef WASI}
   FreeAndNil(Locations);
+  {$endif}
 end.

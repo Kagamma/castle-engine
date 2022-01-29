@@ -57,5 +57,7 @@ end;
 
 initialization
 finalization
+  {$ifndef WASI}
   FreeAndNil(AllSounds);
+  {$endif}
 end.

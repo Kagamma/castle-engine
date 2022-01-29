@@ -524,7 +524,9 @@ initialization
   LoadFreeTypeLibrary;
   {$endif}
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(FreeTypeLibrary);
+  {$endif}
 end.
 
 {$endif CASTLE_FREETYPE_STATIC}

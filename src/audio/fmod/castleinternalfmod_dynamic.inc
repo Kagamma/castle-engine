@@ -1079,7 +1079,9 @@ initialization
   InitializeFmodLibrary;
   {$endif}
 finalization
+  {$ifndef FPC_WASI}
   UnitFinalizationDone := true;
   if FmodUsing = 0 then
     FinalizeFmodLibrary;
+  {$endif}
 end.

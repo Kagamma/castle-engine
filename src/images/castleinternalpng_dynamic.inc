@@ -1180,5 +1180,7 @@ initialization
   PngInitialization;
   {$endif}
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(PngLibrary);
+  {$endif}
 end.

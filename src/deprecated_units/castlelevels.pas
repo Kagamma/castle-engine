@@ -1699,6 +1699,7 @@ initialization
   FLevels := TLevelInfoList.Create(true);
   Inc(FLevels.References);
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(FLevelLogicClasses);
   { there may still exist TLevel instances that refer to our
     TLevelInfo instances. So we don't always free Levels below. }
@@ -1708,4 +1709,5 @@ finalization
     if FLevels.References = 0 then
       FreeAndNil(FLevels);
   end;
+  {$endif}
 end.

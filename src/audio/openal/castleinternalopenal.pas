@@ -351,5 +351,7 @@ initialization
   OpenALInitialization;
   {$endif}
 finalization
+  {$ifndef FPC_WASI}
   OpenALFinalization;
+  {$endif}
 end.

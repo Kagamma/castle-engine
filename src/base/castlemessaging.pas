@@ -422,6 +422,8 @@ end;
 initialization
   DoInitialization;
 finalization
+  {$ifndef FPC_WASI}
   FinalizationDone := true;
   FreeAndNil(FMessaging);
+  {$endif}
 end.

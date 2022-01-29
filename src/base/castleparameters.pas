@@ -747,5 +747,7 @@ end;
 initialization
   InitializationParams;
 finalization
+  {$ifndef FPC_WASI}
   FinalizationParams;
+  {$endif}
 end.

@@ -509,5 +509,7 @@ end;
 
 initialization
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(FApplicationProperties);
+  {$endif}
 end.

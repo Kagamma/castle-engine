@@ -360,5 +360,7 @@ end;
 initialization
 
 finalization
+  {$ifndef WASI}
   FreeAndNil(TUnit.UiTemplate);
+  {$endif}
 end.

@@ -76,5 +76,7 @@ uses XMLRead, StrUtils, Generics.Defaults,
 initialization
   RegisterSerializableComponent(TCastleSound, 'Sound');
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(FSoundEngine);
+  {$endif}
 end.

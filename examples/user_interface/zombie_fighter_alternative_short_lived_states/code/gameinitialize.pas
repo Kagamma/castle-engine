@@ -45,5 +45,7 @@ initialization
   Window := TCastleWindowBase.Create(Application);
   Application.MainWindow := Window;
 finalization
+  {$ifndef WASI}
   TUIState.Current := nil;
+  {$endif}
 end.

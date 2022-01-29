@@ -165,7 +165,9 @@ end;
 initialization
   ApplicationProperties.OnGLContextClose.Add(@ContextClose);
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(BoundFboStack);
   FreeAndNil(FTextureMemoryProfiler);
   FreeAndNil(FDrawableImageCache);
+  {$endif}
 end.

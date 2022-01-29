@@ -74,5 +74,7 @@ uses Math, Generics.Defaults,
 initialization // empty but needed by Delphi
 
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(FX3DFieldsManager);
+  {$endif}
 end.

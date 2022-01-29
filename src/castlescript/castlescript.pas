@@ -2944,5 +2944,7 @@ initialization
 
   FunctionHandlers.RegisterHandler({$ifdef FPC}@{$endif} TCasScriptShortcut{$ifdef FPC}(nil){$endif}.Handle, TCasScriptShortcut, [TCasScriptString], false);
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(FFunctionHandlers);
+  {$endif}
 end.

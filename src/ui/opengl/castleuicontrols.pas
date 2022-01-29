@@ -72,5 +72,7 @@ initialization
   InitializationTheme;
   RegisterSerializableComponent(TCastleUserInterface, 'Empty Rectangle');
 finalization
+  {$ifndef FPC_WASI}
   FinalizationTheme;
+  {$endif}
 end.

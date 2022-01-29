@@ -94,6 +94,7 @@ uses SysUtils;
 
 initialization
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(FPanel);
   FreeAndNil(FWindowDarkTransparent);
   FreeAndNil(FSlider);
@@ -130,4 +131,5 @@ finalization
   FreeAndNil(FScrollbarFrame);
   FreeAndNil(FSliderPosition);
   FreeAndNil(FEdit);
+  {$endif}
 end.

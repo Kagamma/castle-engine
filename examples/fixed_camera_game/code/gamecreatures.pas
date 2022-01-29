@@ -500,5 +500,7 @@ end;
 
 initialization
 finalization
+  {$ifndef WASI}
   FreeAndNil(CreatureKinds);
+  {$endif}
 end.

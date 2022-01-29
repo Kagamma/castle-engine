@@ -60,5 +60,7 @@ uses SysUtils, CastleLog;
 initialization
   RenderingCamera := TRenderingCamera.Create;
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(RenderingCamera);
+  {$endif}
 end.

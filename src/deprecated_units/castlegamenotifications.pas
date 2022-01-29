@@ -44,6 +44,7 @@ initialization
   OnScriptMessage := {$ifdef FPC}@{$endif}Notifications.Show;
 finalization
 
+  {$ifndef FPC_WASI}
   { restore original OnScriptMessage }
   if Notifications <> nil then
   begin
@@ -53,4 +54,5 @@ finalization
   end;
 
   FreeAndNil(Notifications);
+  {$endif}
 end.

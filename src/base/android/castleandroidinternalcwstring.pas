@@ -957,5 +957,7 @@ begin
 end;
 
 finalization
+  {$ifndef FPC_WASI}
   UnloadICU;
+  {$endif}
 end.

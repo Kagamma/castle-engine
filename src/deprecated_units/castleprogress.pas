@@ -453,6 +453,8 @@ initialization
     this way Progress.Init etc. may be always safely called }
   Progress.UserInterface := ProgressNullInterface;
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(Progress);
   FreeAndNil(ProgressNullInterface);
+  {$endif}
 end.

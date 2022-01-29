@@ -2257,5 +2257,7 @@ initialization
   RegisterSerializableComponent(TCastleCylinder, 'Cylinder');
   RegisterSerializableComponent(TCastleImageTransform, 'Image');
 finalization
+  {$ifndef FPC_WASI}
   GLContextCache.FreeWhenEmpty(@GLContextCache);
+  {$endif}
 end.

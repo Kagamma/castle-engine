@@ -584,5 +584,7 @@ end;
 {$ifndef FPC}initialization{$endif}
 
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(FRegisteredSoundFormats);
+  {$endif}
 end.

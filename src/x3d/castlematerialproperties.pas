@@ -977,5 +977,7 @@ end;
 initialization // empty but needed by delphi
 
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(FMaterialProperties);
+  {$endif}
 end.

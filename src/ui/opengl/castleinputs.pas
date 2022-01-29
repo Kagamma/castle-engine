@@ -1009,5 +1009,7 @@ end;
 initialization
   DoInitialization;
 finalization
+  {$ifndef FPC_WASI}
   DoFinalization;
+  {$endif}
 end.

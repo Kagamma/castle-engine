@@ -29,5 +29,7 @@ uses SysUtils;
 
 initialization
 finalization
+  {$ifndef WASI}
   FreeAndNil(GameConfig);
+  {$endif}
 end.

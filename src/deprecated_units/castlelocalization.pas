@@ -288,6 +288,8 @@ initialization
   ActivateAllFileLoader;
 
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(Localization);
+  {$endif}
 
 end.

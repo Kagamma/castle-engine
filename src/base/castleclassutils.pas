@@ -2182,5 +2182,7 @@ end;
 initialization
   InitStdStreams;
 finalization
+  {$ifndef FPC_WASI}
   FiniStdStreams;
+  {$endif}
 end.

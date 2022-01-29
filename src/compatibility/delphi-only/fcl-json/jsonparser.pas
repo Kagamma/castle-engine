@@ -268,6 +268,8 @@ end;
 initialization
   InitJSONHandler;
 finalization
+  {$ifndef FPC_WASI}
   DoneJSONHandler;
+  {$endif}
 end.
 

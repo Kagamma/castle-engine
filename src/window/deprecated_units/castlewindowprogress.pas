@@ -162,5 +162,7 @@ end;
 initialization
   WindowProgressInterface := TWindowProgressInterface.Create;
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(WindowProgressInterface);
+  {$endif}
 end.

@@ -7052,5 +7052,7 @@ end;
 
 initialization
 finalization
+  {$ifndef WASI}
   FreeAndNil(FFont);
+  {$endif}
 end.

@@ -416,5 +416,7 @@ begin
 end;
 
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(TranslateAllDesignsMo);
+  {$endif}
 end.

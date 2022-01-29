@@ -321,5 +321,7 @@ initialization
   Window.ParseParameters; // allows to control window size / fullscreen on the command-line
   Application.MainWindow := Window;
 finalization
+  {$ifndef WASI}
   FreeAndNil(FontContainer);
+  {$endif}
 end.

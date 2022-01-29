@@ -49,5 +49,7 @@ end;
 initialization
   FUserConfig := TCastleConfig.Create(nil);
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(FUserConfig);
+  {$endif}
 end.

@@ -298,7 +298,9 @@ initialization
   ZLibInitialization;
   {$endif}
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(ZLibrary);
+  {$endif}
 end.
 
 {$endif CASTLE_ZLIB_USING_PASZLIB}

@@ -164,5 +164,7 @@ initialization
     In particular, it is not allowed to read files before ApplicationInitialize
     (in case of non-desktop platforms, some necessary may not be prepared yet). }
 finalization
+  {$ifndef WASI}
   FreeAndNil(PackedDataReader);
+  {$endif}
 end.

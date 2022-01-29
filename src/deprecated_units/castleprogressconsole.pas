@@ -130,5 +130,7 @@ end;
 initialization
   ProgressConsoleInterface := TProgressConsoleInterface.Create;
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(ProgressConsoleInterface);
+  {$endif}
 end.

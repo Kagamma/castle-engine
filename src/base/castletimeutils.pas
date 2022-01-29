@@ -64,6 +64,8 @@ initialization
   { Required by Random and all stuff on top of it }
   CastleRandomize;
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(FProfiler);
   FreeAndNil(FFrameProfiler);
+  {$endif}
 end.

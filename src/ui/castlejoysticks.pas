@@ -417,5 +417,7 @@ end;
 {$ifndef FPC}initialization{$endif}
 
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(FJoysticks);
+  {$endif}
 end.

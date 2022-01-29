@@ -67,5 +67,7 @@ uses URIParser, Math, Generics.Collections,
 
 initialization
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(FRegisteredProtocols);
+  {$endif}
 end.

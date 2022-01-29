@@ -929,5 +929,7 @@ initialization
   // not useful: RegisterSerializableComponent(TComponent, 'Component (Basic)');
   RegisterSerializableComponent(TCastleComponent, 'Component (Group)');
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(FRegisteredComponents);
+  {$endif}
 end.

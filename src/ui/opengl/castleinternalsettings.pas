@@ -365,5 +365,7 @@ end;
 {$ifndef FPC}initialization{$endif}
 
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(FWarmupCacheFormats);
+  {$endif}
 end.

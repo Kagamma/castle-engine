@@ -148,5 +148,7 @@ initialization
   Window.OnPress := @WindowPress;
   Window.OnMotion := @WindowMotion;
 finalization
+  {$ifndef WASI}
   ApplicationFinalize;
+  {$endif}
 end.

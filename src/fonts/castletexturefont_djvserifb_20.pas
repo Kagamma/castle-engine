@@ -6579,5 +6579,7 @@ end;
 
 initialization
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(FFont);
+  {$endif}
 end.

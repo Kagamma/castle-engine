@@ -1457,6 +1457,8 @@ initialization
   InitializeClipboard;
   OnMainContainer := @TCastleControlBase(nil).GetMainContainer;
 finalization
+  {$ifndef FPC_WASI}
   OnMainContainer := nil;
   FreeAndNil(ControlsList);
+  {$endif}
 end.

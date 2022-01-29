@@ -706,8 +706,10 @@ initialization
 
   Window.MainMenu := CreateMainMenu;
 finalization
+  {$ifndef WASI}
   FreeAndNil(CurrentTerrain);
   FreeAndNil(OnScreenMenuNoise);
   FreeAndNil(OnScreenMenuImage);
   FreeAndNil(OnScreenMenuGeneral);
+  {$endif}
 end.

@@ -5416,6 +5416,7 @@ end;
 initialization
   ApplicationProperties._FileAccessSafe := false;
 finalization
+  {$ifndef FPC_WASI}
   UnitFinalization := true;
 
   { Instead of using FreeAndNil, just call Free.
@@ -5433,4 +5434,5 @@ finalization
     by TMenu destructor. And some TCastleWindowBase instances may be freed
     only by Application destructor (when they are owned by Application). }
   FreeAndNil(FMenuItems);
+  {$endif}
 end.

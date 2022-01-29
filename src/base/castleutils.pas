@@ -185,5 +185,7 @@ initialization
   SetMultiByteRTLFileSystemCodePage(CP_UTF8);
  {$ENDIF}
 finalization
+  {$ifndef FPC_WASI}
   FinalizationOSSpecific;
+  {$endif}
 end.

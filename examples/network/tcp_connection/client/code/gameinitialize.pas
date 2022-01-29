@@ -182,5 +182,7 @@ initialization
   Application.MainWindow := Window;
 
 finalization
+  {$ifndef WASI}
   Window.Free;
+  {$endif}
 end.

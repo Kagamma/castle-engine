@@ -125,6 +125,8 @@ initialization
   RegisterSerializableComponent(TCastleSwitchControl, 'Switch');
   RegisterSerializableComponent(TCastleDesign, 'Design (Use Another castle-user-interface File)');
 finalization
+  {$ifndef FPC_WASI}
   FinalizationUIFonts;
   FinalizationClipboard;
+  {$endif}
 end.

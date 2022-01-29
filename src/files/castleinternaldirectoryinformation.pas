@@ -405,5 +405,7 @@ end;
 
 initialization
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(FDataDirectoryInformation);
+  {$endif}
 end.

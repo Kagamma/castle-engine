@@ -5074,7 +5074,9 @@ initialization
   {$endif}
   LoadImageEvents := TLoadImageEventList.Create;
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(LoadImage_FileFilters);
   FreeAndNil(SaveImage_FileFilters);
   FreeAndNil(LoadImageEvents);
+  {$endif}
 end.

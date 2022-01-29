@@ -313,6 +313,8 @@ initialization
   Window.ResizeAllowed := raOnlyAtOpen;
   Window.FpsShowOnCaption := true;
 finalization
+  {$ifndef WASI}
   FreeAndNil(Player);
   FreeAndNil(Map);
+  {$endif}
 end.

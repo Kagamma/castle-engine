@@ -779,6 +779,7 @@ initialization
 
   CurrentlyLoading := TCastleStringList.Create;
 finalization
+  {$ifndef FPC_WASI}
   { Because of various finalization order (some stuff may be owned
     e.g. by CastleWindow.Application, and freed at CastleWindow finalization,
     which may be done after X3DNodes finalization) we may defer
@@ -786,4 +787,5 @@ finalization
   if (X3DCache = nil) or X3DCache.Empty then
     X3DNodesFinalization else
     X3DCache.OnEmpty := @X3DNodesFinalization;
+  {$endif}
 end.

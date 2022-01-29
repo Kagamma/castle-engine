@@ -532,9 +532,11 @@ end;
 
 initialization
 finalization
+  {$ifndef FPC_WASI}
   if LogStreamOwned then
   begin
     FreeAndNil(LogStream);
     FLog := false;
   end;
+  {$endif}
 end.

@@ -3802,5 +3802,7 @@ initialization
   PlaceholderNames['x3dshape'] := @X3DShapePlaceholder;
   PlaceholderNames['blender'] := @BlenderPlaceholder;
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(PlaceholderNames);
+  {$endif}
 end.

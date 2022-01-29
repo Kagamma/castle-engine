@@ -1384,5 +1384,7 @@ end;
 
 initialization
 finalization
+  {$ifndef FPC_WASI}
   FreeAndNil(FURIMimeExtensions);
+  {$endif}
 end.
