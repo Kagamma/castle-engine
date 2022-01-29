@@ -217,7 +217,7 @@ begin
         aeMouseWheel:
           begin
             if not MainWindow.Closed then
-              DoMouseWheel(QEvent.MouseWheel, true);
+              MainWindow.DoMouseWheel(QEvent.MouseWheel, true);
           end;
       end;
     end;
