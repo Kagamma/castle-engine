@@ -29,7 +29,6 @@ type
     Key: TKey;
     MouseX, MouseY, MouseWheel: Integer;
     MouseButton: TCastleMouseButton;
-    Width, Height: Integer;
   end;
   TQueuedEventList = specialize TList<TQueuedEvent>;
 
@@ -190,8 +189,8 @@ begin
       case QEvent.EventType of
         aeResize:
           begin
-            FScreenWidth := QEvent.Width;
-            FScreenHeight := QEvent.Height;
+            FScreenWidth := QEvent.MouseX;
+            FScreenHeight := QEvent.MouseY;
             if not MainWindow.Closed then
               MainWindow.DoResize(FScreenWidth, FScreenHeight, false);
           end;
@@ -276,8 +275,8 @@ var
   QEvent: TQueuedEvent;
 begin
   QEvent.EventType := aeResize;
-  QEvent.Width := Width;
-  QEvent.Height := Width;
+  QEvent.MouseX := Width;
+  QEvent.MouseY := Width;
   QEvents.Add(QEvent);
 end;
 
