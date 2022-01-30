@@ -27,7 +27,7 @@ type
   TQueuedEvent = object
     EventType: TQueuedEventType;
     Key: TKey;
-    MouseX, MouseY, MouseWheel: Integer;
+    Value1, Value2: Integer;
     MouseButton: TCastleMouseButton;
   end;
   TQueuedEventList = specialize TList<TQueuedEvent>;
@@ -189,8 +189,8 @@ begin
       case QEvent.EventType of
         aeResize:
           begin
-            FScreenWidth := QEvent.MouseX;
-            FScreenHeight := QEvent.MouseY;
+            FScreenWidth := QEvent.Value1;
+            FScreenHeight := QEvent.Value2;
             if not MainWindow.Closed then
               MainWindow.DoResize(FScreenWidth, FScreenHeight, false);
           end;
@@ -207,22 +207,22 @@ begin
         aeMouseMove:
           begin
             if not MainWindow.Closed then
-              MainWindow.DoMotion(InputMotion(MainWindow.MousePosition, Vector2(QEvent.MouseX, QEvent.MouseY), MainWindow.MousePressed, 0));
+              MainWindow.DoMotion(InputMotion(MainWindow.MousePosition, Vector2(QEvent.Value1, QEvent.Value2), MainWindow.MousePressed, 0));
           end;
         aeMouseDown:
           begin
             if not MainWindow.Closed then
-              MainWindow.DoMouseDown(Vector2(QEvent.MouseX, QEvent.MouseY), QEvent.MouseButton, 0);
+              MainWindow.DoMouseDown(Vector2(QEvent.Value1, QEvent.Value2), QEvent.MouseButton, 0);
           end;
         aeMouseUp:
           begin
             if not MainWindow.Closed then
-              MainWindow.DoMouseUp(Vector2(QEvent.MouseX, QEvent.MouseY), QEvent.MouseButton, 0);
+              MainWindow.DoMouseUp(Vector2(QEvent.Value1, QEvent.Value2), QEvent.MouseButton, 0);
           end;
         aeMouseWheel:
           begin
             if not MainWindow.Closed then
-              MainWindow.DoMouseWheel(QEvent.MouseWheel, true);
+              MainWindow.DoMouseWheel(QEvent.Value1, true);
           end;
       end;
     end;
@@ -275,8 +275,8 @@ var
   QEvent: TQueuedEvent;
 begin
   QEvent.EventType := aeResize;
-  QEvent.MouseX := Width;
-  QEvent.MouseY := Width;
+  QEvent.Value1 := Width;
+  QEvent.Value2 := Height;
   QEvents.Add(QEvent);
 end;
 
@@ -303,8 +303,8 @@ var
   QEvent: TQueuedEvent;
 begin
   QEvent.EventType := aeMouseMove;
-  QEvent.MouseX := X;
-  QEvent.MouseY := Y;
+  QEvent.Value1 := X;
+  QEvent.Value2 := Y;
   QEvents.Add(QEvent);
 end;
 
@@ -313,8 +313,8 @@ var
   QEvent: TQueuedEvent;
 begin
   QEvent.EventType := aeMouseDown;
-  QEvent.MouseX := X;
-  QEvent.MouseY := Y;
+  QEvent.Value1 := X;
+  QEvent.Value2 := Y;
   case Button of
     0: QEvent.MouseButton := buttonLeft;
     1: QEvent.MouseButton := buttonMiddle;
@@ -328,8 +328,8 @@ var
   QEvent: TQueuedEvent;
 begin
   QEvent.EventType := aeMouseUp;
-  QEvent.MouseX := X;
-  QEvent.MouseY := Y;
+  QEvent.Value1 := X;
+  QEvent.Value2 := Y;
   case Button of
     0: QEvent.MouseButton := buttonLeft;
     1: QEvent.MouseButton := buttonMiddle;
@@ -343,7 +343,7 @@ var
   QEvent: TQueuedEvent;
 begin
   QEvent.EventType := aeMouseWheel;
-  QEvent.MouseWheel := Y;
+  QEvent.Value1 := Y;
   QEvents.Add(QEvent);
 end;
 
