@@ -38,7 +38,7 @@ var
 
 { Externals }
 
-procedure SetCaption(S: PChar); external 'window' name 'setCaption';
+procedure SetPageCaption(S: PChar); external 'window' name 'setCaption';
 
 { TCastleWindowBase ---------------------------------------------------------- }
 
@@ -117,7 +117,7 @@ end;
 procedure TCastleWindowBase.SetCaption(const Part: TCaptionPart; const Value: String);
 begin
   FCaption[Part] := Value;
-  SetCaption();
+  SetPageCaption(PChar(Value));
 end;
 
 procedure TCastleWindowBase.SetCursor(const Value: TMouseCursor);
