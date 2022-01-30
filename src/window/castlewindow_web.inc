@@ -36,6 +36,10 @@ type
 var
   QEvents: TQueuedEventList;
 
+{ Externals }
+
+procedure SetCaption(S: PChar); external 'window' name 'setCaption';
+
 { TCastleWindowBase ---------------------------------------------------------- }
 
 procedure TCastleWindowBase.CreateBackend;
@@ -112,6 +116,8 @@ end;
 
 procedure TCastleWindowBase.SetCaption(const Part: TCaptionPart; const Value: String);
 begin
+  FCaption[Part] := Value;
+  SetCaption();
 end;
 
 procedure TCastleWindowBase.SetCursor(const Value: TMouseCursor);
