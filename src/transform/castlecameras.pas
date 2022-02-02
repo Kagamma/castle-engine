@@ -1,5 +1,5 @@
 {
-  Copyright 2003-2021 Michalis Kamburelis.
+  Copyright 2003-2022 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -22,7 +22,7 @@ interface
 
 uses SysUtils, Classes,
   CastleVectors, CastleUtils, CastleKeysMouse, CastleBoxes, CastleQuaternions,
-  CastleFrustum, CastleUIControls, CastleRays, CastleProjection, CastleTimeUtils,
+  CastleFrustum, CastleUIControls, CastleInternalRays, CastleProjection, CastleTimeUtils,
   CastleInputs, CastleTriangles, CastleRectangles, CastleClassUtils,
   CastleInternalCameraGestures;
 
@@ -921,7 +921,7 @@ type
       fills the whole window,
       and requires that it's added to @link(TCastleViewport.Navigation)
       and this @link(TCastleViewport) must be part of
-      TCastleWindowBase.Controls or TCastleControlBase.Controls.
+      TCastleWindow.Controls or TCastleControl.Controls.
 
       Projection (read-only here) describe your projection,
       required for calculating the ray properly.
@@ -939,7 +939,7 @@ type
       fills the whole window,
       and requires that it's added to @link(TCastleViewport.Navigation)
       and this @link(TCastleViewport) must be part of
-      TCastleWindowBase.Controls or TCastleControlBase.Controls.
+      TCastleWindow.Controls or TCastleControl.Controls.
 
       @seealso Ray
       @seealso CustomRay }

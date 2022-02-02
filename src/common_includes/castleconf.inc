@@ -237,7 +237,7 @@
     it seems like it doesn't receive DrawWidth correctly,
     and even when we workaround it, it calculates partial rectangles
     (for DrawAdd) incorrectly.
-    Testcase: e.g. examples/user_interface/show_various_ui_controls/ on Android/Aarch64. }
+    Testcase: any example using Draw3x3 on Android/Aarch64. }
 
 {$if defined(FPC) and defined(CPUAARCH64) and defined(RELEASE) and (defined(VER3_0) or defined(VER3_1) or defined(VER3_2))}
   {$define BUGGY_AARCH64_OPTIMIZATIONS}
@@ -509,15 +509,6 @@
   (it means you cannot define X3D ROUTEs to pass value into/out of this field).
   The choice "which fields are seldom used" is purely subjective, and may change! }
 {.$define CASTLE_SLIM_NODES}
-
-{ Compatibility -------------------------------------------------------------- }
-
-{ Define deprecated CastleWindow classes.
-  These introduce dependencies on deprecated units like CastleLevels etc.
-  which can otherwise be usually avoided. }
-{$ifdef FPC}
-  {$define CASTLE_DEPRECATED_WINDOW_CLASSES}
-{$endif}
 
 { Vampyre Imaging ------------------------------------------------------------ }
 

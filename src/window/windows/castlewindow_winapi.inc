@@ -107,9 +107,11 @@ private
     use predefined HCURSOR values and so is fast. SetCursor is guaranteed
     by WinAPI to return fast if called with already used cursor.
 
-    For mcDefault, and mcCustom, values in this array are undefined.
-    For mcNone, CursorHandle is 0 (this is what SetCursor always accepts
-    as invisible cursor). }
+    For mcDefault, value in this array is undefined.
+    (but 0 in practice, for now).
+
+    For mcNone and CursorHandles, CursorHandle is guaranteed 0
+    (this is what SetCursor always accepts as invisible cursor). }
   CursorHandles: array [TMouseCursor] of record
     Handle: HCURSOR;
   end;
@@ -181,7 +183,7 @@ begin
   result := LRESULT(msg.Result);
 end;
 
-{ TCastleWindowBase ------------------------------------------------- }
+{ TCastleWindow ------------------------------------------------- }
 
 const
   { Some constants missing from FPC's Windows unit. }
@@ -201,7 +203,7 @@ const
 
 { convert virtual key code (VK_xxx) to TKey. Returns keyNone if no conversion
   available. }
-function TCastleWindowBase.VirtualKeyToKey(VirtualKey: Byte): TKey;
+function TCastleWindow.VirtualKeyToKey(VirtualKey: Byte): TKey;
 var
   VirtualKeyToKeyResult: TKey absolute Result;
 
@@ -296,9 +298,9 @@ end;
 
 function TryHandlingMessage(hWnd: HWND; uMsg: UINT; wParm: WPARAM; lParm: LPARAM): boolean;
 var
-  Window: TCastleWindowBase;
+  Window: TCastleWindow;
 begin
-  Window := TCastleWindowBase(GetWindowLongPtr(hWnd, GWL_USERDATA));
+  Window := TCastleWindow(GetWindowLongPtr(hWnd, GWL_USERDATA));
   Result := Application.FindWindow(Window) >= 0;
   if Result then
     Window.WindowProc(uMsg, wParm, lParm);
@@ -306,9 +308,9 @@ end;
 
 function WndProc(hWnd: HWND; uMsg: UINT; wParm: WPARAM; lParm: LPARAM) :LRESULT; stdcall;
 var
-  Window: TCastleWindowBase;
+  Window: TCastleWindow;
 begin
-  Window := TCastleWindowBase(GetWindowLongPtr(hWnd, GWL_USERDATA));
+  Window := TCastleWindow(GetWindowLongPtr(hWnd, GWL_USERDATA));
   { Wszystkie hwnd jakie tu beda wpadac to beda nasze okna
     (it's only different for a plugin, but right now the plugin uses only TryHandlingMessage,
     not this). Ale zanim
@@ -332,7 +334,7 @@ begin
     result := DefWindowProcW(hWnd, uMsg, wParm, lParm);
 end;
 
-function TCastleWindowBase.WindowProc(uMsg: UINT; wParm: WPARAM; lParm: LPARAM): LRESULT;
+function TCastleWindow.WindowProc(uMsg: UINT; wParm: WPARAM; lParm: LPARAM): LRESULT;
 
 { Note: the following Windows events may be called from CloseBackend
   (so they probably should check InCloseBackend):
@@ -418,7 +420,7 @@ function TCastleWindowBase.WindowProc(uMsg: UINT; wParm: WPARAM; lParm: LPARAM):
     The frequency of "key repeat" depends on user settings.
 
     And... that's completely OK. We still pass each WM_KEYDOWN to DoKeyDown.
-    This way our API (TCastleUserInterface.Press, TCastleWindowBase.OnPress)
+    This way our API (TCastleUserInterface.Press, TCastleWindow.OnPress)
     will generate repeated key presses.
     This is documented and desired (e.g. for implementing UI like edit box).
     User can check TInputPressRelease.KeyRepeated that is calculated
@@ -833,8 +835,7 @@ begin
           It will install our window class cursor (or parent cursor)
           if in client area, or just do the right thing if outside client area.
           So it's suitable when wParm <> h_Wnd,
-          or we want mcDefault,
-          or we want mcCustom. }
+          or we want mcDefault. }
       end;
 
     WM_MOUSEWHEEL, WM_MOUSEHWHEEL:
@@ -947,12 +948,12 @@ begin
   end;
 end;
 
-function TCastleWindowBase.RedirectKeyDownToMenuClick: boolean;
+function TCastleWindow.RedirectKeyDownToMenuClick: boolean;
 begin
   Result := true;
 end;
 
-procedure TCastleWindowBase.BackendMenuFinalize;
+procedure TCastleWindow.BackendMenuFinalize;
 var
   Old_H_Menu: HMenu;
 begin
@@ -963,35 +964,35 @@ begin
   MainMenu.ClearHandles;
 end;
 
-procedure TCastleWindowBase.BackendMenuInitialize;
+procedure TCastleWindow.BackendMenuInitialize;
 begin
   OSCheck( SetMenu(H_Wnd, MakeWinapiMenu(MainMenu, true)), 'SetMenu');
 end;
 
-procedure TCastleWindowBase.MenuUpdateCaption(Entry: TMenuEntryWithCaption);
+procedure TCastleWindow.MenuUpdateCaption(Entry: TMenuEntryWithCaption);
 begin
   MenuFinalize;
   MenuInitialize;
 end;
 
-procedure TCastleWindowBase.MenuUpdateEnabled(Entry: TMenuEntryWithCaption);
+procedure TCastleWindow.MenuUpdateEnabled(Entry: TMenuEntryWithCaption);
 begin
   MenuFinalize;
   MenuInitialize;
 end;
 
-procedure TCastleWindowBase.MenuUpdateChecked(Entry: TMenuItemChecked);
+procedure TCastleWindow.MenuUpdateChecked(Entry: TMenuItemChecked);
 begin
   MenuFinalize;
   MenuInitialize;
 end;
 
-function TCastleWindowBase.MenuUpdateCheckedFast: boolean;
+function TCastleWindow.MenuUpdateCheckedFast: boolean;
 begin
   Result := false;
 end;
 
-procedure TCastleWindowBase.MenuInsert(const Parent: TMenu;
+procedure TCastleWindow.MenuInsert(const Parent: TMenu;
   const ParentPosition: Integer; const Entry: TMenuEntry);
 begin
   { TODO: unoptimal }
@@ -999,7 +1000,7 @@ begin
   MenuInitialize;
 end;
 
-procedure TCastleWindowBase.MenuDelete(const Parent: TMenu;
+procedure TCastleWindow.MenuDelete(const Parent: TMenu;
   const ParentPosition: Integer; const Entry: TMenuEntry);
 begin
   { TODO: unoptimal }
@@ -1007,7 +1008,7 @@ begin
   MenuInitialize;
 end;
 
-procedure TCastleWindowBase.OpenBackend;
+procedure TCastleWindow.OpenBackend;
 
   // Get initial MousePosition, even before the first mouse move/down event.
   procedure GetInitialCursorPos(const ClientRect: TRect);
@@ -1224,7 +1225,7 @@ begin
   RegisterForJoystickEvents;
 end;
 
-procedure TCastleWindowBase.SetCursor(const Value: TMouseCursor);
+procedure TCastleWindow.SetCursor(const Value: TMouseCursor);
 var
   Point: Windows.TPoint;
 begin
@@ -1245,13 +1246,7 @@ begin
   end;
 end;
 
-procedure TCastleWindowBase.SetCustomCursor(const Value: TRGBAlphaImage);
-begin
-  FCustomCursor := Value;
-  { TODO }
-end;
-
-procedure TCastleWindowBase.SetMousePosition(const Value: TVector2);
+procedure TCastleWindow.SetMousePosition(const Value: TVector2);
 
   { Perform similar function as WinAPI SetCursorPos (set cursor position,
     given absolute screen coordinates), but using SendInput WinAPI call.
@@ -1306,7 +1301,7 @@ begin
   end;
 end;
 
-procedure TCastleWindowBase.CloseBackend;
+procedure TCastleWindow.CloseBackend;
 begin
   InCloseBackend := true;
   try
@@ -1323,7 +1318,7 @@ begin
   finally InCloseBackend := false; end;
 end;
 
-procedure TCastleWindowBase.SetCaption(const Part: TCaptionPart; const Value: string);
+procedure TCastleWindow.SetCaption(const Part: TCaptionPart; const Value: string);
 begin
   FCaption[Part] := Value;
   if h_Wnd <> 0 then
@@ -1332,11 +1327,11 @@ begin
   end;
 end;
 
-procedure TCastleWindowBase.CreateBackend;
+procedure TCastleWindow.CreateBackend;
 begin
 end;
 
-function TCastleWindowBase.BackendFileDialog(const Title: string; var FileName: string;
+function TCastleWindow.BackendFileDialog(const Title: string; var FileName: string;
   OpenDialog: boolean; FileFilters: TFileFilterList): boolean;
 
   { Make path absolute. Same as ExpandFileName, but knows that
@@ -1575,7 +1570,7 @@ begin
   end;
 end;
 
-function TCastleWindowBase.ColorDialog(var Color: TVector3): boolean;
+function TCastleWindow.ColorDialog(var Color: TVector3): boolean;
 
   function Vector3ToColorRef(const Value: TVector3): TColorRef;
   begin
@@ -1637,7 +1632,7 @@ const
     'Information');
 *)
 
-procedure TCastleWindowBase.MessageOK(const S: string; const MessageType: TWindowMessageType);
+procedure TCastleWindow.MessageOK(const S: string; const MessageType: TWindowMessageType);
 begin
   CastleMessages.MessageOK(Self, S);
 
@@ -1656,7 +1651,7 @@ begin
   *)
 end;
 
-function TCastleWindowBase.MessageYesNo(const S: string;
+function TCastleWindow.MessageYesNo(const S: string;
   const MessageType: TWindowMessageType): boolean;
 begin
   Result := CastleMessages.MessageYesNo(Self, S);
@@ -1673,7 +1668,7 @@ begin
   *)
 end;
 
-procedure TCastleWindowBase.UpdateFullScreenBackend;
+procedure TCastleWindow.UpdateFullScreenBackend;
 begin
   SimpleUpdateFullScreenBackend;
 end;
@@ -1974,14 +1969,6 @@ function TCastleApplication.BackendName: string;
 begin
   Result := 'WinAPI';
 end;
-
-{ TCastleWindow -------------------------------------------------------------- }
-
-{$ifdef CASTLE_DEPRECATED_WINDOW_CLASSES}
-procedure TCastleWindow.NavigationInfoChanged;
-begin
-end;
-{$endif}
 
 { TWindowContainer ----------------------------------------------------------- }
 

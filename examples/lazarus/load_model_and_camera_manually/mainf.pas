@@ -26,10 +26,10 @@ uses
 
 type
   TForm1 = class(TForm)
-    Control1: TCastleControlBase;
-    Viewport: TCastleViewport;
+    Control1: TCastleControl;
     procedure FormCreate(Sender: TObject);
   private
+    Viewport: TCastleViewport;
     WalkNavigation: TCastleWalkNavigation;
     Scene: TCastleScene;
   public
