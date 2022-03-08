@@ -62,8 +62,6 @@ type
   {$I castlecontrols_clipboard.inc}
   {$undef read_interface}
 
-procedure Register;
-
 implementation
 
 uses SysUtils, Math, CastleTextureFont_DjvSans_20,
@@ -98,15 +96,6 @@ uses SysUtils, Math, CastleTextureFont_DjvSans_20,
 {$I castlecontrols_memoundo.inc}
 {$I castlecontrols_memo.inc}
 {$undef read_implementation}
-
-procedure Register;
-begin
-  {$ifdef CASTLE_REGISTER_ALL_COMPONENTS_IN_LAZARUS}
-  RegisterComponents('Castle', [TCastleButton, TCastleImageControl,
-    TCastleRectangleControl, TCastleLabel, TCastleCrosshair,
-    TCastleIntegerSlider, TCastleFloatSlider, TCastleScrollView, TCastleSwitchControl]);
-  {$endif}
-end;
 
 initialization
   RegisterSerializableComponent(TCastleButton, 'Button');

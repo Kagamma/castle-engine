@@ -1,5 +1,5 @@
 {
-  Copyright 2015-2018 Michalis Kamburelis.
+  Copyright 2015-2022 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -28,8 +28,7 @@ type
   TUIStateList = class;
 
   { UI state, to manage the state of your game UI.
-    See also
-    https://castle-engine.io/manual_2d_user_interface.php#section_ui_state
+    See also https://castle-engine.io/states
     for an overview of using TUIState.
 
     In simple cases, only one state is @italic(current) at a given time,
@@ -230,7 +229,7 @@ type
         TUIState.Current := StateMain;
       #)
 
-      See https://castle-engine.io/manual_2d_user_interface.php and numerous engine examples.
+      See https://castle-engine.io/states and numerous engine examples.
     }
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -326,7 +325,7 @@ type
       during all the methods --- @link(Start), @link(Resume), @link(Pause), @link(Stop). }
     function Active: boolean;
 
-    { Prevents passing mouse/keyboard events to the UI states underneath.
+    { Prevents passing mouse/keyboard events to the states underneath.
 
       More precisely, when this property is @true, then the
       @link(Press), @link(Release) and @link(Motion) events are marked as
@@ -336,7 +335,29 @@ type
       by @link(Push) method). They will also not be passed to final container
       (TCastleWindow, TCastleControl) callbacks like
       TCastleWindow.OnPress (as these callbacks are always used at the end,
-      when nothing else handled the event). }
+      when nothing else handled the event).
+
+      Note that setting this to @true means that calling @code(inherited)
+      from your @link(Press) overridden implementation will always return @true,
+      as if the ancestor handled all the items. For this reason,
+      in such case you should not immediately Exit when @code(inherited) is @true.
+      You should just ignore the ancestor result, like this:
+
+      @longCode(#
+      function TMyState.Press(const Event: TInputPressRelease): Boolean;
+      begin
+        Result := inherited;
+        // ignore the ancestor result, as we use InterceptInput, so ancestor always returns true
+        // if Result the Exit;
+
+        if Event.IsMouseButton(buttonLeft) then
+        begin
+          ...
+          Exit(true);
+        end;
+      end;
+      #)
+    }
     property InterceptInput: boolean read FInterceptInput write FInterceptInput
       default false;
 

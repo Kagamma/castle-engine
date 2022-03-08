@@ -22,17 +22,22 @@ unit CastleScene;
   This is OK. }
 {$ifndef FPC}{$warn HIDING_MEMBER off}{$endif}
 
+{ By default, we don't define TCastleEnvironmentLight -- implementation is not finished yet
+  (neither of TCastleEnvironmentLight, nor of underlying TEnvironmentLightNode). }
+{.$define CASTLE_EXPERIMENTAL_ENVIRONMENT_LIGHT}
+
 interface
 
 uses SysUtils, Classes, Generics.Collections,
   {$ifdef FPC} CastleGL, {$else} OpenGL, OpenGLext, {$endif}
   CastleVectors, CastleBoxes, X3DNodes, CastleClassUtils, CastleFonts,
-  CastleUtils, CastleSceneCore, CastleInternalRenderer, CastleInternalBackground,
+  CastleUtils, CastleSceneCore, CastleInternalRenderer, CastleInternalBackgroundRenderer,
   CastleGLUtils, CastleInternalShapeOctree, CastleInternalGLShadowVolumes, X3DFields,
   CastleTriangles, CastleShapes, CastleFrustum, CastleTransform, CastleGLShaders,
   CastleRectangles, CastleCameras, CastleRendererInternalShader, CastleColors,
   CastleSceneInternalShape, CastleSceneInternalOcclusion, CastleSceneInternalBlending,
-  CastleInternalBatchShapes, CastleRenderOptions, CastleTimeUtils, CastleImages;
+  CastleInternalBatchShapes, CastleRenderOptions, CastleTimeUtils, CastleImages,
+  CastleBehaviors;
 
 {$define read_interface}
 
@@ -134,10 +139,11 @@ type
       VarianceShadowMapsProgram, ShadowMapsProgram: TCustomShaders;
       FDistanceCulling: Single;
 
-      FReceiveShadowVolumes: boolean;
+      FReceiveShadowVolumes: Boolean;
       FTempPrepareParams: TPrepareParams;
       { Camera position, in local scene coordinates, known during the Render call. }
       RenderCameraPosition: TVector3;
+      FCastGlobalLights: Boolean;
 
       { Used by LocalRenderInside }
       FilteredShapes: TShapeList;
@@ -273,7 +279,8 @@ type
     procedure RenderWithOctree_CheckShapeCulling(
       ShapeIndex: Integer; CollidesForSure: boolean);
 
-    { Turn off lights that are not supposed to light in the shadow.
+    { Like LightRender, additionally turn off lights that are not
+      supposed to light in the shadow (for shadow volumes).
       This simply turns LightOn to @false if the light has
       shadowVolumes = TRUE (see
       [https://castle-engine.io/x3d_extensions.php#section_ext_shadows]).
@@ -281,10 +288,20 @@ type
       It's useful to pass this as LightRenderEvent to @link(Render)
       when you use shadow algorithm that requires
       you to make a first pass rendering the scene all shadowed. }
-    class procedure LightRenderInShadow(const Light: TLightInstance;
-      var LightOn: boolean);
+    procedure LightRenderInShadow(const Light: TLightInstance;
+      const IsGlobalLight: Boolean; var LightOn: boolean);
+
+    { Turn off global lights that are duplicated in current scene.
+      This way we render our own lights through SceneLights at each shape,
+      not through GlobalLights,
+      and so they work regardless of TCastleScene.CastGlobalLights
+      and RenderOptions.ReceiveGlobalLights,
+      and are controled by RenderOptions.ReceiveSceneLights. }
+    procedure LightRender(const Light: TLightInstance;
+      const IsGlobalLight: Boolean; var LightOn: boolean);
 
     function GetRenderOptions: TCastleRenderOptions;
+    procedure SetCastGlobalLights(const Value: Boolean);
   private
     PreparedShapesResources, PreparedRender: Boolean;
     Renderer: TGLRenderer;
@@ -293,7 +310,7 @@ type
     function CreateShape(const AGeometry: TAbstractGeometryNode;
       const AState: TX3DGraphTraverseState;
       const ParentInfo: PTraversingInfo): TShape; override;
-    procedure InternalInvalidateBackground; override;
+    procedure InternalInvalidateBackgroundRenderer; override;
 
     procedure LocalRender(const Params: TRenderParams); override;
 
@@ -338,14 +355,15 @@ type
       Faces (both shadow quads and caps) are rendered such that
       CCW <=> you're looking at it from outside
       (i.e. it's considered front face of this shadow volume). }
-    procedure LocalRenderShadowVolume(
-      ShadowVolumeRenderer: TBaseShadowVolumeRenderer;
-      const ParentTransformIsIdentity: boolean;
-      const ParentTransform: TMatrix4); override;
+    procedure LocalRenderShadowVolume(const Params: TRenderParams;
+      const ShadowVolumeRenderer: TBaseShadowVolumeRenderer); override;
+
+    procedure ChangeWorld(const Value: TCastleAbstractRootTransform); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure Update(const SecondsPassed: Single; var RemoveMe: TRemoveType); override;
+    function PropertySections(const PropertyName: String): TPropertySections; override;
 
     { Destroy any associations of this object with current OpenGL context.
       For example, release any allocated texture names.
@@ -366,35 +384,31 @@ type
       (useful e.g. for Spine animations). }
     procedure Setup2D;
   private
-    FBackgroundSkySphereRadius: Single;
     { Node for which FBackground is currently prepared. }
     FBackgroundNode: TAbstractBindableNode;
-    { Cached Background value }
-    FBackground: TBackground;
-    { Is FBackground valid ? We can't use "nil" FBackground value to flag this
-      (bacause nil is valid value for Background function).
-      If not FBackgroundValid then FBackground must always be nil.
-      Never set FBackgroundValid to false directly - use InternalInvalidateBackground,
-      this will automatically call FreeAndNil(FBackground) before setting
-      FBackgroundValid to false. }
-    FBackgroundValid: boolean;
-    procedure SetBackgroundSkySphereRadius(const Value: Single);
+    { Cached BackgroundRenderer value }
+    FBackgroundRenderer: TBackgroundRenderer;
+    { Is FBackgroundRenderer valid?
+
+      We can't use "FBackgroundRenderer = nil" to detect this,
+      bacause nil is valid value for FBackgroundRenderer in case there's no
+      (supported) FBackgroundNode.
+
+      If not FBackgroundRendererValid then FBackgroundRenderer must always be nil.
+      Never set FBackgroundRendererValid to false directly - use InternalInvalidateBackgroundRenderer,
+      this will automatically call FreeAndNil(FBackgroundRenderer) before setting
+      FBackgroundRendererValid to false. }
+    FBackgroundRendererValid: boolean;
     procedure PrepareBackground;
   public
-    { Internal hack to avoid checking frustum at rendering in some situations. }
-    InternalIgnoreFrustum: boolean;
     { Internal override test visibility. }
     InternalVisibilityTest: TTestShapeVisibility;
 
     procedure FreeResources(Resources: TSceneFreeResources); override;
 
-    property BackgroundSkySphereRadius: Single
-      read FBackgroundSkySphereRadius write SetBackgroundSkySphereRadius
-      {$ifdef FPC}default 1{$endif};
-
-    { TBackground instance to render current background. Current background
-      is the top node on the BackgroundStack of this scene, following X3D
-      specifications, and can be animated.
+    { TBackgroundRenderer instance to render the background defined in this scene.
+      Current background is the top node on the BackgroundStack of this scene,
+      following X3D specifications, and can be animated.
       The TCastleViewport should use this to render background.
 
       You should not access the background this way in your own code.
@@ -413,11 +427,10 @@ type
       This instance is managed (automatically created/freed
       and so on) by this TCastleScene instance. It is cached
       (so that it's recreated only when relevant things change,
-      like VRML/X3D nodes affecting this background,
-      or changes to BackgroundSkySphereRadius, or OpenGL context is closed).
+      like X3D nodes affecting this background).
 
       @exclude }
-    function InternalBackground: TBackground;
+    function InternalBackgroundRenderer: TBackgroundRenderer;
 
     function Attributes: TCastleRenderOptions; deprecated 'use RenderOptions';
 
@@ -492,6 +505,10 @@ type
     { Rendering options.
       You are free to change them at any time. }
     property RenderOptions: TCastleRenderOptions read GetRenderOptions;
+
+    { Lights defines by given scene shine on everything in the viewport, including all other TCastleScene. }
+    property CastGlobalLights: Boolean
+      read FCastGlobalLights write SetCastGlobalLights default false;
   end;
 
   TCastleSceneClass = class of TCastleScene;
@@ -518,13 +535,11 @@ type
     proper render params instance for you. }
   TBasicRenderParams = class(TRenderParams)
   public
-    FBaseLights: TLightInstancesList;
+    FGlobalLights: TLightInstancesList;
     constructor Create;
     destructor Destroy; override;
-    function BaseLights(Scene: TCastleTransform): TAbstractLightInstancesList; override;
+    function GlobalLights: TAbstractLightInstancesList; override;
   end;
-
-procedure Register;
 
 var
   { Global OpenGL context cache.
@@ -573,18 +588,22 @@ const
 {$I castlescene_cone.inc}
 {$I castlescene_cylinder.inc}
 {$I castlescene_imagetransform.inc}
+{$I castlescene_background.inc}
+{$I castlescene_abstractlight.inc}
+{$I castlescene_pointlight.inc}
+{$I castlescene_directionallight.inc}
+{$I castlescene_spotlight.inc}
+{$ifdef CASTLE_EXPERIMENTAL_ENVIRONMENT_LIGHT}
+  {$I castlescene_environmentlight.inc}
+{$endif}
 {$undef read_interface}
 
 implementation
 
-{$warnings off}
-// TODO: This unit temporarily uses RenderingCamera singleton,
-// to keep TBasicRenderParams working for backward compatibility.
-uses CastleGLVersion, CastleLog,
-  CastleStringUtils, CastleApplicationProperties,
-  CastleRenderingCamera, CastleShapeInternalRenderShadowVolumes,
+uses Math,
+  CastleGLVersion, CastleLog, CastleStringUtils, CastleApplicationProperties,
+  CastleShapeInternalRenderShadowVolumes,
   CastleComponentSerialize, CastleRenderContext, CastleFilesUtils;
-{$warnings on}
 
 {$define read_implementation}
 {$I castlescene_roottransform.inc}
@@ -596,14 +615,15 @@ uses CastleGLVersion, CastleLog,
 {$I castlescene_cone.inc}
 {$I castlescene_cylinder.inc}
 {$I castlescene_imagetransform.inc}
+{$I castlescene_background.inc}
+{$I castlescene_abstractlight.inc}
+{$I castlescene_pointlight.inc}
+{$I castlescene_directionallight.inc}
+{$I castlescene_spotlight.inc}
+{$ifdef CASTLE_EXPERIMENTAL_ENVIRONMENT_LIGHT}
+  {$I castlescene_environmentlight.inc}
+{$endif}
 {$undef read_implementation}
-
-procedure Register;
-begin
-  {$ifdef CASTLE_REGISTER_ALL_COMPONENTS_IN_LAZARUS}
-  RegisterComponents('Castle', [TCastleScene]);
-  {$endif}
-end;
 
 { TGLSceneShape -------------------------------------------------------------- }
 
@@ -711,10 +731,9 @@ begin
 
   inherited Create(AOwner);
 
-  FBackgroundSkySphereRadius := 1.0;
-  FBackgroundValid := false;
+  FBackgroundRendererValid := false;
   FBackgroundNode := nil;
-  FBackground := nil;
+  FBackgroundRenderer := nil;
 
   FSceneFrustumCulling := true;
   FShapeFrustumCulling := true;
@@ -868,7 +887,7 @@ begin
 
   ScheduleUpdateGeneratedTextures;
 
-  InternalInvalidateBackground;
+  InternalInvalidateBackgroundRenderer;
 
   if OcclusionQueryUtilsRenderer <> nil then
     OcclusionQueryUtilsRenderer.GLContextClose;
@@ -907,6 +926,10 @@ end;
 procedure TCastleScene.RenderShape_NoTests(const Shape: TGLShape);
 begin
   Shape.SceneModelView := Render_ModelView;
+  if Render_Params.TransformIdentity then
+    Shape.SceneTransform := TMatrix4.Identity
+  else
+    Shape.SceneTransform := Render_Params.Transform^;
   Shape.Fog := ShapeFog(Shape, Render_Params.GlobalFog as TFogNode);
 
   OcclusionQueryUtilsRenderer.OcclusionBoxStateEnd(false);
@@ -1047,7 +1070,9 @@ procedure TCastleScene.LocalRenderInside(
     VisibilitySensorsPair: {$ifdef FPC}TVisibilitySensors.TDictionaryPair{$else}TPair<TVisibilitySensorNode, TVisibilitySensorInstanceList>{$endif};
   begin
     { optimize for common case: exit early if nothing to do }
-    if VisibilitySensors.Count = 0 then Exit;
+    if (VisibilitySensors.Count = 0) or
+       (Params.Frustum = nil) then
+      Exit;
 
     if ProcessEvents then
     begin
@@ -1142,6 +1167,7 @@ procedure TCastleScene.LocalRenderInside(
 
 var
   LightRenderEvent: TLightRenderEvent;
+  ReceivedGlobalLights: TLightInstancesList;
 begin
   { We update XxxVisible only for one value of Params.Transparent.
     Otherwise, we would increase it twice.
@@ -1159,7 +1185,7 @@ begin
   if Params.InShadow then
     LightRenderEvent := {$ifdef FPC}@{$endif}LightRenderInShadow
   else
-    LightRenderEvent := nil;
+    LightRenderEvent := {$ifdef FPC}@{$endif}LightRender;
 
   Render_ModelView := GetModelViewTransform;
   Render_Params := Params;
@@ -1181,8 +1207,12 @@ begin
   end;
   {$endif}
 
-  Renderer.RenderBegin(Params.BaseLights(Self) as TLightInstancesList,
-    Params.RenderingCamera,
+  if RenderOptions.ReceiveGlobalLights then
+    ReceivedGlobalLights := Params.GlobalLights as TLightInstancesList
+  else
+    ReceivedGlobalLights := nil;
+
+  Renderer.RenderBegin(ReceivedGlobalLights, Params.RenderingCamera,
     LightRenderEvent, Params.InternalPass, InternalScenePass, Params.UserPass);
   try
     case RenderOptions.Mode of
@@ -1241,7 +1271,7 @@ procedure TCastleScene.PrepareResources(
   var
     ShapeList: TShapeList;
     Shape: TShape;
-    BaseLights: TLightInstancesList;
+    ReceivedGlobalLights: TLightInstancesList;
     GoodParams, OwnParams: TPrepareParams;
     DummyCamera: TRenderingCamera;
     I: Integer;
@@ -1275,7 +1305,7 @@ procedure TCastleScene.PrepareResources(
       GoodParams := Params;
     end;
 
-    BaseLights := GoodParams.InternalBaseLights as TLightInstancesList;
+    ReceivedGlobalLights := GoodParams.InternalGlobalLights as TLightInstancesList;
 
     { We need some non-nil TRenderingCamera instance to be able
       to render with lights. }
@@ -1291,7 +1321,7 @@ procedure TCastleScene.PrepareResources(
       DummyCamera.FromMatrix(TVector3.Zero,
         TMatrix4.Identity, TMatrix4.Identity, TMatrix4.Identity);
 
-      Renderer.RenderBegin(BaseLights, DummyCamera, nil, 0, 0, 0);
+      Renderer.RenderBegin(ReceivedGlobalLights, DummyCamera, nil, 0, 0, 0);
 
       for Shape in ShapeList do
       begin
@@ -1300,6 +1330,7 @@ procedure TCastleScene.PrepareResources(
           PlaneTransform(Plane, SceneModelView); will fail,
           with SceneModelView matrix = zero. }
         TGLShape(Shape).SceneModelView := TMatrix4.Identity;
+        TGLShape(Shape).SceneTransform := TMatrix4.Identity;
         TGLShape(Shape).Fog := ShapeFog(Shape, GoodParams.InternalGlobalFog as TFogNode);
         Renderer.RenderShape(TGLShape(Shape));
       end;
@@ -1568,7 +1599,7 @@ begin
   { This is usually called by LocalRender(Params) that probably
     already did tests below. But it may also be called directly,
     so do the checks below anyway. (The checks are trivial, so no speed harm.) }
-  if GetVisible and
+  if CheckVisible and
      (InternalDirty = 0) and
      (ReceiveShadowVolumes in Params.ShadowVolumesReceivers) then
   begin
@@ -1587,7 +1618,7 @@ begin
       It's much simpler to just call PrepareResources at the beginning.
       The PrepareResources is already optimized to do nothing,
       if everything is ready. }
-    FTempPrepareParams.InternalBaseLights := Params.BaseLights(Self);
+    FTempPrepareParams.InternalGlobalLights := Params.GlobalLights;
     FTempPrepareParams.InternalGlobalFog := Params.GlobalFog;
     PrepareResources([prRenderSelf], false, FTempPrepareParams);
 
@@ -1595,10 +1626,34 @@ begin
   end;
 end;
 
-class procedure TCastleScene.LightRenderInShadow(const Light: TLightInstance;
-  var LightOn: boolean);
+procedure TCastleScene.LightRenderInShadow(const Light: TLightInstance;
+  const IsGlobalLight: Boolean; var LightOn: boolean);
 begin
   if Light.Node.FdShadowVolumes.Value then
+    LightOn := false;
+  LightRender(Light, IsGlobalLight, LightOn);
+end;
+
+procedure TCastleScene.LightRender(const Light: TLightInstance;
+  const IsGlobalLight: Boolean; var LightOn: boolean);
+begin
+  if IsGlobalLight and
+    (*Do not filter out headlight nodes, even if they belong to current scene.
+      Headlight nodes are always considered "global lights" and are not present
+      on our InternalGlobalLights list, so we don't want to filter them out here.
+
+      Testcase: castle-game, with "Tower" level that defines in basic_castle_final.x3dv
+      headlight like this:
+
+        NavigationInfo {
+          headlight TRUE
+          headlightNode DirectionalLight {
+            ...
+          }
+        }
+    *)
+    (not Light.Node.InternalHeadlight) and
+    (Light.Node.Scene = Self) then
     LightOn := false;
 end;
 
@@ -1626,10 +1681,8 @@ end;
 
 { Shadow volumes ------------------------------------------------------------- }
 
-procedure TCastleScene.LocalRenderShadowVolume(
-  ShadowVolumeRenderer: TBaseShadowVolumeRenderer;
-  const ParentTransformIsIdentity: boolean;
-  const ParentTransform: TMatrix4);
+procedure TCastleScene.LocalRenderShadowVolume(const Params: TRenderParams;
+  const ShadowVolumeRenderer: TBaseShadowVolumeRenderer);
 var
   SceneBox, ShapeBox: TBox3D;
   SVRenderer: TGLShadowVolumeRenderer;
@@ -1638,7 +1691,7 @@ var
   T: TMatrix4;
   ForceOpaque: boolean;
 begin
-  if GetVisible and CastShadowVolumes then
+  if CheckVisible and CastShadowVolumes then
   begin
     SVRenderer := ShadowVolumeRenderer as TGLShadowVolumeRenderer;
 
@@ -1646,8 +1699,8 @@ begin
 
     { calculate and check SceneBox }
     SceneBox := LocalBoundingBox;
-    if not ParentTransformIsIdentity then
-      SceneBox := SceneBox.Transform(ParentTransform);
+    if not Params.TransformIdentity then
+      SceneBox := SceneBox.Transform(Params.Transform^);
     SVRenderer.InitCaster(SceneBox);
     if SVRenderer.CasterShadowPossiblyVisible then
     begin
@@ -1657,16 +1710,17 @@ begin
       for Shape in ShapeList do
       begin
         ShapeBox := Shape.BoundingBox;
-        if not ParentTransformIsIdentity then
-          ShapeBox := ShapeBox.Transform(ParentTransform);
+        if not Params.TransformIdentity then
+          ShapeBox := ShapeBox.Transform(Params.Transform^);
         SVRenderer.InitCaster(ShapeBox);
         if SVRenderer.CasterShadowPossiblyVisible then
         begin
-          if ParentTransformIsIdentity then
-            T :=                   Shape.State.Transformation.Transform
+          if Params.TransformIdentity then
+            T :=                     Shape.State.Transformation.Transform
           else
-            T := ParentTransform * Shape.State.Transformation.Transform;
+            T := Params.Transform^ * Shape.State.Transformation.Transform;
           Shape.InternalShadowVolumes.RenderSilhouetteShadowVolume(
+            Params,
             SVRenderer.LightPosition, T,
             SVRenderer.ZFailAndLightCap,
             SVRenderer.ZFail,
@@ -1975,7 +2029,7 @@ begin
   inherited;
 
   if InternalEnableRendering and
-     GetVisible and
+     CheckVisible and
      (InternalDirty = 0) and
      (ReceiveShadowVolumes in Params.ShadowVolumesReceivers) then
   begin
@@ -1986,13 +2040,12 @@ begin
        (not ExcludeFromStatistics) then
       Inc(Params.Statistics.ScenesVisible);
 
-    if FSceneFrustumCulling and not InternalIgnoreFrustum then
+    if FSceneFrustumCulling and
+       (Params.Frustum <> nil) and
+       (not Params.Frustum^.Box3DCollisionPossibleSimple(LocalBoundingBox)) then
     begin
-      if not Params.Frustum^.Box3DCollisionPossibleSimple(LocalBoundingBox) then
-      begin
-        FrameProfiler.Stop(fmRenderScene);
-        Exit;
-      end;
+      FrameProfiler.Stop(fmRenderScene);
+      Exit;
     end;
 
     if (not Params.Transparent) and
@@ -2006,7 +2059,7 @@ begin
     if Assigned(InternalVisibilityTest) then
       LocalRenderOutside(InternalVisibilityTest, Params)
     else
-    if InternalIgnoreFrustum then
+    if Params.Frustum = nil then
       LocalRenderOutside(nil, Params)
     else
     if (InternalOctreeRendering <> nil) and ShapeFrustumCulling then
@@ -2026,50 +2079,41 @@ end;
 
 { Background-related things -------------------------------------------------- }
 
-procedure TCastleScene.InternalInvalidateBackground;
+procedure TCastleScene.InternalInvalidateBackgroundRenderer;
 begin
-  FreeAndNil(FBackground);
+  FreeAndNil(FBackgroundRenderer);
   FBackgroundNode := nil;
-  FBackgroundValid := false;
-end;
-
-procedure TCastleScene.SetBackgroundSkySphereRadius(const Value: Single);
-begin
-  if Value <> FBackgroundSkySphereRadius then
-  begin
-    InternalInvalidateBackground;
-    FBackgroundSkySphereRadius := Value;
-  end;
+  FBackgroundRendererValid := false;
 end;
 
 procedure TCastleScene.PrepareBackground;
-{ Always after PrepareBackground => FBackgroundValid = true }
+{ Always after PrepareBackground => FBackgroundRendererValid = true }
 begin
-  if FBackgroundValid and (BackgroundStack.Top = FBackgroundNode) then
+  if FBackgroundRendererValid and (BackgroundStack.Top = FBackgroundNode) then
     Exit;
 
   { Background is created, but not suitable for current
     BackgroundStack.Top. So destroy it. }
-  if FBackgroundValid then
-    InternalInvalidateBackground;
+  if FBackgroundRendererValid then
+    InternalInvalidateBackgroundRenderer;
 
   if BackgroundStack.Top <> nil then
-    FBackground := CreateBackground(BackgroundStack.Top, BackgroundSkySphereRadius)
+    FBackgroundRenderer := CreateBackgroundRenderer(BackgroundStack.Top)
   else
-    FBackground := nil;
+    FBackgroundRenderer := nil;
 
   FBackgroundNode := BackgroundStack.Top;
-  FBackgroundValid := true;
+  FBackgroundRendererValid := true;
 end;
 
-function TCastleScene.InternalBackground: TBackground;
+function TCastleScene.InternalBackgroundRenderer: TBackgroundRenderer;
 var
   BackgroundNode: TAbstractBackgroundNode;
 begin
   PrepareBackground;
-  Result := FBackground;
+  Result := FBackgroundRenderer;
 
-  { If background transform changed, we have to update the FBackground
+  { If background transform changed, we have to update the FBackgroundRenderer
     scene. Note that we check Result <> nil always, since not every
     TAbstractBackgroundNode may be supported. }
   BackgroundNode := BackgroundStack.Top;
@@ -2185,8 +2229,8 @@ begin
   inherited;
 
   if (frBackgroundImageInNodes in Resources) and
-     (FBackground <> nil) then
-    FBackground.FreeResources;
+     (FBackgroundRenderer <> nil) then
+    FBackgroundRenderer.FreeResources;
 end;
 
 function TCastleScene.Clone(const AOwner: TComponent): TCastleScene;
@@ -2206,12 +2250,60 @@ begin
   RenderOptions.BlendingSort := bs2D;
 end;
 
+procedure TCastleScene.ChangeWorld(const Value: TCastleAbstractRootTransform);
+begin
+  if World <> Value then
+  begin
+    if World <> nil then
+    begin
+      if CastGlobalLights then
+        (World as TCastleRootTransform).UnregisterCastGlobalLights(Self);
+    end;
+
+    inherited;
+
+    if World <> nil then
+    begin
+      if CastGlobalLights then
+        (World as TCastleRootTransform).RegisterCastGlobalLights(Self);
+    end;
+  end else
+  begin
+    inherited;
+  end;
+end;
+
+procedure TCastleScene.SetCastGlobalLights(const Value: Boolean);
+begin
+  if FCastGlobalLights <> Value then
+  begin
+    FCastGlobalLights := Value;
+    if World <> nil then
+    begin
+      if Value then
+        (World as TCastleRootTransform).RegisterCastGlobalLights(Self)
+      else
+        (World as TCastleRootTransform).UnregisterCastGlobalLights(Self);
+    end;
+  end;
+end;
+
+function TCastleScene.PropertySections(
+  const PropertyName: String): TPropertySections;
+begin
+  if (PropertyName = 'RenderOptions') or
+     (PropertyName = 'CastGlobalLights') then
+    Result := [psBasic]
+  else
+    Result := inherited PropertySections(PropertyName);
+end;
+
 { TBasicRenderParams --------------------------------------------------------- }
 
 constructor TBasicRenderParams.Create;
 begin
   inherited;
-  FBaseLights := TLightInstancesList.Create;
+  FGlobalLights := TLightInstancesList.Create;
   InShadow := false;
   ShadowVolumesReceivers := [false, true];
   { Transparent does not have good default value.
@@ -2220,19 +2312,17 @@ begin
     We just set them here to capture most 3D objects
     (as using TBasicRenderParams for anything is a discouraged hack anyway). }
   Transparent := false;
-  RenderingCamera := CastleRenderingCamera.RenderingCamera;
-  Frustum := @RenderingCamera.Frustum;
 end;
 
 destructor TBasicRenderParams.Destroy;
 begin
-  FreeAndNil(FBaseLights);
+  FreeAndNil(FGlobalLights);
   inherited;
 end;
 
-function TBasicRenderParams.BaseLights(Scene: TCastleTransform): TAbstractLightInstancesList;
+function TBasicRenderParams.GlobalLights: TAbstractLightInstancesList;
 begin
-  Result := FBaseLights;
+  Result := FGlobalLights;
 end;
 
 var
@@ -2255,6 +2345,13 @@ initialization
   RegisterSerializableComponent(TCastleCone, 'Cone');
   RegisterSerializableComponent(TCastleCylinder, 'Cylinder');
   RegisterSerializableComponent(TCastleImageTransform, 'Image');
+  RegisterSerializableComponent(TCastleBackground, 'Background');
+  RegisterSerializableComponent(TCastlePointLight, 'Point Light');
+  RegisterSerializableComponent(TCastleDirectionalLight, 'Directional Light');
+  RegisterSerializableComponent(TCastleSpotLight, 'Spot Light');
+  {$ifdef CASTLE_EXPERIMENTAL_ENVIRONMENT_LIGHT}
+  RegisterSerializableComponent(TCastleEnvironmentLight, 'Environment Light (Experimental)');
+  {$endif}
 finalization
   GLContextCache.FreeWhenEmpty(@GLContextCache);
 end.

@@ -77,3 +77,17 @@
 ../../../src/scene/ TCastleImageTransform RepeatImage TVector2
 ../../../src/scene/ TCastleImageTransform Shift TVector2
 ../../../src/scene/ TCastleImageTransform Color TCastleColor
+
+../../../src/scene/ TCastleBackground SkyTopColor TCastleColorRGB
+../../../src/scene/ TCastleBackground SkyEquatorColor TCastleColorRGB
+../../../src/scene/ TCastleBackground GroundBottomColor TCastleColorRGB
+../../../src/scene/ TCastleBackground GroundEquatorColor TCastleColorRGB
+../../../src/scene/ TCastleBackground Rotation TVector4
+
+../../../src/scene/ TCastlePointLight Color TCastleColorRGB
+../../../src/scene/ TCastlePointLight Attenuation TVector3
+
+../../../src/scene/ TCastleDirectionalLight Color TCastleColorRGB
+
+../../../src/scene/ TCastleSpotLight Color TCastleColorRGB
+../../../src/scene/ TCastleSpotLight Attenuation TVector3

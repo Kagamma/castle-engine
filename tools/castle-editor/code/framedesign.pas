@@ -480,7 +480,7 @@ function TDesignFrame.TDesignerLayer.HoverUserInterface(
 
       is not present in "if" below. }
 
-    if C.GetExists then
+    if C.Exists then
     begin
       { First try to find children, with TestWithBorder=false (so it doesn't detect
         control if we merely point at its border). This allows to find controls
@@ -4134,6 +4134,5 @@ end;
 initialization
   { Enable using our property edits e.g. for TCastleScene.URL }
   CastlePropEdits.Register;
-  PropertyEditorsAdviceDataDirectory := true;
   CastleDesignMode := true;
 end.
