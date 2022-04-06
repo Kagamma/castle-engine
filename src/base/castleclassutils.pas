@@ -1350,8 +1350,11 @@ begin
     Result := 0 else
   if IsPeekedChar then
   begin
-    PChar(@Buffer)[0] := Chr(PeekedChar);
-    Result := 1 + SourceStream.Read(PChar(@Buffer)[1], Count - 1);
+    { Note: It would be more natural to access
+        PAnsiChar(@Buffer)[...],
+      but on Delphi the PAnsiChar cannot be indexed like an array. }
+    PByteArray(@Buffer)^[0] := PeekedChar;
+    Result := 1 + SourceStream.Read(PByteArray(@Buffer)^[1], Count - 1);
     { Note that if SourceStream.Read will raise an exception,
       we will still have IsPeekedChar = true. }
     IsPeekedChar := false;
@@ -1364,7 +1367,7 @@ end;
 
 function TSimplePeekCharStream.PeekChar: Integer;
 var
-  C: Char;
+  C: AnsiChar;
 begin
   if not IsPeekedChar then
   begin
@@ -2112,6 +2115,11 @@ var
   TextFile: Text;
   StringStream: TStringStream;
 begin
+  {$ifdef VER3_3} {$define CASTLE_SECURE_BACKTRACE} {$endif}
+  {$ifdef CASTLE_SECURE_BACKTRACE}
+  try
+  {$endif}
+
   StringStream := TStringStream.Create('');
   try
     AssignStream(TextFile, StringStream);
@@ -2121,6 +2129,15 @@ begin
     finally CloseFile(TextFile) end;
     Result := StringStream.DataString;
   finally FreeAndNil(StringStream) end;
+
+  {$ifdef CASTLE_SECURE_BACKTRACE}
+  except
+    // TODO: investigate and report, reproducible by running play_animation with non-existent data.
+    // WritelnWarning('Capturing backtrace failed, this is known to happen with some FPC 3.3.1 versions.');
+    // Cannot log this problem -- as logging itself could use backtrace, causing infinite loop...
+    Result := '';
+  end;
+  {$endif}
 {$endif}
 end;
 {$endif}

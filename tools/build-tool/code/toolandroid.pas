@@ -26,12 +26,15 @@ uses Classes,
   ToolManifest;
 
 { Compile (for all possible Android CPUs) Android unit or library.
-  When Project <> nil, we assume we compile libraries (one of more .so files),
-  and their final names must match Project.AndroidLibraryFile(CPU). }
+  When Project <> nil, we assume we compile libraries (one or more .so files),
+  and their final names must match Project.AndroidLibraryFile(CPU) for each CPU.
+
+  CompilerOptions.OS andCompilerOptions.CPU are ignored by this routine.
+  This routine may modify CompilerOptions contents. }
 procedure CompileAndroid(const Compiler: TCompiler;
   const Project: TCastleProject;
-  const Mode: TCompilationMode; const WorkingDirectory, CompileFile: string;
-  const SearchPaths, LibraryPaths, ExtraOptions: TStrings);
+  const WorkingDirectory, CompileFile: string;
+  const CompilerOptions: TCompilerOptions);
 
 { Android CPU values supported by the current compiler. }
 function DetectAndroidCPUS: TCPUS;
@@ -77,15 +80,16 @@ end;
 
 procedure CompileAndroid(const Compiler: TCompiler;
   const Project: TCastleProject;
-  const Mode: TCompilationMode; const WorkingDirectory, CompileFile: string;
-  const SearchPaths, LibraryPaths, ExtraOptions: TStrings);
+  const WorkingDirectory, CompileFile: string;
+  const CompilerOptions: TCompilerOptions);
 var
   CPU: TCPU;
 begin
   for CPU in DetectAndroidCPUS do
   begin
-    Compile(Compiler, Android, CPU, { Plugin } false,
-      Mode, WorkingDirectory, CompileFile, SearchPaths, LibraryPaths, ExtraOptions);
+    CompilerOptions.OS := Android;
+    CompilerOptions.CPU := CPU;
+    Compile(Compiler, WorkingDirectory, CompileFile, CompilerOptions);
     if Project <> nil then
     begin
       CheckRenameFile(Project.AndroidLibraryFile(cpuNone), Project.AndroidLibraryFile(CPU));

@@ -42,11 +42,13 @@ const
 type
   { Main project management. }
   TProjectForm = class(TForm)
+    ActionSystemInformation: TAction;
     ActionOutputCopyAll: TAction;
     ActionOutputCopySelected: TAction;
     ActionOutputClean: TAction;
     ActionNewSpriteSheet: TAction;
     ActionList: TActionList;
+    MenuItemSystemInformation: TMenuItem;
     MenuItemEdit: TMenuItem;
     MenuItemOutputCopyAll: TMenuItem;
     MenuItemOutputCopySelected: TMenuItem;
@@ -190,6 +192,7 @@ type
     TabOutput: TTabSheet;
     ProcessUpdateTimer: TTimer;
     TabWarnings: TTabSheet;
+    procedure ActionSystemInformationExecute(Sender: TObject);
     procedure ActionOutputCleanExecute(Sender: TObject);
     procedure ActionNewSpriteSheetExecute(Sender: TObject);
     procedure ActionEditAssociatedUnitExecute(Sender: TObject);
@@ -380,7 +383,9 @@ uses TypInfo, LCLType,
   CastleFonts, X3DLoad, CastleFileFilters, CastleImages, CastleSoundEngine,
   CastleClassUtils,
   FormAbout, FormChooseProject, FormPreferences, FormSpriteSheetEditor,
-  ToolCompilerInfo, ToolCommonUtils, ToolArchitectures, ToolProcessWait, ToolFpcVersion;
+  FormSystemInformation,
+  ToolCompilerInfo, ToolCommonUtils, ToolArchitectures, ToolProcessWait,
+  ToolFpcVersion;
 
 procedure TProjectForm.MenuItemQuitClick(Sender: TObject);
 begin
@@ -541,6 +546,11 @@ end;
 procedure TProjectForm.ActionOutputCleanExecute(Sender: TObject);
 begin
   ListOutput.Clear;
+end;
+
+procedure TProjectForm.ActionSystemInformationExecute(Sender: TObject);
+begin
+  SystemInformationForm.Show;
 end;
 
 procedure TProjectForm.ApplicationProperties1Activate(Sender: TObject);
@@ -974,6 +984,7 @@ procedure TProjectForm.FormCreate(Sender: TObject);
       'Directory',
       'Compressed zip',
       'Compressed tar.gz',
+      'Debian Package (DEB)',
       'Android APK',
       'Android App Bundle (AAB)',
       'iOS Xcode Project',
@@ -2225,8 +2236,13 @@ begin
   else
     S := '';
   S := S + SQuoteLCLCaption(ProjectName);
-  if InternalHasCustomComponents then
-    S := S + ' (With Custom Components)';
+  if InternalCustomComponentsForProject <> '' then
+  begin
+    if InternalCustomComponentsForProject = ProjectName then
+      S := S + ' (With Custom Components)'
+    else
+      S := S + ' (With Custom Components from ' + InternalCustomComponentsForProject + ')';
+  end;
   Caption := S + ' | Castle Game Engine';
 end;
 
@@ -2272,9 +2288,6 @@ begin
   ProjectStandaloneSource := Manifest.StandaloneSource;
   ProjectLazarus := Manifest.LazarusProject;
   ProjectDelphi := Manifest.DelphiProject;
-  if (Manifest.EditorUnits <> '') and
-     (not InternalHasCustomComponents) then
-    WritelnWarning('Project uses custom components (declares editor_units in CastleEngineManifest.xml), but this is not a custom editor build.' + NL + 'Use the menu item "Project -> Restart Editor (With Custom Components)" to build and run correct editor.');
 
   { Make some fields absolute paths, or empty }
   if ProjectStandaloneSource <> '' then
@@ -2304,6 +2317,17 @@ begin
 
   DesignExistenceChanged;
   UpdateFormCaption(nil); // make form Caption reflect project name (although this is now done also by DesignExistenceChanged)
+
+  if (Manifest.EditorUnits <> '') and
+     (ProjectName <> InternalCustomComponentsForProject) then
+  begin
+    if YesNoBox(Format('Project "%s" uses custom components.' + NL + NL +
+          'Rebuild and restart editor with custom components?', [
+          ProjectName
+        ])) then
+      MenuItemRestartRebuildEditorClick(nil);
+      //WritelnWarning('Project uses custom components (declares editor_units in CastleEngineManifest.xml), but this is not a custom editor build.' + NL + 'Use the menu item "Project -> Restart Editor (With Custom Components)" to build and run correct editor.');
+  end;
 end;
 
 procedure TProjectForm.RefreshFiles(const RefreshNecessary: TRefreshFiles);

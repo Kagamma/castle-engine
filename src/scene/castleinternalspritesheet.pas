@@ -546,6 +546,8 @@ begin
   TexProperties := TTexturePropertiesNode.Create;
   TexProperties.MagnificationFilter := magDefault;
   TexProperties.MinificationFilter := minDefault;
+  TexProperties.BoundaryModeS := bmClampToEdge;
+  TexProperties.BoundaryModeT := bmClampToEdge;
   { Do not force "power of 2" size, which may prevent mipmaps.
     This seems like a better default (otherwise the resizing underneath
     may cause longer loading time, and loss of quality, if not expected).
@@ -556,8 +558,9 @@ begin
   begin
     Tex := TPixelTextureNode.Create;
     TPixelTextureNode(Tex).FdImage.Value := FSpriteSheet.FGeneratedAtlas.MakeCopy;
+    { No point in adjusting RepeatS/T: TextureProperties override it.
     TPixelTextureNode(Tex).RepeatS := false;
-    TPixelTextureNode(Tex).RepeatT := false;
+    TPixelTextureNode(Tex).RepeatT := false; }
     TPixelTextureNode(Tex).TextureProperties := TexProperties;
   end else
   begin
@@ -569,8 +572,9 @@ begin
       FdUrl := FSpriteSheet.LoadedAtlasPath;
 
     TImageTextureNode(Tex).FdUrl.Send(FdUrl);
+    { No point in adjusting RepeatS/T: TextureProperties override it.
     TImageTextureNode(Tex).RepeatS := false;
-    TImageTextureNode(Tex).RepeatT := false;
+    TImageTextureNode(Tex).RepeatT := false; }
     TImageTextureNode(Tex).TextureProperties := TexProperties;
   end;
   Shape.Texture := Tex;
@@ -2404,7 +2408,7 @@ begin
         {$ifdef FPC}
         RemoveTrailingChars(AnimationName, ['0'..'9']);
         {$else}
-        AnimationName.TrimRight(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
+        AnimationName := AnimationName.TrimRight(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
         {$endif}
 
         if AnimationName <> '_' then // do not remove underscore if it's the only character in name

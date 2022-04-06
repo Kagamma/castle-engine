@@ -144,6 +144,7 @@ type
       { Camera position, in local scene coordinates, known during the Render call. }
       RenderCameraPosition: TVector3;
       FCastGlobalLights: Boolean;
+      FWasVisibleFrameId: TFrameId;
 
       { Used by LocalRenderInside }
       FilteredShapes: TShapeList;
@@ -470,6 +471,22 @@ type
       read FOctreeFrustumCulling write SetOctreeFrustumCulling default fcBox;
       deprecated 'use simpler ShapeFrustumCulling';
     {$endif}
+
+    { Whether the scene was (potentially, at least partially) visible in the last rendering event.
+
+      The "was visible" means that "some shape was visible", that is:
+      some shape passed frustum culling and occlusion culling (see https://castle-engine.io/occlusion_query )
+      tests.
+
+      For this method it doesn't matter if the scene contains some lights
+      that only make some other scenes brighter. Or if the scene contains some background
+      that affects TCastleViewport skybox. Only the visibility of shapes matters.
+
+      If this scene instance is used multiple times within some viewport,
+      or when multiple viewports render the same scene,
+      then it is enough that at least one shape in one of the scene instances
+      was visible last frame.  }
+    function WasVisible: Boolean;
   published
     { Improve performance of rendering by checking for each shape whether
       it is inside frustum (camera pyramid of view) before rendering.
@@ -866,7 +883,7 @@ procedure TCastleScene.GLContextClose;
   begin
     if GeneratedTextures <> nil then
       for I := 0 to GeneratedTextures.Count - 1 do
-        GeneratedTextures.List^[I].Handler.InternalUpdateNeeded := true;
+        GeneratedTextures.List^[I].Functionality.InternalUpdateNeeded := true;
   end;
 
 begin
@@ -949,6 +966,13 @@ end;
 
 procedure TCastleScene.RenderShape_BatchingTest(const Shape: TGLShape);
 begin
+  { Whether the Shape is rendered directly or through batching,
+    mark it "was visible this frame".
+    Shape passed the frustum culling and occlusion culling tests at this point. }
+  FWasVisibleFrameId := TFramesPerSecond.RenderFrameId;
+  if Shape.Node <> nil then
+    Shape.Node.InternalWasVisibleFrameId := TFramesPerSecond.RenderFrameId;
+
   if not (ReallyDynamicBatching and Batching.Collect(Shape)) then
     RenderShape_NoTests(Shape);
 end;
@@ -1918,7 +1942,7 @@ procedure TCastleScene.Update(const SecondsPassed: Single; var RemoveMe: TRemove
     I: Integer;
     Shape: TGLShape;
     TextureNode: TAbstractTextureNode;
-    Handler: TGeneratedTextureHandler;
+    GenTexFunctionality: TGeneratedTextureFunctionality;
     CamPos, CamDir, CamUp: TVector3;
   begin
     if GeneratedTextures.Count = 0 then
@@ -1952,26 +1976,26 @@ procedure TCastleScene.Update(const SecondsPassed: Single; var RemoveMe: TRemove
       {$ifndef FPC}{$POINTERMATH ON}{$endif}
       Shape := TGLShape(GeneratedTextures.L[I].Shape);
       TextureNode := GeneratedTextures.L[I].TextureNode;
-      Handler := GeneratedTextures.L[I].Handler;
+      GenTexFunctionality := GeneratedTextures.L[I].Functionality;
       {$ifndef FPC}{$POINTERMATH OFF}{$endif}
 
-      { update Handler.UpdateNeeded }
+      { update GenTexFunctionality.InternalUpdateNeeded }
       if TextureNode is TGeneratedShadowMapNode then
       begin
         { For TGeneratedShadowMapNode, only geometry change requires to regenerate it. }
-        if Handler.InternalLastStateId < World.InternalVisibleGeometryStateId then
+        if GenTexFunctionality.InternalLastStateId < World.InternalVisibleGeometryStateId then
         begin
-          Handler.InternalLastStateId := World.InternalVisibleGeometryStateId;
-          Handler.InternalUpdateNeeded := true;
+          GenTexFunctionality.InternalLastStateId := World.InternalVisibleGeometryStateId;
+          GenTexFunctionality.InternalUpdateNeeded := true;
         end;
       end else
       begin
         { For TRenderedTextureNode, TGeneratedCubeMapTextureNode etc.
           any visible change indicates to regenerate it. }
-        if Handler.InternalLastStateId < World.InternalVisibleStateId then
+        if GenTexFunctionality.InternalLastStateId < World.InternalVisibleStateId then
         begin
-          Handler.InternalLastStateId := World.InternalVisibleStateId;
-          Handler.InternalUpdateNeeded := true;
+          GenTexFunctionality.InternalLastStateId := World.InternalVisibleStateId;
+          GenTexFunctionality.InternalUpdateNeeded := true;
         end;
       end;
 
@@ -2161,7 +2185,7 @@ begin
         as RenderedTexture with viewpoint = NULL uses current camera.
         See demo_models/rendered_texture/rendered_texture_no_headlight.x3dv
         testcase. }
-      GeneratedTextures.L[I].Handler.InternalUpdateNeeded := true;
+      GeneratedTextures.L[I].Functionality.InternalUpdateNeeded := true;
   {$ifndef FPC}{$POINTERMATH OFF}{$endif}
 end;
 
@@ -2296,6 +2320,14 @@ begin
     Result := [psBasic]
   else
     Result := inherited PropertySections(PropertyName);
+end;
+
+function TCastleScene.WasVisible: Boolean;
+begin
+  { Note: FWasVisibleFrameId is 0 by default,
+    and TFramesPerSecond.RenderFrameId is always >= 1,
+    which means that this will return (correctly) false at the beginning before any rendering run. }
+  Result := TFramesPerSecond.RenderFrameId = FWasVisibleFrameId;
 end;
 
 { TBasicRenderParams --------------------------------------------------------- }

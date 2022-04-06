@@ -452,7 +452,7 @@ type
         { May be only TGeneratedCubeMapTextureNode or TRenderedTextureNode
           or TGeneratedShadowMapNode. }
         TextureNode: TAbstractTextureNode;
-        Handler: TGeneratedTextureHandler;
+        Functionality: TGeneratedTextureFunctionality;
         Shape: TShape;
       end;
       PGeneratedTexture = ^TGeneratedTexture;
@@ -2826,12 +2826,11 @@ function TCastleSceneCore.TGeneratedTextureList.AddShapeTexture(Shape: TShape;
   Tex: TAbstractTextureNode): Pointer;
 var
   GenTex: PGeneratedTexture;
+  GenTexFunctionality: TGeneratedTextureFunctionality;
 begin
   Result := nil;
-
-  if (Tex is TGeneratedCubeMapTextureNode) or
-     (Tex is TGeneratedShadowMapNode) or
-     (Tex is TRenderedTextureNode) then
+  GenTexFunctionality := Tex.GenTexFunctionality;
+  if GenTexFunctionality <> nil then
   begin
     GenTex := FindTextureNode(Tex);
     if GenTex <> nil then
@@ -2864,19 +2863,11 @@ begin
     begin
       GenTex := PGeneratedTexture(Add);
       GenTex^.TextureNode := Tex;
-
-      if Tex is TGeneratedCubeMapTextureNode then
-        GenTex^.Handler := TGeneratedCubeMapTextureNode(Tex).GeneratedTextureHandler else
-      if Tex is TGeneratedShadowMapNode then
-        GenTex^.Handler := TGeneratedShadowMapNode(Tex).GeneratedTextureHandler else
-      if Tex is TRenderedTextureNode then
-        GenTex^.Handler := TRenderedTextureNode(Tex).GeneratedTextureHandler else
-        raise EInternalError.Create('sf34234');
-
+      GenTex^.Functionality := GenTexFunctionality;
       { Make sure to reset InternalUpdateNeeded to true, in case it was false because
         it was already generated but now some change caused ChangedAll.
         Testcase: projected_Spotlight.x3dv from Victor Amat. }
-      GenTex^.Handler.InternalUpdateNeeded := true;
+      GenTex^.Functionality.InternalUpdateNeeded := true;
       GenTex^.Shape := Shape;
     end;
   end;
@@ -2889,7 +2880,7 @@ begin
   for I := 0 to Count - 1 do
     if (List^[I].TextureNode is TGeneratedShadowMapNode) and
        (TGeneratedShadowMapNode(List^[I].TextureNode).FdLight.Value = LightNode) then
-      List^[I].Handler.InternalUpdateNeeded := true;
+      List^[I].Functionality.InternalUpdateNeeded := true;
 end;
 
 { TTimeDependentList ------------------------------------------------- }
@@ -5150,7 +5141,7 @@ var
   end;
 
   { Handle chTextureImage, chTextureRendererProperties }
-  procedure HandleChangeTextureImageOrRenderer;
+  procedure HandleChangeTextureImageOrRenderer(const ANode: TX3DNode; const Change: TX3DChange);
   var
     ShapeList: TShapeList;
     Shape: TShape;
@@ -5176,6 +5167,40 @@ var
     end;
   end;
 
+  { React to change of TTexturePropertiesNode fields.
+
+    Testcase that this is needed: create new TCastleImageTransform
+    and change TCastleImageTransform.RepeatImage between (0.1, 0.1) and (10, 10),
+    effectively changing the TextureProperties.BoundaryModeS/T under the hood between
+    clamp and repeat. }
+  procedure HandleChangeTextureProperties;
+  var
+    ParentField: TX3DField;
+    TextureNode: TX3DNode;
+    I: Integer;
+  begin
+    Assert(ANode is TTexturePropertiesNode, 'Only TTexturePropertiesNode should send chTexturePropertiesNode');
+    for I := 0 to ANode.ParentFieldsCount - 1 do
+    begin
+      ParentField := ANode.ParentFields[I];
+      if not (ParentField is TSFNode) then
+      begin
+        WritelnWarning('TTexturePropertiesNode change', 'ParentField is not TSFNode. This should not happen in normal usage of TTexturePropertiesNode, submit a bug');
+        Continue;
+      end;
+
+      TextureNode := TSFNode(ParentField).ParentNode;
+      if TextureNode = nil then
+      begin
+        WritelnWarning('TTexturePropertiesNode change', 'ParentField.Node is nil. This should not happen in usual usage of TCastleScene, submit a bug');
+        Continue;
+      end;
+
+      { Make the same effect as when texture node's repeatS/T/R field changes }
+      HandleChangeTextureImageOrRenderer(TextureNode, chTextureRendererProperties);
+    end;
+  end;
+
   procedure HandleChangeShadowCasters;
   begin
     { When Appearance.shadowCaster field changed, then
@@ -5186,17 +5211,12 @@ var
 
   procedure HandleChangeGeneratedTextureUpdateNeeded;
   var
-    Handler: TGeneratedTextureHandler;
+    GenTexFunctionality: TGeneratedTextureFunctionality;
   begin
-    if ANode is TGeneratedCubeMapTextureNode then
-      Handler := TGeneratedCubeMapTextureNode(ANode).GeneratedTextureHandler else
-    if ANode is TGeneratedShadowMapNode then
-      Handler := TGeneratedShadowMapNode(ANode).GeneratedTextureHandler else
-    if ANode is TRenderedTextureNode then
-      Handler := TRenderedTextureNode(ANode).GeneratedTextureHandler else
+    GenTexFunctionality := ANode.GenTexFunctionality;
+    if GenTexFunctionality = nil then
       Exit;
-
-    Handler.InternalUpdateNeeded := true;
+    GenTexFunctionality.InternalUpdateNeeded := true;
     VisibleChangeHere([]);
   end;
 
@@ -5430,8 +5450,8 @@ begin
       chTimeStopStart: HandleChangeTimeStopStart;
       chViewpointVectors: HandleChangeViewpointVectors;
       // TODO:  chViewpointProjection: HandleChangeViewpointProjection
-      chTextureImage, chTextureRendererProperties: HandleChangeTextureImageOrRenderer;
-      // TODO: chTexturePropertiesNode
+      chTextureImage, chTextureRendererProperties: HandleChangeTextureImageOrRenderer(ANode, Change);
+      chTexturePropertiesNode: HandleChangeTextureProperties;
       chShadowCasters: HandleChangeShadowCasters;
       chGeneratedTextureUpdateNeeded: HandleChangeGeneratedTextureUpdateNeeded;
       { The HandleFontStyle implementation matches
