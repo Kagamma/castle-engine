@@ -92,7 +92,7 @@ begin
       { Buffer sizes below are all in bits. }
       GLX_DEPTH_SIZE, DepthBits,
       GLX_STENCIL_SIZE, StencilBits,
-      GLX_ALPHA_SIZE, AlphaBits,
+      GLX_ALPHA_SIZE, 8,
       GLX_ACCUM_RED_SIZE, FAccumBits[0],
       GLX_ACCUM_GREEN_SIZE, FAccumBits[1],
       GLX_ACCUM_BLUE_SIZE, FAccumBits[2],
@@ -132,6 +132,7 @@ begin
     end else
       XVisual := glXChooseVisual(Application.XDisplay, Application.XScreen, Attribs.L);
   finally FreeAndNil(Attribs) end;
+  XMatchVisualInfo(Application.XDisplay, DefaultScreen(Application.XDisplay), 32, TrueColor, XVisual);
 
   if XVisual = nil then
     raise EGLContextNotPossible.CreateFmt(

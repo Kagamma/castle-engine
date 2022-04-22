@@ -503,7 +503,7 @@
   It also makes some exposed X3D fields into non-exposed
   (it means you cannot define X3D ROUTEs to pass value into/out of this field).
   The choice "which fields are seldom used" is purely subjective, and may change! }
-{.$define CASTLE_SLIM_NODES}
+{$define CASTLE_SLIM_NODES}
 
 { Vampyre Imaging ------------------------------------------------------------ }
 

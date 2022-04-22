@@ -216,8 +216,8 @@ unit CastleWindow;
              { $define CASTLE_WINDOW_TEMPLATE} // only useful for developers
            {$else}
              // various possible backends on traditional Unix (Linux, FreeBSD) desktop:
-             {$define CASTLE_WINDOW_GTK_2} // best (looks native and most functional), supports both OpenGL and OpenGLES
-             { $define CASTLE_WINDOW_XLIB} // supports both OpenGL and OpenGLES
+             { $define CASTLE_WINDOW_GTK_2} // best (looks native and most functional), supports both OpenGL and OpenGLES
+             {$define CASTLE_WINDOW_XLIB} // supports both OpenGL and OpenGLES
              { $define CASTLE_WINDOW_LCL}
              { $define CASTLE_WINDOW_LIBRARY}
              { $define CASTLE_WINDOW_TEMPLATE} // only useful for developers
@@ -2376,9 +2376,6 @@ type
     { Override TCustomApplication to pass TCustomApplication.Log
       to CastleLog logger. }
     procedure DoLog(EventType: TEventType; const Msg: String); override;
-    { Every backend must override this. TCustomApplication will
-      automatically catch exceptions occuring inside DoRun. }
-    procedure DoRun; override;
   public
     { If VideoResize, then next VideoChange call will
       try to resize the screen to given VideoResizeWidth /
@@ -2389,6 +2386,10 @@ type
     VideoResizeWidth,
     VideoResizeheight : integer;
     { @groupEnd }
+
+    { Every backend must override this. TCustomApplication will
+      automatically catch exceptions occuring inside DoRun. }
+    procedure DoRun; override;
 
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
 
@@ -2986,7 +2987,7 @@ procedure TCastleWindow.OpenCore;
         TDrawableImage from Application.OnInitialize work Ok. }
       ApplicationProperties._GLContextEarlyOpen;
 
-      RenderLoadingBackground;
+      //RenderLoadingBackground;
 
       Application.CastleEngineInitialize;
       if Closed then Exit;

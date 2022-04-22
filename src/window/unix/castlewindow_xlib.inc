@@ -25,7 +25,7 @@
 {$endif}
 
 {$ifdef read_interface_uses}
-Xlib, CastleInternalXlib, XUtil, X, KeySym, CursorFont,
+Xlib, CastleInternalXlib, XUtil, X, KeySym, CursorFont, Xfixes,
 {$endif}
 
 {$ifdef read_window_interface}
@@ -120,7 +120,9 @@ var
   WindTitleProp: TXTextProperty;
   ClassHint: TXClassHint;
   WMHints: TXWMHints;
-  PWindTitle: PChar;
+  PWindTitle: PChar; 
+  rrect: TXRectangle;
+  rregion: TXserverRegion;
 const
   AllPointerEventsMask = ButtonPressMask or ButtonReleaseMask or
     EnterWindowMask or LeaveWindowMask or PointerMotionMask;
@@ -140,10 +142,12 @@ begin
   Colormap := XCreateColormap(Application.XDisplay, ParentWinXID,
     XVisual^.Visual, AllocNone);
   Attr.Colormap := Colormap;
+  Attr.background_pixel := None;
+  Attr.border_pixmap := None;
   AttrValueMask := AttrValueMask or CWColormap;
   {$endif}
 
-  if FullScreen then
+  if True then
   begin
     Attr.override_redirect := XBool_true;
     AttrValueMask := AttrValueMask or CWOverrideRedirect;
@@ -241,10 +245,14 @@ begin
       XMapWindow(Application.XDisplay, windowXID);
   end;
 
+  rregion := XFixesCreateRegion(Application.XDisplay, @rrect, 1);
+  XFixesSetWindowShapeRegion(Application.XDisplay, windowXID, 2, 0, 0, rregion);
+  XFixesDestroyRegion(Application.XDisplay, rregion);
+
   ContextCreateEnd(windowXID);
 
   { applying FullScreen changes to the Left / Top / Width / Height }
-  if FullScreen then
+  if True then
   begin
     FLeft := 0;
     FTop := 0;
