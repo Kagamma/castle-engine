@@ -715,6 +715,13 @@ procedure TCastleScene.TSceneRenderOptions.ReleaseCachedResources;
 begin
   inherited;
 
+  { Secure, in case this is called from TCastleRenderOptions constructor --
+    possible if you assign TCastleRenderOptions.OnCreate there that e.g. changes
+    PhongShading.
+    Testcase: castle-game. }
+  if OwnerScene = nil then
+    Exit;
+
   { We have to do at least Renderer.UnprepareAll.
     Actually, we have to do more: TCastleScene must also be disconnected
     from OpenGL, to release screen effects (referencing renderer shaders)
@@ -1961,7 +1968,7 @@ procedure TCastleScene.Update(const SecondsPassed: Single; var RemoveMe: TRemove
 
     if World.MainCamera <> nil then
     begin
-      CamPos := World.MainCamera.Position;
+      CamPos := World.MainCamera.Translation;
       CamDir := World.MainCamera.Direction;
       CamUp  := World.MainCamera.Up;
     end else
