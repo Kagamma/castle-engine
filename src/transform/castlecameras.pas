@@ -367,8 +367,15 @@ type
 
       Returned Dir and Up must be orthogonal.
       Returned Dir and Up and GravityUp are already normalized. }
-    procedure GetView(out APos, ADir, AUp: TVector3); overload;
-    procedure GetView(out APos, ADir, AUp, AGravityUp: TVector3); overload;
+    procedure GetView(out APos, ADir, AUp: TVector3); overload; deprecated 'use GetWorldView';
+    procedure GetView(out APos, ADir, AUp, AGravityUp: TVector3); overload; deprecated 'use GetWorldView';
+
+    { Express current view as camera vectors: position, direction, up.
+      In world coordinates.
+
+      Returned Dir and Up must be orthogonal.
+      Returned Dir and Up and GravityUp are already normalized. }
+    procedure GetWorldView(out APos, ADir, AUp: TVector3);
 
     { Set camera view from vectors: position, direction, up.
 
@@ -381,18 +388,26 @@ type
       (preserving the given direction value),
       otherwise we will adjust the direction (preserving the given up value). }
     procedure SetView(const ADir, AUp: TVector3;
-      const AdjustUp: boolean = true); overload;
+      const AdjustUp: boolean = true); overload; deprecated 'use SetWorldView';
     procedure SetView(const APos, ADir, AUp: TVector3;
-      const AdjustUp: boolean = true); overload;
+      const AdjustUp: boolean = true); overload; deprecated 'use SetWorldView';
     procedure SetView(const APos, ADir, AUp, AGravityUp: TVector3;
-      const AdjustUp: boolean = true); overload;
+      const AdjustUp: boolean = true); overload; deprecated 'use SetWorldView';
 
-    { Camera position, looking direction and up vector.
+    { Set camera view from vectors: position, direction, up.
 
-      Call @link(GoToInitial) to set the current vectors to initial vectors,
-      making them equal to InitialPosition, InitialDirection, InitialUp.
-      You can also use @code(Init) method on some navigation descendants
-      like @link(TCastleExamineNavigation.Init) and @link(TCastleWalkNavigation.Init).
+      ADir, AUp do not have to be normalized,
+      we will normalize them internally if necessary.
+      But make sure they are non-zero.
+
+      We will automatically fix ADir and AUp to be orthogonal, if necessary:
+      when AdjustUp = @true (the default) we will adjust the up vector
+      (preserving the given direction value),
+      otherwise we will adjust the direction (preserving the given up value). }
+    procedure SetWorldView(const APos, ADir, AUp: TVector3;
+      const AdjustUp: boolean = true);
+
+    { Camera looking direction and up vector.
 
       The @link(Direction) and @link(Up) vectors should always be normalized
       (have length 1). When setting them by these properties, we will normalize
@@ -403,10 +418,16 @@ type
       when setting @link(Up), @link(Direction) will be adjusted.
 
       @groupBegin }
-    property Position : TVector3 read FPosition  write SetPosition;
     property Direction: TVector3 read FDirection write SetDirection;
     property Up       : TVector3 read FUp        write SetUp;
     { @groupEnd }
+
+    { Translation (position, location) of the camera. }
+    property Translation: TVector3 read FPosition write SetPosition;
+
+    { Deprecated name for Translation. @deprecated }
+    property Position : TVector3 read FPosition write SetPosition;
+      {$ifdef FPC}deprecated 'use Translation';{$endif}
 
     { Change up vector, keeping the direction unchanged.
       If necessary, the up vector provided here will be fixed to be orthogonal
@@ -2268,6 +2289,10 @@ uses Math,
   CastleStringUtils, CastleLog, CastleViewport,
   CastleComponentSerialize;
 
+{ Temporary on master don't warn about deprecated GetView / SetView usage.
+  This will disappear with merge from new-cameras. }
+{$warnings off}
+
 { TCastle2DNavigation -------------------------------------------------------- }
 
 constructor TCastle2DNavigation.Create(AOwner: TComponent);
@@ -2487,6 +2512,13 @@ begin
     inherited Assign(Source);
 end;
 
+procedure TCastleCamera.GetWorldView(out APos, ADir, AUp: TVector3);
+begin
+  {.$warnings off} // for now, this calls deprecated; in new-cameras branch this does something else
+  GetView(APos, ADir, AUp);
+  {.$warnings on}
+end;
+
 procedure TCastleCamera.GetView(out APos, ADir, AUp: TVector3);
 begin
   APos := FPosition;
@@ -2525,6 +2557,13 @@ procedure TCastleCamera.SetView(const APos, ADir, AUp, AGravityUp: TVector3;
 begin
   GravityUp := AGravityUp;
   SetView(APos, ADir, AUp, AdjustUp);
+end;
+
+procedure TCastleCamera.SetWorldView(const APos, ADir, AUp: TVector3; const AdjustUp: boolean);
+begin
+  {.$warnings off} // for now, this calls deprecated; in new-cameras branch this does something else
+  SetView(APos, ADir, AUp, AdjustUp);
+  {.$warnings on}
 end;
 
 procedure TCastleCamera.SetGravityUp(const Value: TVector3);
@@ -4025,7 +4064,7 @@ function TCastleMouseLookNavigation.Motion(const Event: TInputMotion): boolean;
   var
     MouseChange: TVector2;
   begin
-    MouseChange := Container.MouseLookDelta(Event);
+    MouseChange := Container.MouseLookDelta(Event, RenderRect);
 
     if not MouseChange.IsPerfectlyZero then
     begin
