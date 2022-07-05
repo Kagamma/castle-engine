@@ -438,7 +438,6 @@ begin
   end;
 end;
 
-function UTF8CharacterToUnicode(p: PChar; out CharLen: integer): TUnicodeChar;
 function UTF8SEnding(const S: String; const StartCharIndex: PtrInt): String;
 begin
   result := UTF8Copy(S, StartCharIndex, MaxInt)
