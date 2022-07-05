@@ -45,7 +45,7 @@ unit CastleClassUtils;
 interface
 
 uses Classes, SysUtils, Contnrs, Generics.Collections,
-  CastleUtils, CastleStringUtils, CastleVectors;
+  CastleUtils, CastleStringUtils;
 
 { ---------------------------------------------------------------------------- }
 { @section(TStrings utilities) }
@@ -420,6 +420,68 @@ type
       TListAddEvent = procedure (const NewComponent: TComponent) of object;
       TListClearEvent = procedure of object;
 
+    var
+      { @exclude
+        Used by TCastleViewport to keep navigation/camera across undo. }
+      InternalPreserveDataAcrossUndo: TComponent;
+
+    { Serialize and deserialize given simple Value.
+      This mechanism allows to explicitly serialize/deserialize any internal value,
+      without the need to make it a published property.
+
+      When deserializing, we always try to read it from file.
+      If it is not present, the Value is not modified.
+
+      When serializing, we write it to file only if IsStored.
+      Generally IsStored=false should indicate "the Value is the same as when the object
+      is created, thus there's no point in serializing it".
+
+      The values are guaranteed to be read/written in the same way as if a published
+      property with the same name (Key) and same type would be read/written.
+      This allows to utilize this mechanism to read, to a local/private variable,
+      a value that was previously a published property value.
+      This is a way to provide backward-compatibility for old designs: this way class
+      can interpret old values in design files, even though it no longer publishes
+      given property.
+
+      @seealso ReadWriteSubComponent
+
+      @groupBegin }
+    procedure ReadWriteInteger(const Key: String; var Value: Integer; const IsStored: Boolean);
+      overload; virtual; abstract;
+    procedure ReadWriteBoolean(const Key: String; var Value: Boolean; const IsStored: Boolean);
+      overload; virtual; abstract;
+    procedure ReadWriteString(const Key: String; var Value: String; const IsStored: Boolean);
+      overload; virtual; abstract;
+    procedure ReadWriteSingle(const Key: String; var Value: Single; const IsStored: Boolean);
+      overload; virtual; abstract;
+    { @groupEnd }
+
+    { Serialize and deserialize a subcomponent.
+      Being a subcomponent, we know that Value is not nil,
+      and it is not referenced anywhere else in the design
+      (so serialization/deserialization can expect class contents, not just name),
+      so we just serialize and deserialize the contents.
+
+      When deserializing, we always try to read it from file.
+      If it is not present, nothing is modified.
+
+      When serializing, we write it to file only if IsStored.
+      Generally IsStored=false should indicate "the Value is the same as when the object
+      is created, thus there's no point in serializing it".
+
+      The values are guaranteed to be read/written in the same way as if a published
+      property with the same name (Key) and same type would be read/written.
+      This allows to utilize this mechanism to read, to a local/private variable,
+      a value that was previously a published property value.
+      This is a way to provide backward-compatibility for old designs: this way class
+      can interpret old values in design files, even though it no longer publishes
+      given property.
+
+      @seealso ReadWrite }
+    procedure ReadWriteSubComponent(const Key: String; const Value: TComponent;
+      const IsStored: Boolean); virtual; abstract;
+
     { Make a list serialized and deserialized.
       The definition of list is very flexible here, you provide callbacks
       that should, when called,
@@ -433,18 +495,20 @@ type
 
       Do not worry about conflict between Key and some published property.
       We internally "mangle" keys to avoid it. }
-    procedure ReadWrite(const Key: String;
+    procedure ReadWriteList(const Key: String;
       const ListEnumerate: TListEnumerateEvent; const ListAdd: TListAddEvent;
       const ListClear: TListClearEvent); virtual; abstract;
   end;
 
   { Component with various CGE extensions: can be a parent of other non-visual components
-    (to display them in CGE editor and serialize them to files), can be translated.
+    (to display them in CGE editor and serialize them to files), can be translated,
+    can have custom logic when serializing/deserializing (CustomSerialization).
 
     Note that everywhere in CGE (in particular in editor and when serializing) we handle
-    a standard Pascal TComponent. There's no need to derive all your components from
-    TCastleComponent. Use TCastleComponent only if you want to benefit from some extra
-    features in this class. }
+    a standard Pascal TComponent as well. So there's no need to derive all your components from
+    TCastleComponent, so you derive from standard TComponent too.
+    You can use TCastleComponent only if necessary, i.e. only if you need one of
+    the extra features in this class. }
   TCastleComponent = class(TComponent)
   strict private
     type
@@ -512,11 +576,17 @@ type
       @exclude }
     property InternalText: String read GetInternalText write SetInternalText;
 
-    { Add csLoading. Used when deserializing.
+    { Set IsLoading to @true and (only on FPC) add csLoading flag to ComponentState.
+      Used when deserializing.
+      Do not call this yourself, CastleComponentSerialize automatically calls this.
       @exclude }
     procedure InternalLoading;
 
-    { Remove csLoading. Used when deserializing.
+    { Set IsLoading to @false and (only on FPC) remove csLoading flag from ComponentState
+      and call virtual TComponent.Loaded.
+      Used when deserializing.
+      Do not call this yourself, CastleComponentSerialize automatically calls this.
+      Descendants can override TComponent.Loaded to react to being loaded.
       @exclude }
     procedure InternalLoaded;
 
@@ -806,6 +876,10 @@ type
 function DumpStackToString(const BaseFramePointer: Pointer): string;
 function DumpExceptionBackTraceToString: string;
 {$endif}
+
+{ Propose a name for given component class, making it unique in given ComponentsOwner. }
+function InternalProposeName(const ComponentClass: TComponentClass;
+  const ComponentsOwner: TComponent): String;
 
 type
   TFreeNotificationObserver = class;
@@ -1740,7 +1814,8 @@ end;
 
 procedure TCastleComponent.CustomSerialization(const SerializationProcess: TSerializationProcess);
 begin
-  SerializationProcess.ReadWrite('NonVisualComponents',
+  inherited;
+  SerializationProcess.ReadWriteList('NonVisualComponents',
     {$ifdef FPC}@{$endif} SerializeNonVisualComponentsEnumerate,
     {$ifdef FPC}@{$endif} SerializeNonVisualComponentsAdd,
     {$ifdef FPC}@{$endif} SerializeNonVisualComponentsClear);
@@ -1774,29 +1849,73 @@ end;
 { TComponent routines -------------------------------------------------------- }
 
 type
-  { Helper class to implement TranslateProperties. }
-  TTranslatePropertiesGetChildren = class(TSerializationProcess)
+  { Helper class to implement TranslateProperties.
+
+    Calls TranslatePropertyEvent on all "children", where "children" are all
+    components that this class enumerated in CustomSerialization:
+
+    - all items on lists reported by ReadWriteList
+
+    - all subcomponents reported by ReadWriteSubComponent
+  }
+  TTranslatePropertiesOnChildren = class(TSerializationProcess)
   strict private
     procedure TranslatePropertiesOnChild(Child: TComponent);
   public
     TranslatePropertyEvent: TTranslatePropertyEvent;
-    procedure ReadWrite(const AKey: String;
+    procedure ReadWriteInteger(const Key: String; var Value: Integer; const IsStored: Boolean);
+      overload; override;
+    procedure ReadWriteBoolean(const Key: String; var Value: Boolean; const IsStored: Boolean);
+      overload; override;
+    procedure ReadWriteString(const Key: String; var Value: String; const IsStored: Boolean);
+      overload; override;
+    procedure ReadWriteSingle(const Key: String; var Value: Single; const IsStored: Boolean);
+      overload; override;
+    procedure ReadWriteSubComponent(const Key: String; const Value: TComponent;
+      const IsStored: Boolean); override;
+    procedure ReadWriteList(const Key: String;
       const ListEnumerate: TSerializationProcess.TListEnumerateEvent;
       const ListAdd: TSerializationProcess.TListAddEvent;
       const ListClear: TSerializationProcess.TListClearEvent); override;
   end;
 
-procedure TTranslatePropertiesGetChildren.TranslatePropertiesOnChild(Child: TComponent);
+procedure TTranslatePropertiesOnChildren.TranslatePropertiesOnChild(Child: TComponent);
 begin
   TranslateProperties(Child, TranslatePropertyEvent);
 end;
 
-procedure TTranslatePropertiesGetChildren.ReadWrite(const AKey: String;
+procedure TTranslatePropertiesOnChildren.ReadWriteList(const Key: String;
   const ListEnumerate: TSerializationProcess.TListEnumerateEvent;
   const ListAdd: TSerializationProcess.TListAddEvent;
   const ListClear: TSerializationProcess.TListClearEvent);
 begin
   ListEnumerate({$ifdef FPC}@{$endif} TranslatePropertiesOnChild);
+end;
+
+procedure TTranslatePropertiesOnChildren.ReadWriteSubComponent(
+  const Key: String; const Value: TComponent; const IsStored: Boolean);
+begin
+  TranslateProperties(Value, TranslatePropertyEvent);
+end;
+
+procedure TTranslatePropertiesOnChildren.ReadWriteInteger(const Key: String; var Value: Integer; const IsStored: Boolean);
+begin
+  // just override abstract method to do nothing
+end;
+
+procedure TTranslatePropertiesOnChildren.ReadWriteBoolean(const Key: String; var Value: Boolean; const IsStored: Boolean);
+begin
+  // just override abstract method to do nothing
+end;
+
+procedure TTranslatePropertiesOnChildren.ReadWriteString(const Key: String; var Value: String; const IsStored: Boolean);
+begin
+  // just override abstract method to do nothing
+end;
+
+procedure TTranslatePropertiesOnChildren.ReadWriteSingle(const Key: String; var Value: Single; const IsStored: Boolean);
+begin
+  // just override abstract method to do nothing
 end;
 
 procedure TranslateProperties(const C: TComponent;
@@ -1819,19 +1938,19 @@ var
   PropInfo: PPropInfo;
   TypeInfo: PTypeInfo;
   I: Integer;
-  GetChildrenHandler: TTranslatePropertiesGetChildren;
+  ChildrenEnumerator: TTranslatePropertiesOnChildren;
 begin
   if C is TCastleComponent then
   begin
     // translate properties of C
     TCastleComponent(C).TranslateProperties(TranslatePropertyEvent);
 
-    // translate properties of C children in GetChildren
-    GetChildrenHandler := TTranslatePropertiesGetChildren.Create;
+    // translate properties of C children
+    ChildrenEnumerator := TTranslatePropertiesOnChildren.Create;
     try
-      GetChildrenHandler.TranslatePropertyEvent := TranslatePropertyEvent;
-      TCastleComponent(C).CustomSerialization(GetChildrenHandler);
-    finally FreeAndNil(GetChildrenHandler) end;
+      ChildrenEnumerator.TranslatePropertyEvent := TranslatePropertyEvent;
+      TCastleComponent(C).CustomSerialization(ChildrenEnumerator);
+    finally FreeAndNil(ChildrenEnumerator) end;
   end;
 
   // translate properties of other C serialized children
@@ -2167,6 +2286,67 @@ begin
 {$endif}
 end;
 {$endif}
+
+function InternalProposeName(const ComponentClass: TComponentClass;
+  const ComponentsOwner: TComponent): String;
+
+  { Cleanup S (right now, always taken from some ClassName)
+    to be a nice component name, which also must make it a valid Pascal identifier. }
+  function CleanComponentName(const S: String): String;
+  begin
+    Result := S;
+
+    // remove common prefixes
+    if IsPrefix('TCastleUserInterface', Result, true) then
+      Result := PrefixRemove('TCastleUserInterface', Result, true)
+    else
+    if IsPrefix('TCastle', Result, true) then
+      Result := PrefixRemove('TCastle', Result, true)
+    else
+    if IsPrefix('T', Result, true) then
+      Result := PrefixRemove('T', Result, true);
+
+    // move 2D and 3D to the back, as component name cannot start with a number
+    if IsPrefix('2D', Result, true) then
+      Result := PrefixRemove('2D', Result, true) + '2D';
+    if IsPrefix('3D', Result, true) then
+      Result := PrefixRemove('3D', Result, true) + '3D';
+
+    // in case the replacements above made '', fix it (can happen in case of TCastleUserInterface)
+    if Result = '' then
+      Result := 'Group';
+
+    if SCharIs(Result, 1, ['0'..'9']) then
+      Result := 'Component' + Result;
+  end;
+
+var
+  ResultBase: String;
+  I: Integer;
+begin
+  ResultBase := CleanComponentName(ComponentClass.ClassName);
+
+  { A simple test of the CleanComponentName routine.
+    This is *not* a good place for such automated test, but for now it was simplest to put it here. }
+  {
+  Assert(CleanComponentName('TSomething') = 'Something');
+  Assert(CleanComponentName('TCastleUserInterface') = 'Group');
+  Assert(CleanComponentName('TCastleUserInterfaceButton') = 'Button');
+  Assert(CleanComponentName('TCastleSomething') = 'Something');
+  Assert(CleanComponentName('TCastle2DStuff') = 'Stuff2D');
+  Assert(CleanComponentName('TCastle3DStuff') = 'Stuff3D');
+  Assert(CleanComponentName('TCastle4DProcessing') = 'Component4DProcessing');
+  }
+
+  // make unique
+  I := 1;
+  Result := ResultBase + IntToStr(I);
+  while ComponentsOwner.FindComponent(Result) <> nil do
+  begin
+    Inc(I);
+    Result := ResultBase + IntToStr(I);
+  end;
+end;
 
 { TFreeNotificationObserver -------------------------------------------------- }
 

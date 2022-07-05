@@ -892,8 +892,7 @@ end;
 
 function TLevel.UnloadCore: T3DResourceList;
 begin
-  { clear Items, removing everything from previous level }
-  Items.Clear;
+  Items.ClearExceptCameras;
 
   { free stuff like creatures, items, level logic.
     Note that things not owned by FreeAtUnload, like usual Player and FInternalLogic,
@@ -1180,9 +1179,9 @@ procedure TLevel.Update(const SecondsPassed: Single);
     if Water.Contains(Player.Translation) then
       FPlayerSwimming := psUnderWater
     else
-    { Check Player.Navigation, not Navigation, in case Navigation=nil
-      but Player is <> nil. Then Player.Navigation is guaranteed non-nil. }
-    if Water.Contains(Player.Translation - Viewport.Camera.GravityUp * Player.Navigation.PreferredHeight) then
+    { TODO: swimming on water surface is not ready for 3rd-person navigation. }
+    if (not Player.UseThirdPerson) and
+       Water.Contains(Player.Translation - Viewport.Camera.GravityUp * Player.WalkNavigation.PreferredHeight) then
       FPlayerSwimming := psAboveWater
     else
       FPlayerSwimming := psNo;

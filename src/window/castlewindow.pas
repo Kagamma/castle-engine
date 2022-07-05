@@ -209,8 +209,9 @@ unit CastleWindow;
              {$define CASTLE_WINDOW_LIBRARY}
            {$elseif defined(DARWIN)}
              // various possible backends on macOS (desktop):
-             {$define CASTLE_WINDOW_XLIB} // easiest to compile
-             { $define CASTLE_WINDOW_LCL} // best (looks native and most functional) on macOS, but requires LCL
+             {$define CASTLE_WINDOW_COCOA} // best (looks native) on macOS
+             { $define CASTLE_WINDOW_XLIB} // requires Xlib to compile and to work
+             { $define CASTLE_WINDOW_LCL} // looks native (can use Cocoa through LCL), but requires LCL to compile
              { $define CASTLE_WINDOW_GTK_2}
              { $define CASTLE_WINDOW_LIBRARY}
              { $define CASTLE_WINDOW_TEMPLATE} // only useful for developers
@@ -291,6 +292,11 @@ unit CastleWindow;
   situations you want to define CASTLE_WINDOW_USE_PRIVATE_MODIFIERS_DOWN. }
 {$ifdef CASTLE_WINDOW_GTK_ANY} {$define CASTLE_WINDOW_USE_PRIVATE_MODIFIERS_DOWN} {$endif}
 {$ifdef CASTLE_WINDOW_XLIB}    {$define CASTLE_WINDOW_USE_PRIVATE_MODIFIERS_DOWN} {$endif}
+
+{$ifdef CASTLE_WINDOW_COCOA}
+  {$modeswitch objectivec1}
+  {$modeswitch cblocks}
+{$endif}
 
 interface
 
@@ -1653,7 +1659,9 @@ type
     { Called when user drag and drops file(s) on the window.
       In case of macOS bundle, this is also called when user opens a document
       associated with our application by double-clicking.
-      Note: this is currently supported only by CASTLE_WINDOW_LCL backend. }
+
+      Note: this is currently supported only by LCL and Cocoa backends
+      of TCastleWindow, see https://castle-engine.io/castlewindow_backends . }
     property OnDropFiles: TDropFilesFunc read FOnDropFiles write FOnDropFiles;
 
     { Should we automatically redraw the window all the time,
@@ -2145,15 +2153,15 @@ type
       If user accepts, we return true and set Color accordingly, else
       we return false (and do not modify Color).
 
-      Some overloaded versions (the one with TCastleColor) specify a color with alpha,
-      but note that @italic(currently no implemetation allows
-      the user to adjust the color's alpha value).
-      Alpha always remains unchanged.
+      Overloaded version with TCastleColor specifies a color with alpha.
+      But note that only some backends actually allow user to adjust alpha
+      (others leave alpha unchanged).
+      Backends that allow alpha editing now are: Cocoa, Xlib.
 
       @groupBegin }
-    function ColorDialog(var Color: TCastleColor): boolean; overload;
-    function ColorDialog(var Color: TVector3): boolean; overload;
-    function ColorDialog(var Color: TVector3Byte): boolean; overload;
+    function ColorDialog(var Color: TCastleColor): Boolean; overload;
+    function ColorDialog(var Color: TCastleColorRGB): Boolean; overload;
+    function ColorDialog(var Color: TVector3Byte): Boolean; overload;
     { @groupEnd }
 
     { Show some information and just ask to press "OK",
@@ -3134,11 +3142,11 @@ end;
 
 procedure TCastleWindow.ReleaseAllKeysAndMouse;
 var
-  k: TKey;
-  mb: TCastleMouseButton;
+  Key: TKey;
+  MouseButton: TCastleMouseButton;
   {$ifdef CASTLE_WINDOW_USE_PRIVATE_MODIFIERS_DOWN}
-  mk: TModifierKey;
-  b: boolean;
+  ModKey: TModifierKey;
+  B: boolean;
   {$endif}
 begin
   {$ifdef CASTLE_WINDOW_USE_PRIVATE_MODIFIERS_DOWN}
@@ -3148,18 +3156,19 @@ begin
     use SetPrivateModifiersDown(mkCtrl, ...).
     This is the only way to make values in PrivateModifiersDown[]
     and Pressed[] arrays consistent. }
-  for mk := Low(mk) to High(mk) do
-    for b := Low(b) to High(b) do
-      SetPrivateModifiersDown(mk, b, false);
+  for ModKey := Low(ModKey) to High(ModKey) do
+    for B := Low(B) to High(B) do
+      SetPrivateModifiersDown(ModKey, B, false);
   {$endif CASTLE_WINDOW_USE_PRIVATE_MODIFIERS_DOWN}
 
-  { Since we do DoKeyUp, this should also take care of Characters. }
+  { Since we do DoKeyUp, this should also take care of releasing Characters. }
+  for Key := Low(Key) to High(Key) do
+    if Pressed[Key] then
+      DoKeyUp(Key);
 
-  for k := Low(k) to High(k) do
-    if Pressed[k] then DoKeyUp(k);
-
-  for mb := Low(mb) to High(mb) do if mb in MousePressed then
-    DoMouseUp(MousePosition, mb);
+  for MouseButton := Low(MouseButton) to High(MouseButton) do
+    if MouseButton in MousePressed then
+      DoMouseUp(MousePosition, MouseButton);
 
   Container.MouseLookIgnoreNextMotion;
 end;
@@ -3664,26 +3673,27 @@ begin
   finally FreeAndNil(FFList) end;
 end;
 
-function TCastleWindow.ColorDialog(var Color: TCastleColor): boolean;
+function TCastleWindow.ColorDialog(var Color: TCastleColorRGB): boolean;
 var
-  Color3: TVector3;
+  Color4: TCastleColor;
 begin
-  Color3 := Color.XYZ;
-  Result := ColorDialog(Color3);
+  Color4 := Vector4(Color, 1);
+  Result := ColorDialog(Color4);
   if Result then
-    Color := Vector4(Color3, 1.0);
+    Color := Color4.RGB;
 end;
 
 function TCastleWindow.ColorDialog(var Color: TVector3Byte): boolean;
 var
-  ColorSingle: TVector3;
+  ColorSingle: TVector4;
 begin
   ColorSingle.X := Color.X / High(Byte);
   ColorSingle.Y := Color.Y / High(Byte);
   ColorSingle.Z := Color.Z / High(Byte);
+  ColorSingle.W := 1;
   Result := ColorDialog(ColorSingle);
   if Result then
-    Color := Vector3Byte(ColorSingle);
+    Color := Vector3Byte(ColorSingle.XYZ);
 end;
 
 { OpenAndRun ----------------------------------------------------------------- }
@@ -3931,7 +3941,7 @@ const
 var
   Data: TOptionProcData;
 
-  procedure HandleMacOsXProcessSerialNumber;
+  procedure RemoveMacOsProcessSerialNumber;
   {$ifdef DARWIN}
   var
     I: Integer;
@@ -3958,7 +3968,7 @@ begin
     if ParamKind in AllowedOptions then
     begin
       if ParamKind = poMacOsXProcessSerialNumber then
-        HandleMacOsXProcessSerialNumber
+        RemoveMacOsProcessSerialNumber
       else
         Parameters.Parse(OptionsForParam[ParamKind].pOptions,
           OptionsForParam[ParamKind].Count,

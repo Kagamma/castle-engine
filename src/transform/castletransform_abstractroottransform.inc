@@ -268,19 +268,38 @@
 
       This camera controls:
 
-      - the X3D nodes that "sense" camera like ProximitySensor, Billboard, LOD.
-      - an audio listener (controlling the spatial sound).
-      - the headlight position/direction.
-      - when X3D nodes change Viewport/NavigationInfo,
-        they apply these changes to this camera.
+      @unorderedList(
+        @item(Nodes that "sense" camera like TProximitySensorNode, TBillboardNode, TLODNode.)
 
-      Note that it means that "headlight" is assigned to one camera
+        @item(TCastleBillboard.)
+
+        @item(Audio listener (controlling the spatial sound).)
+
+        @item(Headlight position/direction, if you enable headlight by @link(TCastleRootTransform.UseHeadlight).)
+
+        @item(When X3D nodes change Viewpoint/NavigationInfo (possible if TCastleViewport.AutoCamera),
+          they apply changes to this camera.)
+
+        @item(Rendering of TRenderedTextureNode contents (which camera this texture shows).)
+
+        @item(At design-time: gizmo size is determined with respect to this camera.)
+      )
+
+      Note that it means that "headlight" done by
+      @link(TCastleRootTransform.UseHeadlight) is assigned to one camera
       in case of multiple viewports looking at the same world.
       You cannot have a different "headlight" in each viewport,
       this would cause subtle problems since it's not how it would work in reality
       (where every light is visible in all viewports),
       e.g. mirror textures (like GeneratedCubeMapTexture)
       would need different contents in different viewpoints.
+
+      Note that we no longer advise using @link(TCastleRootTransform.UseHeadlight)
+      for headlight. It's easier to just place light as child of whatever camera
+      you want, like adding TCastleDirectionalLight as child of TCastleCamera.
+      See examples/viewport_and_scenes/headlight/ .
+      In this case MainCamera doesn't matter, instead you explicitly make headlight
+      by placing light as child of chosen camera.
 
       Note that features like LOD or Billboard or ProximitySensor
       need to transform this camera to scene local space.
@@ -292,18 +311,21 @@
 
       By default this is set to @link(TCastleViewport.Camera) of the @link(TCastleViewport)
       that created this @link(TCastleAbstractRootTransform) instance.
-      So in simple cases (when you just create one @link(TCastleViewport)
+      And if something changes the @link(TCastleViewport.Camera) of that viewport,
+      then this @name is also updated.
+      So in simple cases (when you just have one @link(TCastleViewport)
       and add your scenes to it's already-created @link(TCastleViewport.Items))
       you don't have to do anything, it just works.
-      In general, you can change this to any camera of any associated @link(TCastleViewport),
+      In general, you can change this to any camera (currently used by some
+      associated @link(TCastleViewport) or not),
       or @nil (in case no camera should be that "central" camera). }
     property MainCamera: TCastleCamera read FMainCamera write SetMainCamera;
 
-    function CameraPosition: TVector3; deprecated 'use MainCamera.Position if MainCamera <> nil';
-    function CameraDirection: TVector3; deprecated 'use MainCamera.Direction if MainCamera <> nil';
-    function CameraUp: TVector3; deprecated 'use MainCamera.Up if MainCamera <> nil';
-    function CameraGravityUp: TVector3; deprecated 'use MainCamera.GravityUp if MainCamera <> nil';
-    function CameraKnown: Boolean; deprecated 'use MainCamera <> nil';
+    { Remove all items except TCastleCamera instances.
+      This only avoids removing TCastleCamera instances that are direct children
+      of this TCastleAbstractRootTransform, the TCastleCamera instances that are deeper
+      (e.g. TCastleCamera inside some TCastleTransform) will still be removed. }
+    procedure ClearExceptCameras;
   published
     { Adjust physics properties. }
     property PhysicsProperties: TPhysicsProperties read FPhysicsProperties;
@@ -512,38 +534,6 @@ begin
   MainCamera := nil;
 end;
 
-function TCastleAbstractRootTransform.CameraPosition: TVector3;
-begin
-  if MainCamera = nil then
-    Result := TVector3.Zero
-  else
-    Result := MainCamera.Translation;
-end;
-
-function TCastleAbstractRootTransform.CameraDirection: TVector3;
-begin
-  if MainCamera = nil then
-    Result := DefaultCameraDirection
-  else
-    Result := MainCamera.Direction;
-end;
-
-function TCastleAbstractRootTransform.CameraUp: TVector3;
-begin
-  if MainCamera = nil then
-    Result := DefaultCameraUp
-  else
-    Result := MainCamera.Up;
-end;
-
-function TCastleAbstractRootTransform.CameraGravityUp: TVector3;
-begin
-  if MainCamera = nil then
-    Result := DefaultCameraUp
-  else
-    Result := MainCamera.GravityUp;
-end;
-
 function TCastleAbstractRootTransform.GravityUp: TVector3;
 begin
   if MainCamera = nil then
@@ -552,11 +542,6 @@ begin
     Result := DefaultCameraUp
   else
     Result := MainCamera.GravityUp;
-end;
-
-function TCastleAbstractRootTransform.CameraKnown: Boolean;
-begin
-  Result := MainCamera <> nil;
 end;
 
 procedure TCastleAbstractRootTransform.RegisterPressRelease(const T: TCastleTransform);
@@ -582,6 +567,15 @@ begin
   end;
 
   FInternalPressReleaseListeners.Delete(I);
+end;
+
+procedure TCastleAbstractRootTransform.ClearExceptCameras;
+var
+  I: Integer;
+begin
+  for I := Count - 1 downto 0 do
+    if not (Items[I] is TCastleCamera) then
+      Delete(I);
 end;
 
 {$endif read_implementation}

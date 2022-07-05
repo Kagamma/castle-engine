@@ -38,7 +38,7 @@
         <PackageName Value="LCL"/>
       </Item3>
     </RequiredPackages>
-    <Units Count="22">
+    <Units Count="23">
       <Unit0>
         <Filename Value="castle_editor.lpr"/>
         <IsPartOfProject Value="True"/>
@@ -107,9 +107,9 @@
         <UnitName Value="FormPreferences"/>
       </Unit9>
       <Unit10>
-        <Filename Value="code/visualizetransform.pas"/>
+        <Filename Value="code/designvisualizetransform.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="VisualizeTransform"/>
+        <UnitName Value="DesignVisualizeTransform"/>
       </Unit10>
       <Unit11>
         <Filename Value="code/formspritesheeteditor.pas"/>
@@ -181,6 +181,11 @@
         <ResourceBaseClass Value="Form"/>
         <UnitName Value="FormSystemInformation"/>
       </Unit21>
+      <Unit22>
+        <Filename Value="code/castlelcledithack.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="CastleLclEditHack"/>
+      </Unit22>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

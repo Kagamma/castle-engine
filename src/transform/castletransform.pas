@@ -22,7 +22,8 @@ interface
 uses SysUtils, Classes, Math, Generics.Collections, Contnrs, Kraft,
   CastleVectors, CastleFrustum, CastleBoxes, CastleClassUtils, CastleKeysMouse,
   CastleRectangles, CastleUtils, CastleTimeUtils, CastleComponentSerialize,
-  CastleSoundEngine, CastleCameras, CastleTriangles, CastleRenderOptions;
+  CastleSoundEngine, CastleTriangles, CastleRenderOptions, CastleProjection,
+  CastleUIControls, CastleQuaternions;
 
 type
   {$define read_interface}
@@ -34,16 +35,19 @@ type
   {$I castletransform_abstractroottransform.inc}
   {$I castletransform_design.inc}
   {$I castletransform_reference.inc}
+  {$I castletransform_camera.inc}
 
 {$I castletransform_physics.inc}
 {$I castletransform_serialize.inc}
 {$I castletransform_miscellaneous_globals.inc}
+{$I castletransform_camera_utils.inc}
 {$undef read_interface}
 
 implementation
 
-uses CastleLog, CastleQuaternions, CastleApplicationProperties,
-  CastleURIUtils;
+uses CastleLog, CastleApplicationProperties, CastleURIUtils, CastleInternalRays,
+  // TODO: this breaks unit dependencies, transform->scene
+  X3DNodes, CastleScene;
 
 {$define read_implementation}
 {$I castletransform_initial_types.inc}
@@ -57,7 +61,9 @@ uses CastleLog, CastleQuaternions, CastleApplicationProperties,
 {$I castletransform_abstractroottransform.inc}
 {$I castletransform_design.inc}
 {$I castletransform_reference.inc}
+{$I castletransform_camera.inc}
 {$I castletransform_miscellaneous_globals.inc}
+{$I castletransform_camera_utils.inc}
 {$undef read_implementation}
 
 initialization
@@ -66,4 +72,5 @@ initialization
   RegisterSerializableComponent(TCastleTransform, 'Transform');
   RegisterSerializableComponent(TCastleTransformDesign, 'Transform Design (Use Another castle-transform File)');
   RegisterSerializableComponent(TCastleTransformReference, 'Reference Another Transform');
+  RegisterSerializableComponent(TCastleCamera, 'Camera');
 end.

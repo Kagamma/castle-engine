@@ -1,5 +1,5 @@
 {
-  Copyright 2014-2021 Michalis Kamburelis,
+  Copyright 2014-2022 Michalis Kamburelis,
   parts based on LazUTF8 unit copyright by Lazarus developers.
   Parts of this source code are based on Lazarus LazUTF8 source code,
   but no worries --- Lazarus license is exactly the same as Castle Game Engine :)
@@ -56,6 +56,7 @@ function UTF8Length(p: PChar; ByteCount: PtrInt): PtrInt; overload;
 function UTF8CharStart(UTF8Str: PChar; Len, CharIndex: PtrInt): PChar;
 function UTF8CodepointSizeFull(p: PChar): integer;
 function UTF8Copy(const s: string; StartCharIndex, CharCount: PtrInt): string;
+function UTF8SEnding(const S: String; const StartCharIndex: PtrInt): String;
 
 procedure UTF8Insert(const source: String; var s: String; StartCharIndex: PtrInt);
 function UTF8CodepointStart(UTF8Str: PChar; Len, CodepointIndex: PtrInt): PChar;
@@ -438,6 +439,12 @@ begin
 end;
 
 function UTF8CharacterToUnicode(p: PChar; out CharLen: integer): TUnicodeChar;
+function UTF8SEnding(const S: String; const StartCharIndex: PtrInt): String;
+begin
+  result := UTF8Copy(S, StartCharIndex, MaxInt)
+end;
+
+function UTF8CharacterToUnicode(p: PChar; out CharLen: integer): Cardinal;
 { if p=nil then CharLen=0 otherwise CharLen>0
   If there is an encoding error the Result is undefined.
   Use UTF8FixBroken to fix UTF-8 encoding.

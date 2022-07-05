@@ -38,24 +38,25 @@ uses
   CastleSceneCore, CastleKeysMouse, CastleVectors, CastleRectangles,
   CastleViewport, CastleClassUtils, CastleControls, CastleTiledMap,
   CastleCameras, CastleBoxes, CastleTransform, CastleDebugTransform,
-  CastleColors,
+  CastleColors, CastleScene,
   // editor units
-  FrameAnchors, VisualizeTransform,
-  CastleUndoSystem;
+  FrameAnchors,
+  DesignVisualizeTransform, DesignUndoSystem, DesignCameraPreview;
 
 type
   { Frame to visually design component hierarchy. }
   TDesignFrame = class(TFrame)
     ButtonResetTransformation: TButton;
     ButtonClearAnchorDeltas: TButton;
-    ButtonViewportMenu: TSpeedButton;
     LabelHeaderTransform: TLabel;
+    LabelViewport: TLabel;
     LabelHeaderUi: TLabel;
     LabelEventsInfo: TLabel;
     LabelSizeInfo: TLabel;
-    LabelSelectedViewport: TLabel;
+    MenuTreeViewItemSaveSelected: TMenuItem;
+    MenuSeparator1: TMenuItem;
+    MenuTreeViewItemCut: TMenuItem;
     MenuItemSeparator898989: TMenuItem;
-    MenuItemViewportNavigationNone: TMenuItem;
     MenuTreeViewItemSeparator127u30130120983: TMenuItem;
     MenuTreeViewItemAddNonVisual: TMenuItem;
     MenuTreeViewItemAddBehavior: TMenuItem;
@@ -66,21 +67,13 @@ type
     MenuTreeViewItemPaste: TMenuItem;
     MenuTreeViewItemCopy: TMenuItem;
     MenuTreeViewItemDuplicate: TMenuItem;
-    MenuItemViewportCameraCurrentFromInitial: TMenuItem;
-    MenuItemSeparator123: TMenuItem;
-    MenuItemSeparator2: TMenuItem;
-    MenuItemViewportCamera2DViewInitial: TMenuItem;
-    MenuItemViewportCameraSetInitial: TMenuItem;
-    MenuItemViewportCameraViewAll: TMenuItem;
     MenuItemSeparator1: TMenuItem;
-    MenuItemViewportSort2D: TMenuItem;
-    MenuItemViewportChangeNavigation: TMenuItem;
     PanelLayoutTop: TPanel;
     PanelLayoutTransform: TPanel;
     PanelEventsInfo: TPanel;
     PanelAnchors: TPanel;
-    MenuViewport: TPopupMenu;
     MenuTreeView: TPopupMenu;
+    SaveDesignDialog: TCastleSaveDialog;
     SelfAnchorsFrame: TAnchorsFrame;
     ParentAnchorsFrame: TAnchorsFrame;
     CheckParentSelfAnchorsEqual: TCheckBox;
@@ -115,7 +108,6 @@ type
     procedure ButtonTransformScaleModeClick(Sender: TObject);
     procedure ButtonTransformSelectModeClick(Sender: TObject);
     procedure ButtonTransformTranslateModeClick(Sender: TObject);
-    procedure ButtonViewportMenuClick(Sender: TObject);
     procedure CheckParentSelfAnchorsEqualChange(Sender: TObject);
     procedure ControlsTreeAdvancedCustomDrawItem(Sender: TCustomTreeView;
       Node: TTreeNode; State: TCustomDrawState; Stage: TCustomDrawStage;
@@ -132,18 +124,14 @@ type
     procedure ButtonInteractModeClick(Sender: TObject);
     procedure ButtonModifyUiModeClick(Sender: TObject);
     procedure MenuItemAddComponentClick(Sender: TObject);
+    procedure MenuTreeViewItemCutClick(Sender: TObject);
     procedure MenuTreeViewItemRenameClick(Sender: TObject);
     procedure MenuTreeViewItemDeleteClick(Sender: TObject);
     procedure MenuTreeViewItemCopyClick(Sender: TObject);
     procedure MenuTreeViewItemDuplicateClick(Sender: TObject);
-    procedure MenuItemViewportCamera2DViewInitialClick(Sender: TObject);
-    procedure MenuItemViewportCameraCurrentFromInitialClick(Sender: TObject);
-    procedure MenuItemViewportCameraViewAllClick(Sender: TObject);
-    procedure MenuItemViewportCameraSetInitialClick(Sender: TObject);
-    procedure MenuItemViewportSort2DClick(Sender: TObject);
     procedure MenuTreeViewItemPasteClick(Sender: TObject);
+    procedure MenuTreeViewItemSaveSelectedClick(Sender: TObject);
     procedure MenuTreeViewPopup(Sender: TObject);
-    procedure MenuItemViewportChangeNavigationNoneClick(Sender: TObject);
     procedure ClearDesign;
     procedure RenameSelectedItem;
     procedure PerformUndoRedo(const UHE: TUndoHistoryElement);
@@ -211,10 +199,16 @@ type
       PropertyEditorHook: TPropertyEditorHook;
       FDesignUrl: String;
       FDesignRoot: TComponent;
+      { Viewport created for editing design with FDesignRoot being TCastleTransform. }
+      FDesignViewportForTransforms: TCastleViewport;
       { Owner of all components saved/loaded to the design file.
         Also owner of a temporary viewport for .castle-transform,
         in general this owns everything specific to display currrent design. }
       DesignOwner: TComponent;
+      { If design is visual (DesignRoot is TCastleUserInterface or
+        TCastleTransform) then this is non-nil and allows to visualize
+        alternative selected camera view. }
+      CameraPreview: TCameraPreview;
       FDesignerLayer: TDesignerLayer;
       FDesignModified: Boolean;
       CastleControl: TCastleControl;
@@ -226,15 +220,17 @@ type
       PendingErrorBox: String;
       VisualizeTransformHover, VisualizeTransformSelected: TVisualizeTransform;
       CollectionPropertyEditorForm: TCollectionPropertyEditorForm;
+      FCurrentViewport: TCastleViewport;
+      FCurrentViewportObserver: TFreeNotificationObserver;
 
+    function CameraToSynchronize(const V: TCastleViewport): TCastleCamera;
+    procedure CameraSynchronize(const Source, Target: TCastleCamera; const MakeUndo: Boolean);
     procedure CastleControlOpen(Sender: TObject);
     procedure CastleControlResize(Sender: TObject);
     procedure CastleControlUpdate(Sender: TObject);
     procedure CastleControlDragOver(Sender, Source: TObject; X, Y: Integer;
       State: TDragState; var Accept: Boolean);
     procedure CastleControlDragDrop(Sender, Source: TObject; X, Y: Integer);
-    procedure ChangeViewportNavigation(
-      const NewNavigation: TCastleNavigation);
     procedure CollectionPropertyEditorFormUnassign;
     function ComponentCaption(const C: TComponent): String;
     function TreeNodeCaption(const C: TComponent): String;
@@ -242,7 +238,6 @@ type
     procedure FrameAnchorsChange(Sender: TObject);
     procedure AdjustUserInterfaceAnchorsToKeepRect(const UI: TCastleUserInterface;
       const RenderRectBeforeChange: TFloatRectangle);
-    procedure MenuItemViewportChangeNavigationClick(Sender: TObject);
     // Save and restore selection.
     // Careful: you can use it only if the operation between will *never* free any of them.
     //procedure SelectionRestoreAndFree(var Selection: Classes.TList);
@@ -258,22 +253,26 @@ type
     procedure GetSelected(out Selected: TComponentList;
       out SelectedCount: Integer);
 
-    { If there is exactly one item selected, and it is TCastleUserInterface,
-      return it. Otherwise return nil. }
     function GetSelectedUserInterface: TCastleUserInterface;
     procedure SetSelectedUserInterface(const Value: TCastleUserInterface);
+    { If there is exactly one item selected, and it is TCastleUserInterface,
+      return it. Otherwise return nil. }
     property SelectedUserInterface: TCastleUserInterface
       read GetSelectedUserInterface write SetSelectedUserInterface;
 
-    { If there is exactly one item selected, return it. Otherwise return nil. }
     function GetSelectedComponent: TComponent;
     procedure SetSelectedComponent(const Value: TComponent);
+    { If there is exactly one item selected, return it. Otherwise return nil. }
     property SelectedComponent: TComponent
       read GetSelectedComponent write SetSelectedComponent;
 
     { If the selected items all have the same TCastleViewport parent,
       return it. Otherwise return nil. }
     function SelectedViewport: TCastleViewport;
+
+    { Look at current selection and hover and possibly change CurrentViewport,
+      calling also OnCurrentViewportChanged. }
+    procedure UpdateCurrentViewport;
 
     { If there is exactly one item selected, and it is TCastleTransform,
       return it. Otherwise return nil. }
@@ -327,8 +326,6 @@ type
       castle design hierarchy (DesignRoot). }
     function ValidateHierarchy: Boolean;
     procedure UpdateSelectedControl;
-    function ProposeName(const ComponentClass: TComponentClass;
-      const ComponentsOwner: TComponent): String;
     procedure UpdateLabelSizeInfo(const UI: TCastleUserInterface);
     { Update anchors shown, based on UI state.
       Updates which buttons are pressed inside 2 TAnchorFrame instances.
@@ -343,11 +340,23 @@ type
       AEditor: TPropertyEditor; var AShow: Boolean; const Section: TPropertySection);
     procedure GizmoHasModifiedParent(Sender: TObject);
     procedure GizmoStopDrag(Sender: TObject);
+    { Fix Pos.Z, to keep camera to see whole 2D world.
+      Use this before doing V.InternalCamera.AnimateTo/SetWorldView with given Pos,Dir,Up.
+
+      When operating in 2D (*not* detected by navigation type, but by projection type and axis,
+      to keep things also working in Fly mode for 2D games),
+      keep proper distance in Z to see the whole 2D world (including run-time 2D camera)
+      and Pos. }
+    procedure FixCamera2D(const V: TCastleViewport; var Pos: TVector3; const Dir, Up: TVector3);
+    procedure ViewportViewBox(const V: TCastleViewport; Box: TBox3D);
+    procedure CurrentViewportFreeNotification(const Sender: TFreeNotificationObserver);
   protected
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
     OnUpdateFormCaption: TNotifyEvent;
     OnSelectionChanged: TNotifyEvent;
+    { Called always when CurrentViewport value changed. }
+    OnCurrentViewportChanged: TNotifyEvent;
     function RenamePossible: Boolean;
     constructor Create(TheOwner: TComponent); override;
     destructor Destroy; override;
@@ -369,6 +378,7 @@ type
     procedure DeleteComponent;
     procedure CopyComponent;
     procedure PasteComponent;
+    procedure CutComponent;
     procedure DuplicateComponent;
     { set UIScaling values. }
     procedure UIScaling(const UIScaling: TUIScaling;
@@ -382,7 +392,29 @@ type
     procedure RecordUndo(const UndoComment: String;
       const UndoCommentPriority: TUndoCommentPriority; const ItemIndex: Integer = -1);
 
+    procedure SaveSelected;
+
     procedure CurrentComponentApiUrl(var Url: String);
+
+    { Viewport to act on using various commands.
+
+      Chosen "aggressively" by looking at selected viewport
+      (based on selected ui or transform within viewport)
+      or viewport over which mouse hovers. We want to enable user to set current viewport
+      as easily as possible, to avoid the "selection of viewport" being an extra step
+      user needs to remember to do.
+
+      @nil if none. }
+    property CurrentViewport: TCastleViewport read FCurrentViewport;
+
+    procedure ViewportViewAxis(const Dir, Up: TVector3);
+    procedure ViewportViewAll;
+    procedure ViewportViewSelected;
+    procedure ViewportSetup2D;
+    procedure ViewportSort2D;
+    procedure ViewportToggleProjection;
+    procedure ViewportAlignViewToCamera;
+    procedure ViewportAlignCameraToView;
   end;
 
 implementation
@@ -391,10 +423,10 @@ uses // use Windows unit with FPC 3.0.x, to get TSplitRectType enums
   {$ifdef VER3_0} {$ifdef MSWINDOWS} Windows, {$endif} {$endif}
   TypInfo, StrUtils, Math, Graphics, Types, Dialogs, LCLType, ObjInspStrConsts,
   Castle2DSceneManager, CastleComponentSerialize, CastleFileFilters,
-  CastleGLUtils, CastleImages, CastleLog,  CastleProjection, CastleScene,
+  CastleGLUtils, CastleImages, CastleLog,  CastleProjection,
   CastleShellCtrls, CastleStringUtils, CastleThirdPersonNavigation,
   CastleTimeUtils, CastleURIUtils, CastleUtils, CastleBehaviors, CastleSoundEngine,
-  X3DLoad,
+  X3DLoad, CastleFilesUtils,
   EditorUtils, FormProject;
 
 {$R *.lfm}
@@ -526,11 +558,15 @@ function TDesignFrame.TDesignerLayer.HoverUserInterface(
   end;
 
 begin
-  if MouseOverControl(Frame.CastleControl) and
-     (Frame.DesignRoot is TCastleUserInterface) then
-    Result := ControlUnder(Frame.DesignRoot as TCastleUserInterface, AMousePosition, true)
-  else
-    Result := nil;
+  Result := nil;
+  if MouseOverControl(Frame.CastleControl) then
+  begin
+    if Frame.DesignRoot is TCastleUserInterface then
+      Result := ControlUnder(Frame.DesignRoot as TCastleUserInterface, AMousePosition, true)
+    else
+    if Frame.DesignRoot is TCastleTransform then
+      Result := Frame.FDesignViewportForTransforms;
+  end;
 end;
 
 function TDesignFrame.TDesignerLayer.HoverTransform(
@@ -545,12 +581,29 @@ function TDesignFrame.TDesignerLayer.HoverTransform(
       if (RayHit[I].Item is TCastleTransformReference) and Selectable(RayHit[I].Item) then
         Exit(RayHit[I].Item);
 
-    // set the inner-most TCastleTransform hit, but not anything transient (to avoid hitting gizmo)
-    for I := 0 to RayHit.Count - 1 do
-      if Selectable(RayHit[I].Item) then
-        Exit(RayHit[I].Item);
+    { We want the inner-most TCastleTransform hit, but not anything non-selectable
+      (which means csTransient) (to avoid hitting gizmo).
+      Moreover, things that are children of csTransient should always be treated like csTransient
+      too, e.g. GizmoSelect in TInternalCastleEditorGizmo should never be returned by this.
 
-    Result := nil;
+      So if there's anything non-selectable (which just means csTransient),
+      searching from outer (world),
+      then pick the selected transform right above it. }
+
+    for I := RayHit.Count - 1 downto 0 do
+      if not Selectable(RayHit[I].Item) then
+      begin
+        if I + 1 < RayHit.Count then
+          Exit(RayHit[I + 1].Item)
+        else
+          Exit(nil);
+      end;
+
+    { Nothing non-selectable (csTransient) on the list, pick the inner-most transform }
+    if RayHit.Count <> 0 then
+      Result := RayHit[0].Item
+    else
+      Result := nil;
   end;
 
 var
@@ -559,6 +612,13 @@ var
   RayOrigin, RayDirection: TVector3;
   RayHit: TRayCollision;
 begin
+  { Note: We don't call here CurrentViewport, even though we perform
+    similar checks -- HoverUserInterface, SelectedViewport.
+    That is because here:
+    - we check HoverUserInterface first, SelectedViewport last
+    - we don't remember last hovered/selected viewport, it would be weird for HoverTransform
+  }
+
   UI := HoverUserInterface(AMousePosition);
   if UI is TCastleViewport then // also checks UI <> nil
     Viewport := TCastleViewport(UI)
@@ -630,15 +690,46 @@ begin
   Result := inherited Press(Event);
   if Result then Exit;
 
-  if (Frame.Mode = moModifyUi) and
-     (Event.IsMouseButton(buttonLeft) or Event.IsMouseButton(buttonRight)) then
+  { We have a few shortcuts that should only work when the focus is over viewport
+    (that is, if they reach TDesignerLayer.Press),
+    because otherwise they would conflict with editing text in OI or names in hierarchy. }
+  if Event.IsKey(CtrlZ) and (not (mkShift in Event.ModifiersDown)) then
   begin
-    { Left mouse button selects before moving/resizing.
-      Right mouse button doesn't. This allows to change the size of the control
+    Frame.PerformUndo;
+    Exit(ExclusiveEvents);
+  end;
+  if Event.IsKey(CtrlZ) and (mkShift in Event.ModifiersDown) then
+  begin
+    Frame.PerformRedo;
+    Exit(ExclusiveEvents);
+  end;
+  if Event.IsKey(keyF) then
+  begin
+    Frame.ViewportViewSelected;
+    Exit(ExclusiveEvents);
+  end;
+  if Event.IsKey(keyHome) then
+  begin
+    Frame.ViewportViewAll;
+    Exit(ExclusiveEvents);
+  end;
+
+  { Avoid handling mouse events over CameraPreview, to avoid messing with clicking
+    on CameraPreview buttons, and using gizmos in CameraPreview viewport. }
+  if Frame.CameraPreview.UiRoot.Exists and
+     Frame.CameraPreview.UiRoot.RenderRectWithBorder.Contains(Event.Position) then
+    Exit;
+
+  if (Frame.Mode = moModifyUi) and Event.IsMouseButton(buttonLeft) then
+  begin
+    { Without shift pressed, we select before moving/resizing.
+      With shift pressed we don't change selection.
+
+      This allows to change the position/size of the control
       without changing the selected control, e.g. when you want to change
       the size of TCastleScrollView without
       selecting TCastleScrollView.ScrollArea inside. }
-    if Event.IsMouseButton(buttonLeft) then
+    if (not (mkShift in Event.ModifiersDown)) then
       Frame.SelectedUserInterface := HoverUserInterface(Event.Position);
 
     UI := Frame.SelectedUserInterface;
@@ -655,7 +746,11 @@ begin
   end;
 
   if (Frame.Mode in TransformModes) and
-      Event.IsMouseButton(buttonLeft) then
+      Event.IsMouseButton(buttonLeft) and
+      { When Shift is pressed, left mouse button should not change the selection,
+        only Move/Rotate/Scale. And Move/Rotate/Scale is not handled here,
+        it's done by TVisualizeTransform. }
+      (not (mkShift in Event.ModifiersDown)) then
   begin
     T := HoverTransform(Event.Position);
     { Do not change Frame.SelectedTransform in case T is nil,
@@ -683,7 +778,13 @@ begin
   Result := inherited Press(Event);
   if Result then Exit;
 
-  if (Event.IsMouseButton(buttonLeft) or Event.IsMouseButton(buttonRight)) then
+  { Avoid handling mouse events over CameraPreview, to avoid messing with clicking
+    on CameraPreview buttons, and using gizmos in CameraPreview viewport. }
+  if Frame.CameraPreview.UiRoot.Exists and
+     Frame.CameraPreview.UiRoot.RenderRectWithBorder.Contains(Event.Position) then
+    Exit;
+
+  if Event.IsMouseButton(buttonLeft) then
   begin
     DraggingMode := dmNone;
 
@@ -894,12 +995,17 @@ begin
   Result := inherited Motion(Event);
   if Result then Exit;
 
-  { in case user left mouse button, but the event didn't reach us for some reason
+  { Avoid handling mouse events over CameraPreview, to avoid messing with clicking
+    on CameraPreview buttons, and using gizmos in CameraPreview viewport. }
+  if Frame.CameraPreview.UiRoot.Exists and
+     Frame.CameraPreview.UiRoot.RenderRectWithBorder.Contains(Event.Position) then
+    Exit;
+
+  { in case user released mouse button, but the event didn't reach us for some reason
     (maybe can happen e.g. if you Alt+Tab during dragging?),
     reset DraggingMode. }
   if (DraggingMode <> dmNone) and
-     // neither buttonLeft nor buttonRight
-     ([buttonLeft, buttonRight] * Event.Pressed = []) then
+     (not (buttonLeft in Event.Pressed)) then
     DraggingMode := dmNone;
 
   if (Frame.Mode = moModifyUi) and (DraggingMode <> dmNone) then
@@ -932,7 +1038,11 @@ begin
     end;
   end;
 
-  UpdateCursor;
+  if not InternalDesignMouseLook then
+    { do not override cursor when InternalDesignMouseLook,
+      to allow mouse look to hide cursor. }
+    UpdateCursor;
+
   UpdateHoverTransform;
 end;
 
@@ -1073,7 +1183,7 @@ begin
   Inspector[itEvents].AnchorToNeighbour(akTop, 0, PanelEventsInfo);
 
   CastleControl := TCastleControl.Create(Self);
-  CastleControl.Parent := PanelMiddle;
+  CastleControl.AutoFocus := true; // needed on Windows to receive AWSD, Ctrl+Z...
   CastleControl.Align := alClient;
   CastleControl.OnResize := @CastleControlResize;
   CastleControl.OnOpen := @CastleControlOpen;
@@ -1081,6 +1191,7 @@ begin
   CastleControl.StencilBits := 8; // enable shadow volumes
   CastleControl.OnDragOver := @CastleControlDragOver;
   CastleControl.OnDragDrop := @CastleControlDragDrop;
+  CastleControl.Parent := PanelMiddle; // set Parent last, following https://wiki.freepascal.org/LCL_Tips#Set_the_Parent_as_last
 
   {$ifdef DEBUG_GIZMO_PICK}
   TCastleControl.MainControl := CastleControl;
@@ -1103,26 +1214,20 @@ begin
   VisualizeTransformSelected.OnParentModified := @GizmoHasModifiedParent;
   VisualizeTransformSelected.OnGizmoStopDrag := @GizmoStopDrag;
 
+  SaveDesignDialog.InitialDir := URIToFilenameSafe(ApplicationDataOverride);
+
   //ChangeMode(moInteract);
   ChangeMode(moModifyUi); // most expected default, it seems
 
   BuildComponentsMenu(
-    nil,
     MenuTreeViewItemAddUserInterface,
     MenuTreeViewItemAddTransform,
     MenuTreeViewItemAddBehavior,
     MenuTreeViewItemAddNonVisual,
     @MenuItemAddComponentClick);
-  BuildComponentsMenu(
-    MenuItemViewportChangeNavigation,
-    nil,
-    nil,
-    nil,
-    nil,
-    @MenuItemViewportChangeNavigationClick);
-  // Input_Interact (for gizmos) reacts to both left and right
-  Input_Interact.MouseButton2Use := true;
-  Input_Interact.MouseButton2 := buttonRight;
+
+  FCurrentViewportObserver := TFreeNotificationObserver.Create(Self);
+  FCurrentViewportObserver.OnFreeNotification := {$ifdef FPC}@{$endif} CurrentViewportFreeNotification;
 end;
 
 destructor TDesignFrame.Destroy;
@@ -1184,6 +1289,7 @@ begin
   UpdateSelectedControl;
   //CastleControl.Controls.Clear; // don't clear it, leave DesignerLayer
   FDesignRoot := nil;
+  FreeAndNil(CameraPreview);
 
   // this actually frees everything inside DesignRoot
   FreeAndNil(DesignOwner);
@@ -1204,14 +1310,15 @@ procedure TDesignFrame.PerformUndoRedo(const UHE: TUndoHistoryElement);
   end;
 
 var
-  NewDesignOwner: TComponent;
+  NewDesignOwner, NewDesignRoot: TComponent;
   InspectorType: TInspectorType;
 begin
   for InspectorType in TInspectorType do
     Inspector[InspectorType].SaveChanges;
 
   NewDesignOwner := TComponent.Create(Self);
-  OpenDesign(StringToComponent(UHE.Data, NewDesignOwner), NewDesignOwner, FDesignUrl);
+  NewDesignRoot := InternalStringToComponent(UHE.Data, NewDesignOwner, DesignOwner);
+  OpenDesign(NewDesignRoot, NewDesignOwner, FDesignUrl);
 
   if UHE.Selected <> '' then
     SetSelectedComponent(NewDesignOwner.FindRequiredComponent(UHE.Selected));
@@ -1256,9 +1363,34 @@ end;
 
 procedure TDesignFrame.OpenDesign(const NewDesignRoot, NewDesignOwner: TComponent;
   const NewDesignUrl: String);
+
+  { Initialize TCastleViewport that is internal, and used to edit
+    .castle-transform. It requires some special considerations,
+    as it needs a good camera/navigation, but also user cannot modify them,
+    and they are not saved to .castle-transform. }
+  procedure InitializeDesignViewportForTransforms(const V: TCastleViewport);
+  var
+    APos, ADir, AUp, AGravityUp: TVector3;
+  begin
+    { This Name is user-visible: if user selects anything in viewport,
+      we show CurrentViewport.Name in header. }
+    V.Name := 'InternalViewport';
+    V.Transparent := true;
+    V.FullSize := true;
+
+    { Add headlight to design-time camera this way.
+      Note that doing "V.Items.UseHeadLight := hlOn" would not have a desired
+      effect, as this headlight would be done only from runtime camera,
+      which we don't care about in this case. }
+    V.InternalCamera.Add(TCastleDirectionalLight.Create(NewDesignOwner));
+
+    CameraViewpointForWholeScene(V.Items.BoundingBox, 2, 1, false, true,
+      APos, ADir, AUp, AGravityUp);
+    V.InternalCamera.SetWorldView(APos, ADir, AUp);
+    V.InternalCamera.GravityUp := AGravityUp;
+  end;
+
 var
-  Background: TCastleRectangleControl;
-  TempViewport: TCastleViewport;
   //LabelNonVisualHint: TCastleLabel;
   DesignRootVisual: Boolean;
 begin
@@ -1267,22 +1399,29 @@ begin
   { We use CastleControl.Controls.InsertBack here, to keep DesignerLayer
     in the front. }
 
+  DesignRootVisual :=
+    (NewDesignRoot is TCastleUserInterface) or
+    (NewDesignRoot is TCastleTransform);
+
+  if DesignRootVisual then
+  begin
+    CameraPreview := TCameraPreview.Create(NewDesignOwner);
+    CastleControl.Controls.InsertBack(CameraPreview.UiRoot);
+  end;
+
   if NewDesignRoot is TCastleUserInterface then
   begin
     CastleControl.Controls.InsertBack(NewDesignRoot as TCastleUserInterface);
-    DesignRootVisual := true;
+    Assert(DesignRootVisual);
   end else
   if NewDesignRoot is TCastleTransform then
   begin
-    TempViewport := TCastleViewport.Create(NewDesignOwner);
-    TempViewport.Transparent := true;
-    TempViewport.Items.UseHeadlight := hlOn;
-    TempViewport.Items.Add(NewDesignRoot as TCastleTransform);
-    TempViewport.FullSize := true;
-    TempViewport.AutoCamera := true;
-    TempViewport.AutoNavigation := true;
-    CastleControl.Controls.InsertBack(TempViewport);
-    DesignRootVisual := true;
+    FDesignViewportForTransforms := TCastleViewport.Create(NewDesignOwner);
+    FDesignViewportForTransforms.Items.Add(NewDesignRoot as TCastleTransform);
+    { Do this after adding NewDesignRoot, as it wants good Items.BoundingBox }
+    InitializeDesignViewportForTransforms(FDesignViewportForTransforms);
+    CastleControl.Controls.InsertBack(FDesignViewportForTransforms);
+    Assert(DesignRootVisual);
   end else
   begin
     { This is normal situation for non-visual components. }
@@ -1297,17 +1436,14 @@ begin
     LabelNonVisualHint.FontSize := 40;
     CastleControl.Controls.InsertBack(LabelNonVisualHint);
     *)
-    DesignRootVisual := false;
+    Assert(not DesignRootVisual);
   end;
 
   SetEnabledVisible(CastleControl, DesignRootVisual);
   SetEnabledVisible(PanelMiddleTop, DesignRootVisual);
 
-  // make background defined
-  Background := TCastleRectangleControl.Create(NewDesignOwner);
-  Background.Color := Vector4(0.5, 0.5, 0.5, 1);
-  Background.FullSize := true;
-  CastleControl.Controls.InsertBack(Background);
+  // set background to gray
+  CastleControl.Container.BackgroundColor := Vector4(0.5, 0.5, 0.5, 1);
 
   // replace DesignXxx variables, once loading successfull
   FDesignRoot := NewDesignRoot;
@@ -1420,7 +1556,7 @@ function TDesignFrame.AddComponent(const ParentComponent: TComponent;
     Result := ComponentClass.Create(DesignOwner) as TComponent;
     if Assigned(ComponentOnCreate) then // call ComponentOnCreate ASAP after constructor
       ComponentOnCreate(Result);
-    Result.Name := ProposeName(ComponentClass, DesignOwner);
+    Result.Name := InternalProposeName(ComponentClass, DesignOwner);
   end;
 
   procedure FinishAddingComponent(const NewComponent: TComponent);
@@ -1737,6 +1873,22 @@ begin
   end;
 end;
 
+procedure TDesignFrame.CutComponent;
+var
+  Sel: TComponent;
+begin
+  Sel := SelectedComponent;
+  if (Sel <> nil) and
+     (not (csSubComponent in Sel.ComponentStyle)) then
+  begin
+    Clipboard.AsText := ComponentToString(Sel);
+    DeleteComponent;
+  end else
+  begin
+    ErrorBox('Select exactly one component, that is not a subcomponent, to copy');
+  end;
+end;
+
 procedure TDesignFrame.DuplicateComponent;
 
   procedure FinishAddingComponent(const NewComponent: TComponent);
@@ -1832,9 +1984,9 @@ begin
       if Sel is TCastleNavigation then
       begin
         Nav := Sel as TCastleNavigation;
-        if Nav.InternalViewport is TCastleViewport then
+        if Nav.Parent is TCastleViewport then
         begin
-          NewResult := Nav.InternalViewport as TCastleViewport;
+          NewResult := Nav.Parent as TCastleViewport;
           if (Result <> nil) and (Result <> NewResult) then
             Exit(nil); // multiple viewports selected
           Result := NewResult;
@@ -1936,6 +2088,180 @@ begin
   end;
 end;
 
+procedure TDesignFrame.UpdateCurrentViewport;
+var
+  NewCurrentViewport: TCastleViewport;
+  HoverUi: TCastleUserInterface;
+begin
+  { try SelectedViewport }
+  NewCurrentViewport := SelectedViewport;
+
+  if NewCurrentViewport = nil then
+  begin
+    { try HoverUserInterface as TCastleViewport }
+    HoverUi := FDesignerLayer.HoverUserInterface(CastleControl.MousePosition);
+    if HoverUi is TCastleViewport then // also checks HoverUi <> nil
+      NewCurrentViewport := TCastleViewport(HoverUi);
+  end;
+
+  if (NewCurrentViewport <> nil) and
+     (FCurrentViewport <> NewCurrentViewport) then
+  begin
+    FCurrentViewport := NewCurrentViewport;
+    FCurrentViewportObserver.Observed := NewCurrentViewport;
+    if Assigned(OnCurrentViewportChanged) then
+      OnCurrentViewportChanged(Self);
+  end;
+  { otherwise keep using FCurrentViewport we had so far }
+end;
+
+procedure TDesignFrame.CurrentViewportFreeNotification(
+  const Sender: TFreeNotificationObserver);
+begin
+  FCurrentViewport := nil;
+  if Assigned(OnCurrentViewportChanged) then
+    OnCurrentViewportChanged(Self);
+end;
+
+const
+  CameraTransitionTime = 0.25;
+
+procedure TDesignFrame.ViewportViewAxis(const Dir, Up: TVector3);
+var
+  V: TCastleViewport;
+  Box: TBox3D;
+  Distance: Single;
+  NewPos: TVector3;
+begin
+  V := CurrentViewport;
+  if V = nil then Exit;
+  if V.Items = nil then Exit;
+
+  Box := V.Items.BoundingBox;
+  if Box.IsEmpty then Exit;
+
+  Distance := PointsDistance(V.InternalCamera.WorldTranslation, Box.Center);
+  NewPos := Box.Center - Dir * Distance;
+  FixCamera2D(V, NewPos, Dir, Up);
+  V.InternalCamera.AnimateTo(NewPos, Dir, Up, CameraTransitionTime);
+end;
+
+procedure TDesignFrame.FixCamera2D(const V: TCastleViewport; var Pos: TVector3; const Dir, Up: TVector3);
+var
+  CameraZ, CameraProjectionNear: Single;
+begin
+  if (V.InternalCamera.ProjectionType = ptOrthographic) and
+     TVector3.Equals(Dir, Vector3(0, 0, -1)) and
+     TVector3.Equals(Up, Vector3(0, 1, 0)) then
+  begin
+    if V.Camera <> nil then
+    begin
+      CameraZ := V.Camera.Translation.Z;
+      CameraProjectionNear := V.Camera.EffectiveProjectionNear;
+    end else
+    begin
+      CameraZ := Default2DCameraZ;
+      CameraProjectionNear := Default2DProjectionNear;
+    end;
+
+    Pos.Z := Max(Pos.Z, CameraZ - CameraProjectionNear + 100);
+  end;
+end;
+
+procedure TDesignFrame.ViewportViewBox(const V: TCastleViewport; Box: TBox3D);
+var
+  APos, ADir, AUp: TVector3;
+  IntersectionDistance: Single;
+begin
+  // in particular, condition below means we don't do anything if no TCastleTransform selected
+  if not Box.IsEmpty then
+  begin
+    V.InternalCamera.GetWorldView(APos, ADir, AUp);
+
+    { Convert Box to use maximum size in all 3 dimensions.
+      This results in better camera view for boxes mostly flat in 1 dimension. }
+    Box := Box3DAroundPoint(Box.Center, Box.Size.Max);
+    if not Box.TryRayClosestIntersection(IntersectionDistance, Box.Center, -ADir) then
+    begin
+      { TryRayClosestIntersection may return false for box with size zero
+        (though not observed in practice),
+        only then ray from Box.Center may not hit one of box walls. }
+      IntersectionDistance := 1;
+      WritelnWarning('Ray from box center didn''t hit any of box walls');
+    end;
+    APos := Box.Center - ADir * IntersectionDistance * 2;
+
+    { Older version of this routine was doing:
+
+    CameraViewpointForWholeScene(Box, 2, 1, false, true,
+      APos, ADir, AUp, AGravityUp);
+
+    New version only modifies the camera position, preserving existing
+    dir, up. This is more flexible for movement by key shortcuts,
+    and consistent with
+    - Blender home
+    - Unity F
+    - Godot O
+    }
+
+    FixCamera2D(V, APos, ADir, AUp);
+    V.InternalCamera.AnimateTo(APos, ADir, AUp, CameraTransitionTime);
+  end;
+end;
+
+procedure TDesignFrame.ViewportViewAll;
+var
+  V: TCastleViewport;
+begin
+  V := CurrentViewport;
+  if V = nil then Exit;
+
+  if V.Items <> nil then
+    ViewportViewBox(V, V.Items.BoundingBox);
+end;
+
+procedure TDesignFrame.ViewportViewSelected;
+
+  { Determine selected TCastleTransform based on selected component, or @nil.
+    This routine treats selecting a behavior just like selecting a transform,
+    so that pressing F on behavior works. }
+  function TransformFromSelected(const C: TComponent): TCastleTransform;
+  begin
+    if C is TCastleTransform then
+      Result := TCastleTransform(C)
+    else
+    if C is TCastleBehavior then
+      Result := TCastleBehavior(C).Parent
+    else
+      Result := nil;
+  end;
+
+var
+  Selected: TComponentList;
+  SelectedCount, I: Integer;
+  SelectedBox: TBox3D;
+  V: TCastleViewport;
+  T: TCastleTransform;
+begin
+  V := CurrentViewport;
+  if V = nil then Exit;
+
+  SelectedBox := TBox3D.Empty;
+
+  GetSelected(Selected, SelectedCount);
+  try
+    for I := 0 to SelectedCount - 1 do
+    begin
+      T := TransformFromSelected(Selected[I]);
+      if (T <> nil) and
+         (T.World = V.Items) then
+        SelectedBox := SelectedBox + T.WorldBoundingBox;
+    end;
+  finally FreeAndNil(Selected) end;
+
+  ViewportViewBox(V, SelectedBox);
+end;
+
 function TDesignFrame.ComponentCaption(const C: TComponent): String;
 
   function ClassCaption(const C: TClass): String;
@@ -2035,6 +2361,59 @@ begin
 end;
 
 procedure TDesignFrame.CastleControlUpdate(Sender: TObject);
+
+  function ViewportDebugInfo(const V: TCastleViewport): String;
+
+    function CameraDirectionStr: String;
+    begin
+      { This detection matches TProjectForm.ActionViewport*Execute methods in CGE editor. }
+      if TVector3.Equals(V.InternalCamera.Direction, Vector3(0, -1, 0)) then
+        Result := 'Top '
+      else
+      if TVector3.Equals(V.InternalCamera.Direction, Vector3(0, 1, 0)) then
+        Result := 'Bottom '
+      else
+      if TVector3.Equals(V.InternalCamera.Direction, Vector3(0, 0, -1)) then
+        Result := 'Front '
+      else
+      if TVector3.Equals(V.InternalCamera.Direction, Vector3(0, 0, 1)) then
+        Result := 'Back '
+      else
+      if TVector3.Equals(V.InternalCamera.Direction, Vector3(1, 0, 0)) then
+        Result := 'Left '
+      else
+      if TVector3.Equals(V.InternalCamera.Direction, Vector3(-1, 0, 0)) then
+        Result := 'Right '
+      else
+        Result := '';
+    end;
+
+    function ProjectionStr: String;
+    begin
+      Result := ProjectionTypeToStr(V.InternalCamera.ProjectionType);
+    end;
+
+    function DesignNavigationStr: String;
+    const
+      Names: array [TInternalDesignNavigationType] of String = ('Fly', 'Examine', '2D');
+    begin
+      if not V.InternalDesignManipulation then
+      begin
+        WritelnWarning('Viewport not in design mode, but selected (submit a bug): %s', [V.Name]);
+        Exit;
+      end;
+      Result := Names[V.InternalDesignNavigationType];
+      if V.InternalDesignNavigationType = dnFly then
+        Result := Result + Format(' (speed %f)', [
+          (V.InternalDesignNavigation as TCastleWalkNavigation).MoveSpeed
+        ]);
+    end;
+
+  begin
+    Result := V.Name + ': ' + CameraDirectionStr + ProjectionStr + ' ' + NL +
+      DesignNavigationStr;
+  end;
+
 var
   SavedErrorBox: String;
 begin
@@ -2065,6 +2444,16 @@ begin
     PanelAnchors.Visible;
   TabEvents.TabVisible :=
     (Inspector[itEvents].RowCount <> 0);
+
+  { If necessary, reset OverrideCursor modified by UpdateCursor, to allow mouse look to hide cursor }
+  if InternalDesignMouseLook then
+    CastleControl.Container.OverrideCursor := mcDefault;
+
+  UpdateCurrentViewport;
+
+  LabelViewport.Visible := FCurrentViewport <> nil;
+  if FCurrentViewport <> nil then
+    LabelViewport.Caption := ViewportDebugInfo(FCurrentViewport);
 end;
 
 procedure TDesignFrame.CastleControlDragOver(Sender, Source: TObject; X,
@@ -2263,8 +2652,8 @@ begin
       end;
     end else
     begin
-      { Show=true when Instance is some class used for subcomponents,
-        like TCastleVector3Persistent, TBorder, TCastleImagePersistent... }
+      { Show=true when Instance is some non-TComponent class used for subcomponents,
+        like TBorder, TCastleImagePersistent... }
       AShow := true;
     end;
   end;
@@ -2532,6 +2921,31 @@ begin
 
   UndoSystem.RecordUndo(ComponentToString(FDesignRoot), SelectedName, ItemIndex, ControlProperties.TabIndex, UndoComment, UndoCommentPriority);
   UndoSystem.DoLog('Undo "%s" recorded in %fs for "%s".', [UndoComment, StartTimer.ElapsedTime, SelectedName]);
+end;
+
+procedure TDesignFrame.SaveSelected;
+var
+  ComponentToSave: TComponent;
+begin
+  ComponentToSave := SelectedComponent;
+  if ComponentToSave = nil then
+  begin
+    ErrorBox('Select exactly one component to save');
+    Exit;
+  end;
+
+  PrepareSaveDesignDialog(SaveDesignDialog, ComponentToSave);
+  SaveDesignDialog.Url := '';
+  if SaveDesignDialog.Execute then
+  begin
+    if ComponentToSave is TCastleUserInterface then
+      UserInterfaceSave(TCastleUserInterface(ComponentToSave), SaveDesignDialog.Url)
+    else
+    if ComponentToSave is TCastleTransform then
+      TransformSave(TCastleTransform(ComponentToSave), SaveDesignDialog.Url)
+    else
+      ComponentSave(ComponentToSave, SaveDesignDialog.Url);
+  end;
 end;
 
 procedure TDesignFrame.MarkModified;
@@ -3204,14 +3618,20 @@ begin
   end;
 
   V := SelectedViewport;
-  SetEnabledVisible(LabelSelectedViewport, V <> nil);
-  SetEnabledVisible(ButtonViewportMenu, V <> nil);
-  if V <> nil then
-    LabelSelectedViewport.Caption := V.Name + ':';
-
-  T := SelectedTransform;
+  if SelectedComponent is TCastleBehavior then
+    { Highlight using VisualizeTransformSelected also transformation of selected behavior }
+    T := TCastleBehavior(SelectedComponent).Parent
+  else
+    T := SelectedTransform;
   SetEnabledVisible(PanelLayoutTransform, T <> nil);
   VisualizeTransformSelected.Parent := T; // works also in case SelectedTransform is nil
+
+  if CameraPreview <> nil then
+    CameraPreview.SelectedChanged(T, V);
+
+  { if selection determines CurrentViewport, update CurrentViewport immediately
+    (without waiting for OnUpdate) -- maybe this will be relevant at some point }
+  UpdateCurrentViewport;
 end;
 
 procedure TDesignFrame.ControlsTreeSelectionChanged(Sender: TObject);
@@ -3821,12 +4241,6 @@ begin
   InsideToggleModeClick := false;
 end;
 
-procedure TDesignFrame.ButtonViewportMenuClick(Sender: TObject);
-begin
-  MenuViewport.PopupComponent := ButtonViewportMenu;
-  MenuViewport.PopUp;
-end;
-
 procedure TDesignFrame.ButtonInteractModeClick(Sender: TObject);
 begin
   if InsideToggleModeClick then Exit;
@@ -3851,6 +4265,11 @@ begin
   AddComponent(R.ComponentClass, R.OnCreate);
 end;
 
+procedure TDesignFrame.MenuTreeViewItemCutClick(Sender: TObject);
+begin
+  CutComponent;
+end;
+
 procedure TDesignFrame.MenuTreeViewItemRenameClick(Sender: TObject);
 begin
   RenameSelectedItem;
@@ -3871,6 +4290,11 @@ begin
   PasteComponent;
 end;
 
+procedure TDesignFrame.MenuTreeViewItemSaveSelectedClick(Sender: TObject);
+begin
+  SaveSelected;
+end;
+
 procedure TDesignFrame.MenuTreeViewPopup(Sender: TObject);
 var
   Sel: TComponent;
@@ -3878,7 +4302,9 @@ begin
   Sel := SelectedComponent;
   MenuTreeViewItemRename.Enabled := RenamePossible;
   MenuTreeViewItemDuplicate.Enabled := Sel <> nil;
+  MenuTreeViewItemCut.Enabled := Sel <> nil;
   MenuTreeViewItemCopy.Enabled := Sel <> nil;
+  MenuTreeViewItemSaveSelected.Enabled := Sel <> nil;
   MenuTreeViewItemDelete.Enabled := ControlsTree.SelectionCount > 0; // delete can handle multiple objects
   if (Sel is TCastleUserInterface) or ((Sel = nil) and (DesignRoot is TCastleUserInterface)) then
   begin
@@ -3906,93 +4332,122 @@ begin
   DuplicateComponent;
 end;
 
-procedure TDesignFrame.MenuItemViewportCamera2DViewInitialClick(
-  Sender: TObject);
+procedure TDesignFrame.ViewportSetup2D;
 var
   V: TCastleViewport;
 begin
-  V := SelectedViewport;
+  V := CurrentViewport;
+  if V = nil then Exit;
+
   V.Setup2D;
-  ModifiedOutsideObjectInspector('Camera Setup for 2D View and Projection for ' + V.Name, ucHigh);
+  ModifiedOutsideObjectInspector('2D Camera And Projection At Runtime: ' + V.Name, ucHigh);
 end;
 
-procedure TDesignFrame.MenuItemViewportCameraCurrentFromInitialClick(
-  Sender: TObject);
+procedure TDesignFrame.ViewportSort2D;
 var
   V: TCastleViewport;
 begin
-  V := SelectedViewport;
-  V.Camera.SetView(
-    V.Camera.InitialPosition,
-    V.Camera.InitialDirection,
-    V.Camera.InitialUp);
-  ModifiedOutsideObjectInspector('Camera Current := Initial for ' + V.Name, ucHigh);
-end;
-
-procedure TDesignFrame.MenuItemViewportCameraViewAllClick(Sender: TObject);
-var
-  V: TCastleViewport;
-  Position, Direction, Up, GravityUp: TVector3;
-  ProjectionWidth, ProjectionHeight, ProjectionFar: Single;
-  Box: TBox3D;
-begin
-  V := SelectedViewport;
-  Box := V.Items.BoundingBox;
-
-  if V.Camera.ProjectionType = ptOrthographic then
-  begin
-    CameraOrthoViewpointForWholeScene(Box,
-      V.EffectiveWidth,
-      V.EffectiveHeight,
-      V.Camera.Orthographic.Origin,
-      Position, ProjectionWidth, ProjectionHeight, ProjectionFar);
-    V.Camera.Orthographic.Width := ProjectionWidth;
-    V.Camera.Orthographic.Height := ProjectionHeight;
-    V.Camera.ProjectionFar := ProjectionFar;
-    // set the rest of variables to constant values, matching 2D game view
-    Direction := Vector3(0, 0, -1);
-    Up := Vector3(0, 1, 0);
-    GravityUp := Up;
-  end else
-  begin
-    CameraViewpointForWholeScene(Box,
-      2, 1, false, true, // dir = -Z, up = +Y
-      Position, Direction, Up, GravityUp);
-  end;
-
-  V.Camera.AnimateTo(Position, Direction, Up, 0.5);
-  V.Camera.GravityUp := GravityUp;
-  if V.Navigation <> nil then
-    // Makes Examine camera pivot, and scroll speed, adjust to sizes
-    V.Navigation.ModelBox := Box;
-
-  ModifiedOutsideObjectInspector('Camera Current := View All for ' + V.Name, ucHigh);
-end;
-
-procedure TDesignFrame.MenuItemViewportCameraSetInitialClick(Sender: TObject);
-var
-  V: TCastleViewport;
-  APos, ADir, AUp: TVector3;
-begin
-  V := SelectedViewport;
-
-  V.Camera.GetView(APos, ADir, AUp);
-  V.Camera.SetInitialView(APos, ADir, AUp, false);
-  V.AutoCamera := false;
-
-  ModifiedOutsideObjectInspector('Camera Initial := Current for ' + V.Name, ucHigh);
-end;
-
-procedure TDesignFrame.MenuItemViewportSort2DClick(Sender: TObject);
-var
-  V: TCastleViewport;
-begin
-  V := SelectedViewport;
+  V := CurrentViewport;
+  if V = nil then Exit;
 
   V.Items.SortBackToFront2D;
-
   UpdateDesign; // make the tree reflect new order
-  ModifiedOutsideObjectInspector('Sort Items for Correct 2D Blending for ' + V.Name, ucHigh);
+  ModifiedOutsideObjectInspector('Sort Items for Correct 2D Blending: ' + V.Name, ucHigh);
+end;
+
+procedure TDesignFrame.ViewportToggleProjection;
+var
+  V: TCastleViewport;
+begin
+  V := CurrentViewport;
+  if V = nil then Exit;
+
+  if V.InternalCamera.ProjectionType = ptPerspective then
+    V.InternalCamera.ProjectionType := ptOrthographic
+  else
+    V.InternalCamera.ProjectionType := ptPerspective;
+end;
+
+function TDesignFrame.CameraToSynchronize(const V: TCastleViewport): TCastleCamera;
+begin
+  { Prefer to use camera from CameraPreview, as this is most natural in UI,
+    because user sees CameraPreview.
+    Do this even when SelectedTransform is also (maybe different) camera. }
+  if (CameraPreview <> nil) and
+     (CameraPreview.SelectedCamera <> nil) and
+     (CameraPreview.SelectedCamera.World = V.Items) then
+    Result := CameraPreview.SelectedCamera
+  else
+  if (SelectedTransform is TCastleCamera) and
+     (TCastleCamera(SelectedTransform).World = V.Items) then
+    Result := TCastleCamera(SelectedTransform)
+  else
+    Result := V.Camera;
+end;
+
+procedure TDesignFrame.CameraSynchronize(const Source, Target: TCastleCamera; const MakeUndo: Boolean);
+var
+  BeginPos, BeginDir, BeginUp, EndPos, EndDir, EndUp: TVector3;
+begin
+  Target.ProjectionType := Source.ProjectionType;
+  Target.Perspective.FieldOfView     := Source.Perspective.FieldOfView;
+  Target.Perspective.FieldOfViewAxis := Source.Perspective.FieldOfViewAxis;
+  Target.Orthographic.Origin  := Source.Orthographic.Origin;
+  Target.Orthographic.Width   := Source.Orthographic.Width;
+  Target.Orthographic.Height  := Source.Orthographic.Height;
+  Target.Orthographic.Scale   := Source.Orthographic.Scale;
+  Target.Orthographic.Stretch := Source.Orthographic.Stretch;
+
+  Target.GetWorldView(BeginPos, BeginDir, BeginUp);
+  Source.GetWorldView(EndPos, EndDir, EndUp);
+
+  { Instead of using FixCamera2D, just explicitly force Z values to be unchanged. }
+  if (Source.ProjectionType = ptOrthographic) and
+     TVector3.Equals(EndDir, Vector3(0, 0, -1)) and
+     TVector3.Equals(EndUp, Vector3(0, 1, 0)) then
+  begin
+    EndPos.Z := BeginPos.Z;
+  end;
+
+  if MakeUndo then
+  begin
+    { To record undo for Target camera pos/dir/up, we do a little trick.
+      As we want to animate using AnimateTo, but we want to record undo state
+      with already final pos/dir/up, so we *temporarily* adjust Target instantly
+      to Source pos/dir/up. }
+    Target.SetWorldView(EndPos, EndDir, EndUp);
+    ModifiedOutsideObjectInspector('Align Camera To View: ' + Target.Name, ucHigh);
+    // restore Target to begin positions, to animate to it
+    Target.SetWorldView(BeginPos, BeginDir, BeginUp);
+  end;
+
+  Target.AnimateTo(EndPos, EndDir, EndUp, CameraTransitionTime);
+end;
+
+procedure TDesignFrame.ViewportAlignViewToCamera;
+var
+  V: TCastleViewport;
+  C: TCastleCamera;
+begin
+  V := CurrentViewport;
+  if V = nil then Exit;
+
+  C := CameraToSynchronize(V);
+  if C <> nil then
+    CameraSynchronize(C, V.InternalCamera, false);
+end;
+
+procedure TDesignFrame.ViewportAlignCameraToView;
+var
+  V: TCastleViewport;
+  C: TCastleCamera;
+begin
+  V := CurrentViewport;
+  if V = nil then Exit;
+
+  C := CameraToSynchronize(V);
+  if C <> nil then
+    CameraSynchronize(V.InternalCamera, C, true);
 end;
 
 {
@@ -4013,60 +4468,6 @@ begin
 end;
 }
 
-procedure TDesignFrame.ChangeViewportNavigation(const NewNavigation: TCastleNavigation);
-var
-  V: TCastleViewport;
-begin
-  V := SelectedViewport;
-
-  // fixes crash, in case current selection was equal to old V.Navigation that will be freed
-  SelectedUserInterface := nil;
-
-  // free previous V.Navigation
-  if (V.Navigation <> nil) and
-     (V.Navigation.Owner = DesignOwner) then
-    V.Navigation.Free
-  else
-    // using internal navigation instance, through SetNavigationType
-    V.Navigation := nil;
-  Assert(V.Navigation = nil);
-
-  // set new V.Navigation
-  V.Navigation := NewNavigation;
-  if NewNavigation <> nil then
-    NewNavigation.Name := ProposeName(TComponentClass(NewNavigation.ClassType), DesignOwner);
-
-  // otherwise, setting Navigation to nil would not work, as it would be replaced by internal navigation
-  V.AutoNavigation := false;
-
-  UpdateDesign;
-
-  if NewNavigation <> nil then
-    SelectedUserInterface := NewNavigation
-  else
-    SelectedUserInterface := V;
-  ModifiedOutsideObjectInspector('Change Viewport Navigation for ' + V.Name, ucHigh);
-end;
-
-procedure TDesignFrame.MenuItemViewportChangeNavigationNoneClick(Sender: TObject);
-begin
-  ChangeViewportNavigation(nil);
-end;
-
-procedure TDesignFrame.MenuItemViewportChangeNavigationClick(Sender: TObject);
-var
-  R: TRegisteredComponent;
-  Nav: TCastleNavigation;
-begin
-  R := TRegisteredComponent(Pointer((Sender as TComponent).Tag));
-
-  Nav := R.ComponentClass.Create(DesignOwner) as TCastleNavigation;
-  if Assigned(R.OnCreate) then // call OnCreate ASAP after constructor
-    R.OnCreate(Nav);
-
-  ChangeViewportNavigation(Nav);
-end;
-
 procedure TDesignFrame.SetParent(AParent: TWinControl);
 {$ifdef LCLwin32}
 var
@@ -4084,67 +4485,6 @@ begin
       Inspector[InspectorType].DefaultItemHeight := H;
   end;
   {$endif}
-end;
-
-function TDesignFrame.ProposeName(const ComponentClass: TComponentClass;
-  const ComponentsOwner: TComponent): String;
-
-  { Cleanup S (right now, always taken from some ClassName)
-    to be a nice component name, which also must make it a valid Pascal identifier. }
-  function CleanComponentName(const S: String): String;
-  begin
-    Result := S;
-
-    // remove common prefixes
-    if IsPrefix('TCastleUserInterface', Result, true) then
-      Result := PrefixRemove('TCastleUserInterface', Result, true)
-    else
-    if IsPrefix('TCastle', Result, true) then
-      Result := PrefixRemove('TCastle', Result, true)
-    else
-    if IsPrefix('T', Result, true) then
-      Result := PrefixRemove('T', Result, true);
-
-    // move 2D and 3D to the back, as component name cannot start with a number
-    if IsPrefix('2D', Result, true) then
-      Result := PrefixRemove('2D', Result, true) + '2D';
-    if IsPrefix('3D', Result, true) then
-      Result := PrefixRemove('3D', Result, true) + '3D';
-
-    // in case the replacements above made '', fix it (can happen in case of TCastleUserInterface)
-    if Result = '' then
-      Result := 'Group';
-
-    if SCharIs(Result, 1, ['0'..'9']) then
-      Result := 'Component' + Result;
-  end;
-
-var
-  ResultBase: String;
-  I: Integer;
-begin
-  ResultBase := CleanComponentName(ComponentClass.ClassName);
-
-  { A simple test of the CleanComponentName routine.
-    This is *not* a good place for such automated test, but for now it was simplest to put it here. }
-  {
-  Assert(CleanComponentName('TSomething') = 'Something');
-  Assert(CleanComponentName('TCastleUserInterface') = 'Group');
-  Assert(CleanComponentName('TCastleUserInterfaceButton') = 'Button');
-  Assert(CleanComponentName('TCastleSomething') = 'Something');
-  Assert(CleanComponentName('TCastle2DStuff') = 'Stuff2D');
-  Assert(CleanComponentName('TCastle3DStuff') = 'Stuff3D');
-  Assert(CleanComponentName('TCastle4DProcessing') = 'Component4DProcessing');
-  }
-
-  // make unique
-  I := 1;
-  Result := ResultBase + IntToStr(I);
-  while ComponentsOwner.FindComponent(Result) <> nil do
-  begin
-    Inc(I);
-    Result := ResultBase + IntToStr(I);
-  end;
 end;
 
 procedure TDesignFrame.UpdateLabelSizeInfo(const UI: TCastleUserInterface);
@@ -4256,7 +4596,7 @@ begin
   NewRoot := ComponentClass.Create(NewDesignOwner);
   if Assigned(ComponentOnCreate) then
     ComponentOnCreate(NewRoot);
-  NewRoot.Name := ProposeName(ComponentClass, NewDesignOwner);
+  NewRoot.Name := InternalProposeName(ComponentClass, NewDesignOwner);
 
   { In these special cases, set FullSize to true,
     since this is almost certainly what user wants when creating a new UI

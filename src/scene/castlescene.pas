@@ -606,6 +606,7 @@ const
 {$I castlescene_cylinder.inc}
 {$I castlescene_imagetransform.inc}
 {$I castlescene_background.inc}
+{$I castlescene_editorgizmo.inc}
 {$I castlescene_abstractlight.inc}
 {$I castlescene_pointlight.inc}
 {$I castlescene_directionallight.inc}
@@ -633,6 +634,7 @@ uses Math,
 {$I castlescene_cylinder.inc}
 {$I castlescene_imagetransform.inc}
 {$I castlescene_background.inc}
+{$I castlescene_editorgizmo.inc}
 {$I castlescene_abstractlight.inc}
 {$I castlescene_pointlight.inc}
 {$I castlescene_directionallight.inc}
@@ -1968,9 +1970,7 @@ procedure TCastleScene.Update(const SecondsPassed: Single; var RemoveMe: TRemove
 
     if World.MainCamera <> nil then
     begin
-      CamPos := World.MainCamera.Translation;
-      CamDir := World.MainCamera.Direction;
-      CamUp  := World.MainCamera.Up;
+      World.MainCamera.GetWorldView(CamPos, CamDir, CamUp);
     end else
     begin
       CamPos := TVector3.Zero;
@@ -2385,11 +2385,11 @@ initialization
   RegisterSerializableComponent(TCastleCylinder, 'Cylinder');
   RegisterSerializableComponent(TCastleImageTransform, 'Image');
   RegisterSerializableComponent(TCastleBackground, 'Background');
-  RegisterSerializableComponent(TCastlePointLight, 'Point Light');
-  RegisterSerializableComponent(TCastleDirectionalLight, 'Directional Light');
-  RegisterSerializableComponent(TCastleSpotLight, 'Spot Light');
+  RegisterSerializableComponent(TCastlePointLight, 'Light/Point');
+  RegisterSerializableComponent(TCastleDirectionalLight, 'Light/Directional');
+  RegisterSerializableComponent(TCastleSpotLight, 'Light/Spot');
   {$ifdef CASTLE_EXPERIMENTAL_ENVIRONMENT_LIGHT}
-  RegisterSerializableComponent(TCastleEnvironmentLight, 'Environment Light (Experimental)');
+  RegisterSerializableComponent(TCastleEnvironmentLight, 'Light/Environment');
   {$endif}
 finalization
   GLContextCache.FreeWhenEmpty(@GLContextCache);

@@ -42,12 +42,62 @@ const
 type
   { Main project management. }
   TProjectForm = class(TForm)
+    ActionComponentDuplicate: TAction;
+    ActionComponentSaveSelected: TAction;
+    ActionComponentDelete: TAction;
+    ActionComponentCut: TAction;
+    ActionComponentPaste: TAction;
+    ActionComponentCopy: TAction;
+    ActionViewportToggleProjection: TAction;
+    ActionViewportSetup2D: TAction;
+    ActionViewportSort2D: TAction;
+    ActionViewportAlignCameraToView: TAction;
+    ActionViewportTop: TAction;
+    ActionNavigationToggle2D: TAction;
+    ActionViewportAlignViewToCamera: TAction;
+    ActionViewportBottom: TAction;
+    ActionViewportFront: TAction;
+    ActionViewportBack: TAction;
+    ActionViewportRight: TAction;
+    ActionViewportLeft: TAction;
+    ActionNavigationFly: TAction;
+    ActionNavigationExamine: TAction;
+    ActionNavigation2D: TAction;
+    ActionViewportViewSelected: TAction;
+    ActionViewportViewAll: TAction;
     ActionSystemInformation: TAction;
     ActionOutputCopyAll: TAction;
     ActionOutputCopySelected: TAction;
     ActionOutputClean: TAction;
     ActionNewSpriteSheet: TAction;
     ActionList: TActionList;
+    MenuItem10: TMenuItem;
+    MenuItem11: TMenuItem;
+    MenuItem12: TMenuItem;
+    MenuItem15: TMenuItem;
+    MenuItem21: TMenuItem;
+    MenuSeparator6123: TMenuItem;
+    MenuSeparator6: TMenuItem;
+    Separator5: TMenuItem;
+    MenuItem20: TMenuItem;
+    Separator4: TMenuItem;
+    MenuItem18: TMenuItem;
+    MenuItem19: TMenuItem;
+    MenuItem2: TMenuItem;
+    Separator2: TMenuItem;
+    MenuItem13: TMenuItem;
+    MenuItem14: TMenuItem;
+    Separator3: TMenuItem;
+    MenuItem16: TMenuItem;
+    MenuItem17: TMenuItem;
+    Separator1: TMenuItem;
+    MenuItem4: TMenuItem;
+    MenuItem6: TMenuItem;
+    MenuItem7: TMenuItem;
+    MenuItem8: TMenuItem;
+    MenuItemViewportViewAll: TMenuItem;
+    MenuItemViewportViewSelected: TMenuItem;
+    MenuItemViewport: TMenuItem;
     MenuItemSystemInformation: TMenuItem;
     MenuItemEdit: TMenuItem;
     MenuItemOutputCopyAll: TMenuItem;
@@ -192,6 +242,15 @@ type
     TabOutput: TTabSheet;
     ProcessUpdateTimer: TTimer;
     TabWarnings: TTabSheet;
+    procedure ActionComponentCutExecute(Sender: TObject);
+    procedure ActionComponentSaveSelectedExecute(Sender: TObject);
+    procedure ActionViewportAlignCameraToViewExecute(Sender: TObject);
+    procedure ActionViewportAlignViewToCameraExecute(Sender: TObject);
+    procedure ActionViewportToggleProjectionExecute(Sender: TObject);
+    procedure ActionNavigation2DExecute(Sender: TObject);
+    procedure ActionNavigationExamineExecute(Sender: TObject);
+    procedure ActionNavigationFlyExecute(Sender: TObject);
+    procedure ActionNavigationToggle2DExecute(Sender: TObject);
     procedure ActionSystemInformationExecute(Sender: TObject);
     procedure ActionOutputCleanExecute(Sender: TObject);
     procedure ActionNewSpriteSheetExecute(Sender: TObject);
@@ -208,6 +267,17 @@ type
     procedure ActionOutputCopySelectedExecute(Sender: TObject);
     procedure ActionOutputCopySelectedUpdate(Sender: TObject);
     procedure ActionRegenerateProjectExecute(Sender: TObject);
+    procedure ActionViewportBackExecute(Sender: TObject);
+    procedure ActionViewportBottomExecute(Sender: TObject);
+    procedure ActionViewportFrontExecute(Sender: TObject);
+    procedure ActionViewportLeftExecute(Sender: TObject);
+    procedure ActionViewportRightExecute(Sender: TObject);
+    procedure ActionViewportSetup2DExecute(Sender: TObject);
+    procedure ActionViewportSort2DExecute(Sender: TObject);
+    procedure ActionViewportTopExecute(Sender: TObject);
+    procedure ActionViewportViewAllExecute(Sender: TObject);
+    procedure ActionViewportViewSelectedExecute(Sender: TObject);
+    procedure ActionViewportUpdate(Sender: TObject);
     procedure ApplicationProperties1Activate(Sender: TObject);
     procedure ApplicationProperties1Exception(Sender: TObject; E: Exception);
     procedure ButtonClearWarningsClick(Sender: TObject);
@@ -216,6 +286,7 @@ type
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure FormHide(Sender: TObject);
+    procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure FormShow(Sender: TObject);
     procedure ListOutputClick(Sender: TObject);
     procedure ListOutputDblClick(Sender: TObject);
@@ -249,10 +320,10 @@ type
     procedure MenuItemCleanClick(Sender: TObject);
     procedure MenuItemCompileClick(Sender: TObject);
     procedure MenuItemCompileRunClick(Sender: TObject);
-    procedure MenuItemCopyComponentClick(Sender: TObject);
+    procedure ActionCopyComponentExecute(Sender: TObject);
     procedure MenuItemDesignCloseClick(Sender: TObject);
-    procedure MenuItemDesignDeleteComponentClick(Sender: TObject);
-    procedure MenuItemDuplicateComponentClick(Sender: TObject);
+    procedure ActionDeleteComponentExecute(Sender: TObject);
+    procedure ActionDuplicateComponentExecute(Sender: TObject);
     procedure MenuItemManualClick(Sender: TObject);
     procedure MenuItemModeDebugClick(Sender: TObject);
     procedure MenuItemDesignNewUserInterfaceRectClick(Sender: TObject);
@@ -261,7 +332,7 @@ type
     procedure MenuItemOpenDesignClick(Sender: TObject);
     procedure MenuItemPackageClick(Sender: TObject);
     procedure MenuItemPackageSourceClick(Sender: TObject);
-    procedure MenuItemPasteComponentClick(Sender: TObject);
+    procedure ActionPasteComponentExecute(Sender: TObject);
     procedure MenuItemQuitClick(Sender: TObject);
     procedure MenuItemReferenceClick(Sender: TObject);
     procedure MenuItemModeReleaseClick(Sender: TObject);
@@ -371,6 +442,7 @@ type
     procedure SaveDockLayout;
     procedure MenuItemPlatformChangeClick(Sender: TObject);
     procedure RestartEditor(Sender: TObject);
+    procedure CurrentViewportChanged(Sender: TObject);
   public
     { Open a project, given an absolute path to CastleEngineManifest.xml }
     procedure OpenProject(const ManifestUrl: String);
@@ -383,14 +455,14 @@ implementation
 
 {$R *.lfm}
 
-uses TypInfo, LCLType, RegExpr,
+uses TypInfo, LCLType, RegExpr, StrUtils, LCLVersion,
   CastleXMLUtils, CastleLCLUtils, CastleOpenDocument, CastleURIUtils,
   CastleFilesUtils, CastleUtils, CastleVectors, CastleColors, CastleConfig,
   CastleScene, CastleViewport, Castle2DSceneManager, CastleCameras,
   CastleTransform, CastleControls, CastleDownload, CastleApplicationProperties,
   CastleLog, CastleComponentSerialize, CastleSceneCore, CastleStringUtils,
   CastleFonts, X3DLoad, CastleFileFilters, CastleImages, CastleSoundEngine,
-  CastleClassUtils,
+  CastleClassUtils, CastleLclEditHack,
   FormAbout, FormChooseProject, FormPreferences, FormSpriteSheetEditor,
   FormSystemInformation,
   ToolCompilerInfo, ToolCommonUtils, ToolArchitectures, ToolProcessWait,
@@ -436,26 +508,7 @@ end;
 procedure TProjectForm.MenuItemSaveAsDesignClick(Sender: TObject);
 begin
   Assert(Design <> nil); // menu item is disabled otherwise
-
-  if Design.DesignRoot is TCastleUserInterface then
-  begin
-    SaveDesignDialog.DefaultExt := 'castle-user-interface';
-    SaveDesignDialog.Filter := 'CGE User Interface Design (*.castle-user-interface)|*.castle-user-interface|All Files|*';
-  end else
-  if Design.DesignRoot is TCastleTransform then
-  begin
-    { We modify both Filter and DefaultExt, otherwise (at least on GTK2)
-      the default extension (for filter like '*.castle-user-interface;*.castle-transform')
-      would still be castle-user-interface. I.e. DefaultExt seems to be ignored,
-      and instead GTK applies first filter. }
-    SaveDesignDialog.DefaultExt := 'castle-transform';
-    SaveDesignDialog.Filter := 'CGE Transform Design (*.castle-transform)|*.castle-transform|All Files|*';
-  end else
-  begin
-    SaveDesignDialog.DefaultExt := 'castle-component';
-    SaveDesignDialog.Filter := 'CGE Component Design (*.castle-component)|*.castle-component|All Files|*';
-  end;
-
+  PrepareSaveDesignDialog(SaveDesignDialog, Design.DesignRoot);
   SaveDesignDialog.Url := Design.DesignUrl;
   if SaveDesignDialog.Execute then
     Design.SaveDesign(SaveDesignDialog.Url);
@@ -537,8 +590,7 @@ begin
   ClearAllWarnings;
 end;
 
-procedure TProjectForm.FormClose(Sender: TObject; var CloseAction: TCloseAction
-  );
+procedure TProjectForm.FormClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
   SaveDockLayout;
 end;
@@ -560,6 +612,83 @@ end;
 procedure TProjectForm.ActionSystemInformationExecute(Sender: TObject);
 begin
   SystemInformationForm.Show;
+end;
+
+procedure TProjectForm.ActionNavigationToggle2DExecute(Sender: TObject);
+begin
+  if (Design <> nil) and (Design.CurrentViewport <> nil) then
+  begin
+    { This comparison also determines what happens if current navigation
+      is neither 2D, nor Fly.
+      In this case we want to switch to 2D, because all other navigations
+      are more 3D. }
+    if Design.CurrentViewport.InternalDesignNavigationType = dn2D then
+    begin
+      Design.CurrentViewport.InternalDesignNavigationType := dnFly;
+      ActionNavigationFly.Checked := true;
+    end else
+    begin
+      Design.CurrentViewport.InternalDesignNavigationType := dn2D;
+      ActionNavigation2D.Checked := true;
+    end;
+  end;
+end;
+
+procedure TProjectForm.ActionNavigationFlyExecute(Sender: TObject);
+begin
+  if (Design <> nil) and (Design.CurrentViewport <> nil) then
+  begin
+    Design.CurrentViewport.InternalDesignNavigationType := dnFly;
+    ActionNavigationFly.Checked := true;
+  end;
+end;
+
+procedure TProjectForm.ActionNavigation2DExecute(Sender: TObject);
+begin
+  if (Design <> nil) and (Design.CurrentViewport <> nil) then
+  begin
+    Design.CurrentViewport.InternalDesignNavigationType := dn2D;
+    ActionNavigation2D.Checked := true;
+  end;
+end;
+
+procedure TProjectForm.ActionNavigationExamineExecute(Sender: TObject);
+begin
+  if (Design <> nil) and (Design.CurrentViewport <> nil) then
+  begin
+    Design.CurrentViewport.InternalDesignNavigationType := dnExamine;
+    ActionNavigationExamine.Checked := true;
+  end;
+end;
+
+procedure TProjectForm.ActionViewportToggleProjectionExecute(Sender: TObject);
+begin
+  if Design <> nil then
+    Design.ViewportToggleProjection;
+end;
+
+procedure TProjectForm.ActionViewportAlignViewToCameraExecute(Sender: TObject);
+begin
+  if Design <> nil then
+    Design.ViewportAlignViewToCamera;
+end;
+
+procedure TProjectForm.ActionViewportAlignCameraToViewExecute(Sender: TObject);
+begin
+  if Design <> nil then
+    Design.ViewportAlignCameraToView;
+end;
+
+procedure TProjectForm.ActionComponentCutExecute(Sender: TObject);
+begin
+  Assert(Design <> nil); // menu item is disabled otherwise
+  Design.CutComponent;
+end;
+
+procedure TProjectForm.ActionComponentSaveSelectedExecute(Sender: TObject);
+begin
+  Assert(Design <> nil); // menu item is disabled otherwise
+  Design.SaveSelected;
 end;
 
 procedure TProjectForm.ApplicationProperties1Activate(Sender: TObject);
@@ -678,6 +807,76 @@ end;
 procedure TProjectForm.ActionRegenerateProjectExecute(Sender: TObject);
 begin
   BuildToolCall(['generate-program']);
+end;
+
+procedure TProjectForm.ActionViewportBackExecute(Sender: TObject);
+begin
+  if Design <> nil then
+    Design.ViewportViewAxis(Vector3(0, 0, 1), Vector3(0, 1, 0));
+end;
+
+procedure TProjectForm.ActionViewportBottomExecute(Sender: TObject);
+begin
+  if Design <> nil then
+    Design.ViewportViewAxis(Vector3(0, 1, 0), Vector3(0, 0, -1));
+end;
+
+procedure TProjectForm.ActionViewportFrontExecute(Sender: TObject);
+begin
+  if Design <> nil then
+    Design.ViewportViewAxis(Vector3(0, 0, -1), Vector3(0, 1, 0));
+end;
+
+procedure TProjectForm.ActionViewportLeftExecute(Sender: TObject);
+begin
+  if Design <> nil then
+    Design.ViewportViewAxis(Vector3(1, 0, 0), Vector3(0, 1, 0));
+end;
+
+procedure TProjectForm.ActionViewportRightExecute(Sender: TObject);
+begin
+  if Design <> nil then
+    Design.ViewportViewAxis(Vector3(-1, 0, 0), Vector3(0, 1, 0));
+end;
+
+procedure TProjectForm.ActionViewportSetup2DExecute(Sender: TObject);
+begin
+  if Design <> nil then
+    Design.ViewportSetup2D;
+end;
+
+procedure TProjectForm.ActionViewportSort2DExecute(Sender: TObject);
+begin
+  if Design <> nil then
+    Design.ViewportSort2D;
+end;
+
+procedure TProjectForm.ActionViewportTopExecute(Sender: TObject);
+begin
+  if Design <> nil then
+    { up -Z better than up +Z: makes more natural rotation when using 1/3/7 }
+    Design.ViewportViewAxis(Vector3(0, -1, 0), Vector3(0, 0, -1));
+end;
+
+procedure TProjectForm.ActionViewportViewAllExecute(Sender: TObject);
+begin
+  if Design <> nil then
+    Design.ViewportViewAll;
+end;
+
+procedure TProjectForm.ActionViewportViewSelectedExecute(Sender: TObject);
+begin
+  if Design <> nil then
+    Design.ViewportViewSelected;
+end;
+
+procedure TProjectForm.ActionViewportUpdate(Sender: TObject);
+var
+  ViewportActionsAllowed: Boolean;
+begin
+  ViewportActionsAllowed := (Design <> nil) and (Design.CurrentViewport <> nil);
+  (Sender as TAction).Enabled := ViewportActionsAllowed;
+  // MenuItemViewport.Enabled := ViewportActionsAllowed; // TODO would disable everything without ability to restore
 end;
 
 procedure TProjectForm.ActionEditUnitExecute(Sender: TObject);
@@ -1000,7 +1199,9 @@ procedure TProjectForm.FormCreate(Sender: TObject);
       'iOS Archive -> Development',
       'iOS Archive -> ad-hoc',
       'iOS Archive -> AppStore',
-      'Nintendo Switch Project'
+      'Nintendo Switch Project',
+      'macOS App Bundle (APP)',
+      'macOS App Bundle (APP) zip'
     );
   var
     Mi: TMenuItem;
@@ -1028,14 +1229,12 @@ begin
   Docking := EnableDocking and UserConfig.GetValue('ProjectForm_Docking', false);
   OutputList := TOutputList.Create(ListOutput);
   BuildComponentsMenu(
-    nil,
     MenuItemDesignNewUserInterfaceCustomRoot,
     MenuItemDesignNewTransformCustomRoot,
     nil,
     MenuItemDesignNewNonVisualCustomRoot,
     @MenuItemDesignNewCustomRootClick);
   BuildComponentsMenu(
-    nil,
     MenuItemDesignAddUserInterface,
     MenuItemDesignAddTransform,
     MenuItemDesignAddBehavior,
@@ -1165,6 +1364,59 @@ begin
       UserConfig.SetValue('ProjectForm_Design.PanelLeft.Width', Design.PanelLeft.Width);
     end;
     UserConfig.Save;
+  end;
+end;
+
+procedure TProjectForm.FormKeyDown(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+
+  {$if LCL_FULLVERSION >= 2020000}
+    {$define HAS_COMBO_EDIT_BOX}
+  {$endif}
+
+  {$ifndef HAS_COMBO_EDIT_BOX}
+  // Adjusted from TComboBoxStyleHelper.HasEditBox in latest LCL.
+  function ComboHasEditBox(const Style: TComboBoxStyle): Boolean;
+  const
+    ArrHasEditBox: array[TComboBoxStyle] of Boolean = (
+      True,  // csDropDown
+      True,  // csSimple
+      False, // csDropDownList
+      False, // csOwnerDrawFixed
+      False, // csOwnerDrawVariable
+      True,  // csOwnerDrawEditableFixed
+      True   // csOwnerDrawEditableVariable
+    );
+  begin
+    Result := ArrHasEditBox[Style];
+  end;
+  {$endif}
+
+var
+  E: TEditBox;
+begin
+  { See CastleLclEditHack for an expanation of this hack. }
+
+  if (ActiveControl is TComboBox) and
+     {$ifdef HAS_COMBO_EDIT_BOX}
+     (TComboBox(ActiveControl).Style.HasEditBox)
+     {$else}
+     ComboHasEditBox(TComboBox(ActiveControl).Style)
+     {$endif}
+     then
+  begin
+    E := TEditBoxForComboBox.Create(TComboBox(ActiveControl));
+    try
+      E.ProcessKey(Key, Shift);
+    finally FreeAndNil(E) end;
+  end;
+
+  if ActiveControl is TEdit then
+  begin
+    E := TEditBoxForEdit.Create(TEdit(ActiveControl));
+    try
+      E.ProcessKey(Key, Shift);
+    finally FreeAndNil(E) end;
   end;
 end;
 
@@ -1493,7 +1745,7 @@ begin
   end;
 end;
 
-procedure TProjectForm.MenuItemCopyComponentClick(Sender: TObject);
+procedure TProjectForm.ActionCopyComponentExecute(Sender: TObject);
 begin
   Assert(Design <> nil); // menu item is disabled otherwise
   Design.CopyComponent;
@@ -1514,13 +1766,13 @@ begin
   end;
 end;
 
-procedure TProjectForm.MenuItemDesignDeleteComponentClick(Sender: TObject);
+procedure TProjectForm.ActionDeleteComponentExecute(Sender: TObject);
 begin
   Assert(Design <> nil); // menu item is disabled otherwise
   Design.DeleteComponent;
 end;
 
-procedure TProjectForm.MenuItemDuplicateComponentClick(Sender: TObject);
+procedure TProjectForm.ActionDuplicateComponentExecute(Sender: TObject);
 begin
   Assert(Design <> nil); // menu item is disabled otherwise
   Design.DuplicateComponent;
@@ -1548,10 +1800,12 @@ begin
   MenuItemDesignAddUserInterface.Enabled := Design <> nil;
   MenuItemDesignAddBehavior.Enabled := Design <> nil;
   MenuItemDesignAddNonVisual.Enabled := Design <> nil;
-  MenuItemDesignDeleteComponent.Enabled := Design <> nil;
-  MenuItemCopyComponent.Enabled := Design <> nil;
-  MenuItemPasteComponent.Enabled := Design <> nil;
-  MenuItemDuplicateComponent.Enabled := Design <> nil;
+  ActionComponentDelete.Enabled := Design <> nil;
+  ActionComponentCopy.Enabled := Design <> nil;
+  ActionComponentPaste.Enabled := Design <> nil;
+  ActionComponentCut.Enabled := Design <> nil;
+  ActionComponentDuplicate.Enabled := Design <> nil;
+  ActionComponentSaveSelected.Enabled := Design <> nil;
   ActionEditAssociatedUnit.Enabled := Design <> nil;
 
   UpdateUndo(nil);
@@ -1585,6 +1839,8 @@ begin
     Design.OnUpdateFormCaption := @UpdateFormCaption;
     Design.UndoSystem.OnUpdateUndo := @UpdateUndo;
     Design.OnSelectionChanged := @UpdateRenameItem;
+    Design.OnCurrentViewportChanged := @CurrentViewportChanged;
+
     DesignExistenceChanged;
     if Docking then
     begin
@@ -1600,6 +1856,29 @@ begin
       Design.SplitterRight.Visible := False;
     end;
   end;
+end;
+
+procedure TProjectForm.CurrentViewportChanged(Sender: TObject);
+
+  procedure UnselectAll;
+  begin
+    ActionNavigation2D.Checked := false;
+    ActionNavigationFly.Checked := false;
+    ActionNavigationExamine.Checked := false;
+  end;
+
+begin
+  if (Design <> nil) and (Design.CurrentViewport <> nil) then
+  begin
+    { update menu state from Design.CurrentViewport.InternalDesignNavigationType }
+    case Design.CurrentViewport.InternalDesignNavigationType of
+      dn2D     : ActionNavigation2D.Checked := true;
+      dnFly    : ActionNavigationFly.Checked := true;
+      dnExamine: ActionNavigationExamine.Checked := true;
+      else UnselectAll;
+    end;
+  end else
+    UnselectAll;
 end;
 
 procedure TProjectForm.NewDesign(const ComponentClass: TComponentClass;
@@ -1688,7 +1967,7 @@ begin
   BuildToolCall(['package-source']);
 end;
 
-procedure TProjectForm.MenuItemPasteComponentClick(Sender: TObject);
+procedure TProjectForm.ActionPasteComponentExecute(Sender: TObject);
 begin
   Assert(Design <> nil); // menu item is disabled otherwise
   Design.PasteComponent;

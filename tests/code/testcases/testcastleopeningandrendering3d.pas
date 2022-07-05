@@ -38,7 +38,7 @@ type
   private
     { Available only during Test1 }
     Window: TCastleWindow;
-    Viewport: TCastleViewport;
+    Viewport: TCastleAutoNavigationViewport;
     Scene: TCastleScene;
     RecreateSceneEachTime: boolean;
 
@@ -97,7 +97,7 @@ begin
   AssertTrue(Viewport.Navigation = nil);
   Viewport.RequiredNavigation;
 
-  Viewport.ClearCameras;
+  Viewport.Navigation := nil;
   AssertTrue(Viewport.Navigation = nil);
 
   { Force preparing and using OpenGL resources for the scene.
@@ -161,7 +161,7 @@ begin
     Scene.Spatial := [ssRendering, ssDynamicCollisions];
     Scene.ProcessEvents := true;
 
-    Viewport := TCastleViewport.Create(Window);
+    Viewport := TCastleAutoNavigationViewport.Create(Window);
     Viewport.Items.Add(Scene);
     Viewport.Items.MainScene := Scene;
 

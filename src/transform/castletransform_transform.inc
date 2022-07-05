@@ -487,10 +487,15 @@
         (X: 0; Y: 0; Z: 1)
       );
 
+      { Default TCastleCamera.Orientation. }
+      DefaultCameraOrientation = otUpYDirectionMinusZ;
+
     class var
-      { Default value of @link(TCastleTransform.Orientation) for new instances.
-        By default @link(otUpYDirectionZ), matching glTF orientation
-        (as exported from Blender and other software). }
+      { Default value of @link(TCastleTransform.Orientation) for new TCastleTransform instances,
+        but not for cameras (cameras use special DefaultCameraOrientation).
+
+        This is @link(otUpYDirectionZ) by default.
+        This matches glTF orientation (as exported from Blender and other software). }
       DefaultOrientation: TOrientationType;
 
     var
@@ -925,7 +930,7 @@
       If you want to @italic(react) to visibility changes,
       you should not override this method, instead watch above "state id" variables
       and react when they change. }
-    procedure VisibleChangeHere(const Changes: TVisibleChanges);
+    procedure VisibleChangeHere(const Changes: TVisibleChanges); virtual;
 
     { Root transformation (TCastleAbstractRootTransform) containing us.
       @nil if we are not (yet) part of some hierarchy rooted in TCastleAbstractRootTransform. }
@@ -1448,17 +1453,11 @@
 
     { Translation (move) the children. Zero by default.
 
-      Note: This is a property that returns a record (TVector3 is a record).
-      If you want to change its value, make sure that you set the property using a property setter,
-      like this:
-
+      Set it like this:
       @longCode(#
         Scene.Translation := Vector3(1, 2, 3);
         Scene.Translation := Scene.Translation + Vector3(4, 5, 6);
-      #)
-
-      See https://castle-engine.io/coding_traps for a detailed discussion how to
-      set properties that are vectors in Pascal. }
+      #) }
     property Translation: TVector3 read FTranslation write SetTranslation;
 
     { Get or set the XY components of the translation.
@@ -1481,17 +1480,11 @@
 
       Rotation is done around @link(Center).
 
-      Note: This is a property that returns a record (TVector4 is a record).
-      If you want to change its value, make sure that you set the property using a property setter,
-      like this:
-
+      Set it like this:
       @longCode(#
         Scene.Rotation := Vector4(0, 0, 1, Pi / 10);
         Scene.Rotation := Scene.Rotation + Vector4(0, 0, 0, Pi / 10);
-      #)
-
-      See https://castle-engine.io/coding_traps for a detailed discussion how to
-      set properties that are vectors in Pascal. }
+      #) }
     property Rotation: TVector4 read FRotation write SetRotation;
 
     { Scale in 3D. Scaling is done around @link(Center)
@@ -1537,17 +1530,11 @@
           using @link(Collides) = @false.)
       )
 
-      Note: This is a property that returns a record (TVector3 is a record).
-      If you want to change its value, make sure that you set the property using a property setter,
-      like this:
-
+      Set it like this:
       @longCode(#
         Scene.Scale := Vector3(5, 5, 5);
         Scene.Scale := Scene.Scale * 1.5;
-      #)
-
-      See https://castle-engine.io/coding_traps for a detailed discussion how to
-      set properties that are vectors in Pascal. }
+      #) }
     property Scale: TVector3 read FScale write SetScale;
 
     { Orientation in which 3D @link(Scale) is performed. }
@@ -1640,12 +1627,11 @@
     }
     property RigidBody: TRigidBody read FRigidBody write SetRigidBody;
 
-    {$ifdef FPC}
+    { @deprecated Deprecated name for Translation. }
     property Position: TVector3 read FTranslation write SetTranslation;
-      deprecated 'use Translation';
-    {$endif}
+      {$ifdef FPC}deprecated 'use Translation';{$endif}
 
-    { Direction the creature is facing, and up vector.
+    { Direction the transformation (like creature or camera) is facing, and up vector.
       These properties provide an alternative way to get and set the @link(Rotation)
       of the transformation.
       Thinking in terms of "direction" and "up" is often more natural
@@ -1653,9 +1639,7 @@
 
       The @link(Orientation) determines what is your default direction and up
       (when the @link(Rotation) is zero).
-      By default we follow X3D standard vectors suitable for gravity along
-      the Y axis. So direction is -Z (DefaultCameraDirection),
-      up is +Y (DefaultCameraUp).
+      See @link(Orientation) for documentation of its default value.
 
       The @link(Direction) and @link(Up) vectors should always be normalized
       (have length 1). When setting them by these properties, we will normalize
@@ -1684,6 +1668,13 @@
       Returned ADir and AUp are always orthogonal.
       Returned ADir and AUp are always normalized. }
     procedure GetWorldView(out APos, ADir, AUp: TVector3);
+
+    { Get position in world coordinates.
+
+      The returned position is the same as by @link(GetWorldView).
+      This method just doesn't calculation anything else, thus it is faster
+      than @link(GetWorldView) if you don't need direction/up. }
+    function WorldTranslation: TVector3;
 
     { Set at once vectors: position, direction, up.
 
@@ -1735,16 +1726,29 @@
     { How the direction and up vectors determine transformation.
       See TOrientationType for values documentation.
 
-      The default value of this is determined by static variable
-      DefaultOrientation, this is usually comfortable (because almost
-      always you use the same Orientation throughout your game).
-      By default it's otUpYDirectionMinusZ (matching default cameras
-      of OpenGL and VRML/X3D).
+      The default value of this is:
+
+      @unorderedList(
+        @item(For cameras (TCastleCamera):
+
+          DefaultCameraOrientation, which is just constant @link(otUpYDirectionMinusZ).
+          This means direction is -Z (DefaultCameraDirection), up is +Y (DefaultCameraUp).
+        )
+
+        @item(For all other transformations (not cameras):
+
+          DefaultOrientation, static variable, by default @link(otUpYDirectionZ).
+          This means direction is +Z and up is +Y (DefaultCameraUp).
+          This matches default orientation of glTF models exported from Blender.
+
+          You can adjust the Orientation property of particular models.
+          Or you can adjust DefaultOrientation to set it for all (non-camera) transforms
+          throughout your application.
+        )
+      )
 
       This value determines how you should model your 3D models,
-      like the creatures, the items, and the player weapons.
-      Generally, it applies to every 3D model that is used as
-      a child of this TCastleTransform instance. }
+      like the creatures, the items, and the player weapons. }
     property Orientation: TOrientationType read FOrientation write FOrientation;
 
     { Transformation objects inside.
@@ -2674,9 +2678,21 @@ begin
   if FParent = nil then
   begin
     if Self = World then
-      raise ETransformParentUndefined.Create('Parent not available: This is the root node (World)')
+      raise ETransformParentUndefined.CreateFmt('Parent not available: This is the root node (%s %s).', [
+        Name,
+        ClassName
+      ])
     else
-      raise ETransformParentUndefined.Create('Parent (and WorldTransform) not available: This instance was once added multiple times to Viewport.Items' + ' (references through TCastleTransformReference are not counted here). To have a Parent, add it only once (you can still use TCastleTransformReference to have more instances).');
+      raise ETransformParentUndefined.CreateFmt('Parent (and WorldTransform) not available for %s %s.' + NL +
+        NL +
+        'This instance is not part of TCastleRootTransform (Viewport.Items).' + NL +
+        'Or it was (at some point in time) added multiple times to TCastleRootTransform (Viewport.Items). References through TCastleTransformReference are not counted here.' + NL +
+        NL +
+        'To have a Parent (and WorldTransform), add it exactly once to TCastleRootTransform (Viewport.Items). You can still use TCastleTransformReference to have more instances.',
+      [
+        Name,
+        ClassName
+      ]);
   end;
   Result := FParent;
 end;
@@ -3259,11 +3275,11 @@ end;
 procedure TCastleTransform.CustomSerialization(const SerializationProcess: TSerializationProcess);
 begin
   inherited;
-  SerializationProcess.ReadWrite('Children',
+  SerializationProcess.ReadWriteList('Children',
     {$ifdef FPC}@{$endif}SerializeChildrenEnumerate,
     {$ifdef FPC}@{$endif}SerializeChildrenAdd,
     {$ifdef FPC}@{$endif}SerializeChildrenClear);
-  SerializationProcess.ReadWrite('Behaviors',
+  SerializationProcess.ReadWriteList('Behaviors',
     {$ifdef FPC}@{$endif}SerializeBehaviorsEnumerate,
     {$ifdef FPC}@{$endif}SerializeBehaviorsAdd,
     {$ifdef FPC}@{$endif}SerializeBehaviorsClear);
@@ -3479,6 +3495,11 @@ begin
   APos := T;
   ADir := RotationToDirection(R);
   AUp := RotationToUp(R);
+end;
+
+function TCastleTransform.WorldTranslation: TVector3;
+begin
+  Result := TranslationFromMatrix(WorldTransform);
 end;
 
 procedure TCastleTransform.SetView(const APos, ADir, AUp: TVector3;

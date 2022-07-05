@@ -1730,11 +1730,6 @@ type
     function GetNavigationInfoStack: TX3DBindableStackBasic; override;
     function GetViewpointStack: TX3DBindableStackBasic; override;
 
-    function CameraPosition: TVector3; deprecated 'do not access camera properties this way, instead use e.g. Viewport.Camera.Position';
-    function CameraDirection: TVector3; deprecated 'do not access camera properties this way, instead use e.g. Viewport.Camera.GetView';
-    function CameraUp: TVector3; deprecated 'do not access camera properties this way, instead use e.g. Viewport.Camera.GetView';
-    function CameraViewKnown: boolean; deprecated 'do not access camera properties this way, instead use e.g. Viewport.Camera';
-
     { List of handlers for VRML/X3D Script node with "compiled:" protocol.
       This is read-only, change this only by RegisterCompiledScript. }
     property CompiledScriptHandlers: TCompiledScriptHandlerInfoList
@@ -1746,29 +1741,16 @@ type
     procedure RegisterCompiledScript(const HandlerName: string;
       Handler: TCompiledScriptHandler);
 
-    { TNavigationType value determined by current NavigationInfo node. }
-    function NavigationTypeFromNavigationInfo: TNavigationType;
+    { Update TCastleNavigation properties based on currently bound TNavigationInfoNode.
 
-    { Update TCastleNavigation properties based on currently bound NavigationInfo.
+      Bound TNavigationInfoNode is taken from
+      NavigationInfoStack.Top. If no such node is bound (NavigationInfoStack.Top is @nil)
+      then we behave as if TNavigationInfoNode with all fields at default was active.
 
-      Bound NavigationInfo node is taken from
-      NavigationInfoStack.Top. If no NavigationInfo is bound, this is @nil,
-      and we will create camera corresponding to default NavigationInfo
-      values (this is following VRML/X3D spec), so it will have
-      initial type = EXAMINE.
-
-      This initializes various navigation properties:
-
-      @unorderedList(
-        @item(TCastleNavigation.Radius,)
-        @item(TCastleNavigation.Input,)
-        @item(TCastleWalkNavigation.Gravity,)
-        @item(TCastleWalkNavigation.PreferGravityUpForRotations,)
-        @item(TCastleWalkNavigation.PreferGravityUpForMoving,)
-        @item(TCastleWalkNavigation.PreferredHeight,)
-        @item(TCastleWalkNavigation.ClimbHeight,)
-        @item(TCastleWalkNavigation.HeadBobbing, TCastleWalkNavigation.HeadBobbingTime.)
-      )
+      Note that, since some fields are only in some descendants (e.g. MoveSpeed
+      is only at TCastleWalkNavigation) then some TNavigationInfoNode settings
+      are just not transferred to all Navigation instances like
+      TCastleExamineNavigation.
 
       WorldBox is the expected bounding box of the whole 3D scene.
       Usually, it should be TCastleViewport.Items.BoundingBox.
@@ -1783,10 +1765,11 @@ type
       When no viewpoint is currently bound, we will go to a suitable
       viewpoint to see the whole world (based on the WorldBox).
 
-      The initial camera vectors (TCastleCamera.InitialPosition,
-      TCastleCamera.InitialDirection, TCastleCamera.InitialUp, TCastleWalkNavigation.GravityUp)
+      The initial camera vectors position, direction, up, gravity up
       are set to the current viewpoint. This is done
       regardless of the RelativeCameraTransform value.
+
+      TODO: below is no longer valid, RelativeCameraTransform has no meaning now.
 
       How current camera vectors change depends on RelativeCameraTransform:
 
@@ -1814,11 +1797,11 @@ type
       const RelativeCameraTransform: boolean = false;
       const AllowTransitionAnimate: boolean = true);
 
-    { Make Camera go to the view given by APosition, ADirection, AUp.
+    { Make Camera go to the view given by (world coordinates) APosition, ADirection, AUp.
 
       Honours current NavigationInfo.transitionType and transitionTime.
       If transitionType indicates instanteneous transition, then jumps
-      by simple @code(Camera.SetView(APosition, ADirection, AUp)).
+      by simple @code(Camera.SetWorldView(APosition, ADirection, AUp)).
       Otherwise makes a smooth animation into new values by
       @code(Camera.AnimateTo(APosition, ADirection, AUp, TransitionTime)).
 
@@ -1826,11 +1809,13 @@ type
 
       @groupBegin }
     procedure CameraTransition(const Camera: TCastleCamera; const APosition, ADirection, AUp: TVector3); overload;
+      deprecated 'use Camera.AnimateTo(APosition, ADirection, AUp)';
     procedure CameraTransition(const Camera: TCastleCamera; const APosition, ADirection, AUp, GravityUp: TVector3); overload;
+      deprecated 'use Camera.AnimateTo(APosition, ADirection, AUp)';
     procedure CameraTransition(const Navigation: TCastleNavigation; const APosition, ADirection, AUp: TVector3); overload;
-      deprecated 'use overloaded version with TCastleCamera';
+      deprecated 'use Camera.AnimateTo(APosition, ADirection, AUp)';
     procedure CameraTransition(const Navigation: TCastleNavigation; const APosition, ADirection, AUp, GravityUp: TVector3); overload;
-      deprecated 'use overloaded version with TCastleCamera';
+      deprecated 'use Camera.AnimateTo(APosition, ADirection, AUp)';
     { @groupEnd }
 
     { Detect position/direction of the main light that produces shadow volumes.
@@ -7390,9 +7375,13 @@ begin
   Result := HasWorldTransform and (World.MainCamera <> nil);
   if Result then
   begin
-    CameraVectors.Position  := WorldInverseTransform.MultPoint    (World.MainCamera.Translation);
-    CameraVectors.Direction := WorldInverseTransform.MultDirection(World.MainCamera.Direction);
-    CameraVectors.Up        := WorldInverseTransform.MultDirection(World.MainCamera.Up);
+    World.MainCamera.GetWorldView(
+      CameraVectors.Position,
+      CameraVectors.Direction,
+      CameraVectors.Up);
+    CameraVectors.Position  := WorldInverseTransform.MultPoint    (CameraVectors.Position);
+    CameraVectors.Direction := WorldInverseTransform.MultDirection(CameraVectors.Direction);
+    CameraVectors.Up        := WorldInverseTransform.MultDirection(CameraVectors.Up);
   end;
 end;
 
@@ -7402,7 +7391,7 @@ begin
   // note that HasWorldTransform implies also World <> nil
   Result := HasWorldTransform and (World.MainCamera <> nil);
   if Result then
-    CameraLocalPosition := WorldInverseTransform.MultPoint(World.MainCamera.Translation);
+    CameraLocalPosition := WorldInverseTransform.MultPoint(World.MainCamera.WorldTranslation);
 end;
 
 procedure TCastleSceneCore.ChangedTransform;
@@ -7437,34 +7426,6 @@ begin
     InternalCameraChanged;
 end;
 
-function TCastleSceneCore.CameraPosition: TVector3;
-begin
-  {$warnings off} // using deprecated from deprecated
-  Result := World.CameraPosition;
-  {$warnings on}
-end;
-
-function TCastleSceneCore.CameraDirection: TVector3;
-begin
-  {$warnings off} // using deprecated from deprecated
-  Result := World.CameraDirection;
-  {$warnings on}
-end;
-
-function TCastleSceneCore.CameraUp: TVector3;
-begin
-  {$warnings off} // using deprecated from deprecated
-  Result := World.CameraUp;
-  {$warnings on}
-end;
-
-function TCastleSceneCore.CameraViewKnown: boolean;
-begin
-  {$warnings off} // using deprecated from deprecated
-  Result := (World <> nil) and World.CameraKnown;
-  {$warnings on}
-end;
-
 { compiled scripts ----------------------------------------------------------- }
 
 procedure TCastleSceneCore.RegisterCompiledScript(const HandlerName: string;
@@ -7491,62 +7452,6 @@ begin
 end;
 
 { camera ------------------------------------------------------------------ }
-
-function TCastleSceneCore.NavigationTypeFromNavigationInfo: TNavigationType;
-
-  function StringToNavigationType(const S: string;
-    out NavigationType: TNavigationType): boolean;
-  begin
-    Result := false;
-    if S = 'WALK' then
-    begin
-      Result := true;
-      NavigationType := ntWalk;
-    end else
-    if S = 'FLY' then
-    begin
-      Result := true;
-      NavigationType := ntFly
-    end else
-    if S = 'NONE' then
-    begin
-      Result := true;
-      NavigationType := ntNone
-    end else
-    if (S = 'EXAMINE') or
-       (S = 'LOOKAT') then
-    begin
-      if S = 'LOOKAT' then
-        WritelnWarning('X3D', 'TODO: Navigation type "LOOKAT" is not yet supported, treating like "EXAMINE"');
-      Result := true;
-      NavigationType := ntExamine;
-    end else
-    if (S = 'ARCHITECTURE') or
-       (S = 'TURNTABLE') then
-    begin
-      Result := true;
-      NavigationType := ntTurntable
-    end else
-    if S = 'ANY' then
-    begin
-      { Do nothing, also do not report this NavigationInfo.type as unknown. }
-    end else
-      WritelnWarning('X3D', 'Unknown NavigationInfo.type "%s"', [S]);
-  end;
-
-var
-  I: Integer;
-  NavigationNode: TNavigationInfoNode;
-begin
-  NavigationNode := NavigationInfoStack.Top;
-  if NavigationNode <> nil then
-    for I := 0 to NavigationNode.FdType.Count - 1 do
-      if StringToNavigationType(NavigationNode.FdType.Items[I], Result) then
-        Exit;
-
-  { No recognized "type" found, so use default type EXAMINE. }
-  Result := ntExamine;
-end;
 
 function TCastleSceneCore.SensibleCameraRadius(const WorldBox: TBox3D;
   out RadiusAutomaticallyDerivedFromBox: Boolean): Single;
@@ -7576,6 +7481,48 @@ var
   NavigationNode: TNavigationInfoNode;
   Radius: Single;
   RadiusAutomaticallyDerivedFromBox: Boolean;
+
+  procedure UpdateWalkNavigation(const Navigation: TCastleWalkNavigation);
+  begin
+    { calculate Navigation.PreferredHeight }
+    if (NavigationNode <> nil) and
+       (NavigationNode.FdAvatarSize.Count >= 2) then
+      Navigation.PreferredHeight := NavigationNode.FdAvatarSize.Items[1]
+    else
+      Navigation.PreferredHeight := Max(TCastleNavigation.DefaultPreferredHeight, Radius * RadiusToPreferredHeightMin);
+
+    Navigation.CorrectPreferredHeight;
+
+    { calculate Navigation.ClimbHeight }
+    if (NavigationNode <> nil) and
+       (NavigationNode.FdAvatarSize.Count >= 3) then
+      Navigation.ClimbHeight := Max(NavigationNode.FdAvatarSize.Items[2], 0.0)
+    else
+      Navigation.ClimbHeight := 0;
+
+    { calculate Navigation.HeadBobbing* }
+    if (NavigationNode <> nil) and
+       (NavigationNode is TKambiNavigationInfoNode) then
+    begin
+      Navigation.HeadBobbing := TKambiNavigationInfoNode(NavigationNode).FdHeadBobbing.Value;
+      Navigation.HeadBobbingTime := TKambiNavigationInfoNode(NavigationNode).FdHeadBobbingTime.Value;
+    end else
+    begin
+      Navigation.HeadBobbing := TCastleWalkNavigation.DefaultHeadBobbing;
+      Navigation.HeadBobbingTime := TCastleWalkNavigation.DefaultHeadBobbingTime;
+    end;
+
+    { calculate Navigation.MoveSpeed }
+    if NavigationNode = nil then
+      { Since we don't have NavigationNode.speed, we just calculate some
+        speed that should "feel sensible". We base it on Radius,
+        that was set above. }
+      Navigation.MoveSpeed := Navigation.Radius * 20
+    else
+      { This is OK, also for NavigationNode.FdSpeed.Value = 0 case. }
+      Navigation.MoveSpeed := NavigationNode.FdSpeed.Value;
+  end;
+
 begin
   NavigationNode := NavigationInfoStack.Top;
 
@@ -7583,57 +7530,10 @@ begin
   Radius := SensibleCameraRadius(WorldBox, RadiusAutomaticallyDerivedFromBox);
   Navigation.Radius := Radius;
 
-  { Note that we cannot here conditionally set some properties
-    e.g. only if "Navigation is TCastleWalkNavigation".
-    This would mean that e.g. value of PreferredHeight
-    (from NavigationInfo.avatarSize) is lost when NavigationInfo.type="EXAMINE",
-    even if developer later switches NavigationType to Walk. }
-
-  { calculate Navigation.PreferredHeight }
-  if (NavigationNode <> nil) and
-     (NavigationNode.FdAvatarSize.Count >= 2) then
-    Navigation.PreferredHeight := NavigationNode.FdAvatarSize.Items[1]
-  else
-    Navigation.PreferredHeight := Max(TCastleNavigation.DefaultPreferredHeight, Radius * RadiusToPreferredHeightMin);
-
-  Navigation.CorrectPreferredHeight;
-
-  { calculate Navigation.ClimbHeight }
-  if (NavigationNode <> nil) and
-     (NavigationNode.FdAvatarSize.Count >= 3) then
-    Navigation.ClimbHeight := Max(NavigationNode.FdAvatarSize.Items[2], 0.0)
-  else
-    Navigation.ClimbHeight := 0;
-
-  { calculate Navigation.HeadBobbing* }
-  if (NavigationNode <> nil) and
-     (NavigationNode is TKambiNavigationInfoNode) then
-  begin
-    Navigation.HeadBobbing := TKambiNavigationInfoNode(NavigationNode).FdHeadBobbing.Value;
-    Navigation.HeadBobbingTime := TKambiNavigationInfoNode(NavigationNode).FdHeadBobbingTime.Value;
-  end else
-  begin
-    Navigation.HeadBobbing := TCastleWalkNavigation.DefaultHeadBobbing;
-    Navigation.HeadBobbingTime := TCastleWalkNavigation.DefaultHeadBobbingTime;
-  end;
-
-  { calculate Navigation.MoveSpeed }
-  if NavigationNode = nil then
-    { Since we don't have NavigationNode.speed, we just calculate some
-      speed that should "feel sensible". We base it on Radius,
-      that was set above. }
-    Navigation.MoveSpeed := Navigation.Radius * 20
-  else
-    { This is OK, also for NavigationNode.FdSpeed.Value = 0 case. }
-    Navigation.MoveSpeed := NavigationNode.FdSpeed.Value;
+  if Navigation is TCastleWalkNavigation then
+    UpdateWalkNavigation(TCastleWalkNavigation(Navigation));
 
   Navigation.ModelBox := WorldBox;
-
-  { No point in calling TCastleWalkNavigation.Init or TCastleExamineNavigation.Init
-    or TCastleCamera.Init here:
-    this method, together with InternalUpdateCamera
-    (with RelativeCameraTransform = false),
-    together initialize everything that Init does. }
 end;
 
 procedure TCastleSceneCore.InternalUpdateCamera(const ACamera: TCastleCamera;
@@ -7675,6 +7575,32 @@ begin
   if ViewpointNode <> nil then
   begin
     ViewpointNode.GetView(APosition, ADirection, AUp, GravityUp);
+
+    { Transform into world coordinates, as camera is set in world coordinates.
+      As an exception for backward compatibility: when HasWorldTransform = false,
+      we just assume that this scene will be added to world without any transformations.
+
+      This is possible when you load a scene to Viewport.Items.MainScene,
+      but MainScene is not yet part of Viewport.Items, like
+
+        Viewport.Items.MainScene := TCastleScene.Create(Self);
+        Viewport.Items.MainScene.Load(...);
+        Viewport.Items.Insert(0, Items.MainScene);
+
+      ... which is even done by src/deprecated_units/castlelevels.pas.
+      Then MainScene.Load causes InternalUpdateCamera, with MainScene being used.
+      In the long-term future, some day MainScene will be removed and this
+      complication should disappear.
+
+      Testcase: mountains-of-fire. }
+    if HasWorldTransform then
+    begin
+      APosition  := WorldTransform.MultPoint    (APosition);
+      ADirection := WorldTransform.MultDirection(ADirection);
+      AUp        := WorldTransform.MultDirection(AUp);
+      GravityUp  := WorldTransform.MultDirection(GravityUp);
+    end;
+
     if ViewpointNode is TViewpointNode then
     begin
       ACamera.Perspective.FieldOfView :=
@@ -7727,16 +7653,17 @@ begin
 
   ACamera.GravityUp := GravityUp;
 
-  { If RelativeCameraTransform, then we will move relative to
-    initial camera changes. Else, we will jump to new initial camera vectors. }
-  ACamera.SetInitialView(APosition, ADirection, AUp, RelativeCameraTransform);
-  if not RelativeCameraTransform then
-  begin
-    if AllowTransitionAnimate and (not ForceTeleportTransitions) then
-      CameraTransition(ACamera, APosition, ADirection, AUp)
-    else
-      ACamera.SetView(APosition, ADirection, AUp);
-  end;
+  { TODO:
+    If RelativeCameraTransform, then we should move relative to initial camera changes,
+    to honor X3D dictated Viewpoint animation behavior.
+    Right now, we always behave like RelativeCameraTransform=false. }
+
+  if AllowTransitionAnimate and (not ForceTeleportTransitions) then
+    {$warnings off} // using deprecated, it really should be internal - camera transition following X3D events
+    CameraTransition(ACamera, APosition, ADirection, AUp)
+    {$warnings on}
+  else
+    ACamera.SetWorldView(APosition, ADirection, AUp);
 end;
 
 procedure TCastleSceneCore.CameraTransition(const Camera: TCastleCamera;
@@ -7786,7 +7713,7 @@ begin
     WatchForTransitionComplete := true;
   end else
   begin
-    Camera.SetView(APosition, ADirection, AUp);
+    Camera.SetWorldView(APosition, ADirection, AUp);
     if NavigationInfoStack.Top <> nil then
       NavigationInfoStack.Top.EventTransitionComplete.Send(true, NextEventTime);
   end;
@@ -7796,19 +7723,25 @@ procedure TCastleSceneCore.CameraTransition(const Camera: TCastleCamera;
   const APosition, ADirection, AUp, GravityUp: TVector3);
 begin
   Camera.GravityUp := GravityUp;
+  {$warnings off} // using deprecated in deprecated
   CameraTransition(Camera, APosition, ADirection, AUp);
+  {$warnings on}
 end;
 
 procedure TCastleSceneCore.CameraTransition(const Navigation: TCastleNavigation;
   const APosition, ADirection, AUp: TVector3);
 begin
+  {$warnings off} // using deprecated in deprecated
   CameraTransition(Navigation.Camera, APosition, ADirection, AUp);
+  {$warnings on}
 end;
 
 procedure TCastleSceneCore.CameraTransition(const Navigation: TCastleNavigation;
   const APosition, ADirection, AUp, GravityUp: TVector3);
 begin
+  {$warnings off} // using deprecated in deprecated
   CameraTransition(Navigation.Camera, APosition, ADirection, AUp, GravityUp);
+  {$warnings on}
 end;
 
 { misc ----------------------------------------------------------------------- }
@@ -8097,10 +8030,11 @@ var
 begin
   if RootNode = nil then
     raise Exception.Create('You have to initialize RootNode, usually just by loading some scene to TCastleSceneCore.Load, before adding viewpoints');
-  if Navigation.InternalViewport = nil then
+  if Navigation.Camera <> nil then
     raise Exception.Create('Navigation must be part of some Viewport before using AddViewpointFromNavigation');
 
-  Navigation.Camera.GetView(APosition, ADirection, AUp, GravityUp);
+  Navigation.Camera.GetWorldView(APosition, ADirection, AUp);
+  GravityUp := Navigation.Camera.GravityUp;
 
   if RootNode.HasForceVersion and (RootNode.ForceVersion.Major <= 1) then
     Version := cvVrml1_Inventor else
