@@ -340,13 +340,18 @@ type
       AEditor: TPropertyEditor; var AShow: Boolean; const Section: TPropertySection);
     procedure GizmoHasModifiedParent(Sender: TObject);
     procedure GizmoStopDrag(Sender: TObject);
-    { Fix Pos.Z, to keep camera to see whole 2D world.
+    { Fix camera position, to look at Pos.XY in case of 2D games.
       Use this before doing V.InternalCamera.AnimateTo/SetWorldView with given Pos,Dir,Up.
 
-      When operating in 2D (*not* detected by navigation type, but by projection type and axis,
-      to keep things also working in Fly mode for 2D games),
-      keep proper distance in Z to see the whole 2D world (including run-time 2D camera)
-      and Pos. }
+      In case of 2D this means we should:
+
+      - Fix Pos.Z, to keep camera to see whole 2D world (including run-time 2D camera).
+
+      - Fix Pos.XY, to account that Camera.Orthographic.Origin may <> (0.5,0.5).
+
+      Done when operating in 2D (*not* detected by navigation type, but by projection type and axis,
+      to keep this also working in Fly mode for 2D games).
+    }
     procedure FixCamera2D(const V: TCastleViewport; var Pos: TVector3; const Dir, Up: TVector3);
     procedure ViewportViewBox(const V: TCastleViewport; Box: TBox3D);
     procedure CurrentViewportFreeNotification(const Sender: TFreeNotificationObserver);
@@ -419,14 +424,20 @@ type
 
 implementation
 
-uses // use Windows unit with FPC 3.0.x, to get TSplitRectType enums
+uses
+  { Standard FPC/Lazarus units }
+  // use Windows unit with FPC 3.0.x, to get TSplitRectType enums
   {$ifdef VER3_0} {$ifdef MSWINDOWS} Windows, {$endif} {$endif}
   TypInfo, StrUtils, Math, Graphics, Types, Dialogs, LCLType, ObjInspStrConsts,
-  Castle2DSceneManager, CastleComponentSerialize, CastleFileFilters,
-  CastleGLUtils, CastleImages, CastleLog,  CastleProjection,
-  CastleShellCtrls, CastleStringUtils, CastleThirdPersonNavigation,
-  CastleTimeUtils, CastleURIUtils, CastleUtils, CastleBehaviors, CastleSoundEngine,
-  X3DLoad, CastleFilesUtils,
+  { CGE units }
+  CastleUtils, CastleComponentSerialize, CastleFileFilters, CastleGLUtils, CastleImages,
+  CastleLog, CastleProjection, CastleShellCtrls, CastleStringUtils, CastleTimeUtils,
+  CastleURIUtils, X3DLoad, CastleFilesUtils,
+  { CGE unit to keep in uses clause even if they are not explicitly used by FrameDesign,
+    to register the core CGE components for (de)serialization. }
+  Castle2DSceneManager, CastleNotifications, CastleThirdPersonNavigation, CastleSoundEngine,
+  CastleBehaviors,
+  { Editor units }
   EditorUtils, FormProject;
 
 {$R *.lfm}
@@ -2165,6 +2176,9 @@ begin
     end;
 
     Pos.Z := Max(Pos.Z, CameraZ - CameraProjectionNear + 100);
+
+    Pos.X := Pos.X - (0.5 - V.InternalCamera.Orthographic.Origin.X) * V.InternalCamera.Orthographic.EffectiveWidth;
+    Pos.Y := Pos.Y - (0.5 - V.InternalCamera.Orthographic.Origin.Y) * V.InternalCamera.Orthographic.EffectiveHeight;
   end;
 end;
 
@@ -4395,8 +4409,6 @@ begin
   Target.Orthographic.Origin  := Source.Orthographic.Origin;
   Target.Orthographic.Width   := Source.Orthographic.Width;
   Target.Orthographic.Height  := Source.Orthographic.Height;
-  Target.Orthographic.Scale   := Source.Orthographic.Scale;
-  Target.Orthographic.Stretch := Source.Orthographic.Stretch;
 
   Target.GetWorldView(BeginPos, BeginDir, BeginUp);
   Source.GetWorldView(EndPos, EndDir, EndUp);
