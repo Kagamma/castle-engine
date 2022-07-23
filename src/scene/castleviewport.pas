@@ -148,6 +148,8 @@ type
       FLastSeenMainScene: TCastleScene; // only used by editor
       FBackground: TCastleBackground;
       FBackgroundObserver: TFreeNotificationObserver;
+      FFog: TCastleFog;
+      FFogObserver: TFreeNotificationObserver;
       // reused between frames for speed
       FRenderWithoutScreenEffectsRenderingCamera: TRenderingCamera;
       FMissingCameraRect: TCastleRectangleControl;
@@ -173,6 +175,8 @@ type
     procedure SetPaused(const Value: Boolean);
     procedure SetBackground(const Value: TCastleBackground);
     procedure BackgroundFreeNotification(const Sender: TFreeNotificationObserver);
+    procedure SetFog(const Value: TCastleFog);
+    procedure FogFreeNotification(const Sender: TFreeNotificationObserver);
     procedure SetInternalDesignNavigationType(const Value: TInternalDesignNavigationType);
 
     { Callbacks when MainCamera is notified that MainScene changes camera/navigation }
@@ -251,6 +255,11 @@ type
       (move camera far away), because it would adjust to the camera and lights gizmo bbox
       (see TTestCastleViewport.TestAutoCameraIgnoresGizmos). }
     function ItemsBoundingBox: TBox3D;
+
+    { Bounding box of everything, including design-time gizmos (because you also want to see
+      them accounted for in design-time ortho camera ProjectionNear/Far).
+      Similar to just usign Items.BoundingBox, but handles Items=nil case OK. }
+    function ItemsWithGizmosBoundingBox: TBox3D;
 
     { Set the projection parameters and matrix.
       Used by our Render method.
@@ -376,8 +385,10 @@ type
       DefaultUseGlobalFog = true;
       DefaultShadowVolumes = true;
       DefaultBackgroundColor: TVector4 = (X: 0.1; Y: 0.1; Z: 0.1; W: 1);
-      Default2DProjectionFar = CastleTransform.Default2DProjectionFar;
-      Default2DProjectionNear = CastleTransform.Default2DProjectionNear;
+      {$warnings off} // referencing deprecated in deprecated
+      Default2DProjectionFar = CastleTransform.Default2DProjectionFar deprecated 'this default is not used; ProjectionFar in orthographic projection is now automatically adjusted to what you display';
+      Default2DProjectionNear = CastleTransform.Default2DProjectionNear deprecated 'this default is not used; ProjectionNear in orthographic projection is now automatically adjusted to what you display';
+      {$warnings on}
       Default2DCameraZ = CastleTransform.Default2DCameraZ;
       DefaultPrepareOptions = [prRenderSelf, prRenderClones, prBackground, prBoundingBox, prScreenEffects];
       { @exclude }
@@ -983,6 +994,9 @@ type
       Displayed only when not @link(Transparent). }
     property Background: TCastleBackground read FBackground write SetBackground;
 
+    { Fog to use to display @link(Items). }
+    property Fog: TCastleFog read FFog write SetFog;
+
     { If @true then the background (from @link(Background) or
       @link(TCastleRootTransform.MainScene MainScene)) will be rendered wireframe,
       over the solid background filled with BackgroundColor.
@@ -1041,6 +1055,7 @@ type
       from MainScene to shine on all objects. }
     property UseGlobalFog: boolean
       read FUseGlobalFog write FUseGlobalFog default DefaultUseGlobalFog;
+      {$ifdef FPC} deprecated 'configure fog by assigning to TCastleViewport.Fog component; leave deprecated TCastleViewport.MainScene nil'; {$endif}
 
     { Help user to activate pointing device sensors and pick items.
       Every time you press Input_Interact (by default
@@ -1097,8 +1112,7 @@ type
     }
     property AutoCamera: Boolean
       read FAutoCamera write SetAutoCamera default false;
-      // {$ifdef FPC} deprecated 'it is simpler to set camera at design-time explicitly, or use CameraViewpointForWholeScene to auto-adjust camera'; {$endif}
-      // TODO: Not deprecated *yet*, only because AutoCamera is the only way to run camera animation designed in glTF / X3D
+      {$ifdef FPC} deprecated 'it is simpler to set camera at design-time explicitly, or use CameraViewpointForWholeScene to auto-adjust camera; if you want to animate the camera, attach TCastleCamera to a bone transformation exposed by Scene.ExposeTransforms'; {$endif}
 
     { Called when bound Viewpoint node changes.
       Called exactly when TCastleSceneCore.ViewpointStack.OnBoundChanged is called. }
@@ -1198,10 +1212,13 @@ begin
     Assignment below works, but it seems that effect is much less noticeable
     then?
 
+    Note: Viewport.ProjectionFar may be ZFarInfinity, this will also have to be accounted for,
+    maybe use ItemsBoundingBox.PointsDistance (max distance to camera) or MaxSize.
+
   WritelnLog('setting near to %f', [Viewport.ProjectionNear]); // testing
-  WritelnLog('setting far to %f', [Viewport.ProjectionFarFinite]); // testing
+  WritelnLog('setting far to %f', [Viewport.ProjectionFar]); // testing
   Uniform('near').SetValue(Viewport.ProjectionNear);
-  Uniform('far').SetValue(Viewport.ProjectionFarFinite);
+  Uniform('far').SetValue(Viewport.ProjectionFar);
   }
 
   Uniform('near').SetValue(1.0);
@@ -1261,6 +1278,9 @@ begin
 
   FBackgroundObserver := TFreeNotificationObserver.Create(Self);
   FBackgroundObserver.OnFreeNotification := {$ifdef FPC}@{$endif} BackgroundFreeNotification;
+
+  FFogObserver := TFreeNotificationObserver.Create(Self);
+  FFogObserver.OnFreeNotification := {$ifdef FPC}@{$endif} FogFreeNotification;
 
   FCameraObserver := TFreeNotificationObserver.Create(Self);
   FCameraObserver.OnFreeNotification := {$ifdef FPC}@{$endif} CameraFreeNotification;
@@ -1554,7 +1574,11 @@ begin
 
       { Assign useful InternalDesignCamera vectors, because in case of reading old designs --
         TCastleViewport.CustomSerialization could not read any useful InternalDesignCamera
-        from design file. }
+        from design file.
+
+        Note known limitation: This will not adjust InternalCamera to final Camera view
+        if AutoCamera is used. AutoCamera is applied later.
+        This will only adjust InternalCamera to Camera view that is serialized. }
       Camera.GetWorldView(InitialPos, InitialDir, InitialUp);
       if Camera.ProjectionType = ptOrthographic then
       begin
@@ -1595,6 +1619,21 @@ begin
     Assert(Items.List.IndexOf(InternalDesignCamera) <> -1);
     Assert(IndexOfControl(InternalDesignNavigation) <> -1);
   end;
+
+  {$warnings off} // using deprecated to warn about it
+  if AutoCamera then
+    WritelnWarning('AutoCamera is deprecated (on TCastleViewport named "%s"). Instead: It is simpler to set camera at design-time explicitly, or use CameraViewpointForWholeScene from code to auto-adjust camera.' + ' If you want to animate the camera, attach TCastleCamera to a bone transformation exposed by Scene.ExposeTransforms', [
+      Name
+    ]);
+  if UseGlobalFog <> DefaultUseGlobalFog then
+    WritelnWarning('UseGlobalFog is deprecated (on TCastleViewport named "%s"). Instead: Assign TCastleViewport.Fog to use fog, and leave deprecated TCastleViewport.MainScene = nil', [
+      Name
+    ]);
+  if UseGlobalLights <> DefaultUseGlobalLights then
+    WritelnWarning('UseGlobalLights is deprecated (on TCastleViewport named "%s"). Instead: If you need to tweak lighting, then use regular TCastleScene and set CastGlobalLights as needed; leave deprecated TCastleViewport.MainScene = nil', [
+      Name
+    ]);
+  {$warnings on}
 end;
 
 procedure TCastleViewport.SetCapturePointingDevice(const Value: TCastleTransform);
@@ -1625,6 +1664,21 @@ procedure TCastleViewport.BackgroundFreeNotification(
   const Sender: TFreeNotificationObserver);
 begin
   Background := nil;
+end;
+
+procedure TCastleViewport.SetFog(const Value: TCastleFog);
+begin
+  if FFog <> Value then
+  begin
+    FFog := Value;
+    FFogObserver.Observed := Value;
+  end;
+end;
+
+procedure TCastleViewport.FogFreeNotification(
+  const Sender: TFreeNotificationObserver);
+begin
+  Fog := nil;
 end;
 
 function TCastleViewport.FillsWholeContainer: boolean;
@@ -1766,6 +1820,7 @@ begin
   Result := inherited;
   if (not Result) and (not Items.Paused) then
   begin
+    {$warnings off} // TODO: using deprecated Navigation for now
     if Navigation <> nil then
     begin
       TopMostTransform := TransformUnderMouse;
@@ -1789,6 +1844,7 @@ begin
         Navigation.Press(LastPressEvent);
       end;
     end;
+    {$warnings on}
 
     UpdateMouseRayHit;
 
@@ -1973,8 +2029,10 @@ procedure TCastleViewport.EnsureCameraDetected;
 begin
   if Camera <> nil then
   begin
+    {$warnings off} // using deprecated to warn about it
     if AutoCamera and not AssignDefaultCameraDone then
       AssignDefaultCamera;
+    {$warnings on}
     { Set AssignDefaultCameraDone to done,
       regardless if AssignDefaultCameraDone was done or not.
       Otherwise later setting AutoCamera to true would suddenly
@@ -2025,6 +2083,14 @@ begin
       Result := Items.BoundingBox;
     finally Dec(TInternalCastleEditorGizmo.EmptyBoundingBox) end;
   end else
+    Result := TBox3D.Empty;
+end;
+
+function TCastleViewport.ItemsWithGizmosBoundingBox: TBox3D;
+begin
+  if Items <> nil then
+    Result := Items.BoundingBox
+  else
     Result := TBox3D.Empty;
 end;
 
@@ -2079,11 +2145,8 @@ end;
 
 function TCastleViewport.CalculateProjection: TProjection;
 var
-  Box: TBox3D;
   ViewportWidth, ViewportHeight: Single;
 begin
-  Box := ItemsBoundingBox;
-
   if (InternalOverride2DProjectionSizing <> nil)
      { We could use InternalOverride2DProjectionSizing only when really necessary,
        but it more consistent and easier to test to use it always when available.
@@ -2119,28 +2182,19 @@ begin
       ViewportHeight);
     Result.ProjectionNear := 1;
     Result.ProjectionFar := 1000;
-    Result.ProjectionFarFinite := 1000;
     Exit;
   end;
 
-  Result := InternalCamera.InternalProjection(Box, ViewportWidth, ViewportHeight,
-    InternalCamera = InternalDesignCamera,
-    { Check "GLFeatures = nil" to allow using CalculateProjection and
-      things depending on it when no OpenGL context available.
-
-      Testcase: open CGE editor, open a project with any sprite sheet,
-      open sprite sheet editor with some .castle-sprite-sheet file,
-      then do "Close Project" (without closing sprite sheet editor
-      explicitly). It should not crash. }
-    ((GLFeatures = nil) or GLFeatures.ShadowVolumesPossible) and
-    ShadowVolumes
-  );
+  Result := InternalCamera.InternalProjection({$ifdef FPC}@{$endif} ItemsWithGizmosBoundingBox,
+    ViewportWidth, ViewportHeight,
+    InternalCamera = InternalDesignCamera);
 end;
 
 function TCastleViewport.MainLightForShadows(out AMainLightPosition: TVector4): boolean;
 var
   AMainLightPosition3D: PVector3;
 begin
+  {$warnings off} // using deprecated MainScene to keep it working
   if Items.MainScene <> nil then
   begin
     Result :=
@@ -2164,6 +2218,7 @@ begin
     end;
   end else
     Result := false;
+  {$warnings on}
 end;
 
 procedure TCastleViewport.Render3D(const Params: TRenderParams);
@@ -2281,9 +2336,14 @@ begin
   FPrepareParams.InternalGlobalLights := FRenderParams.FGlobalLights;
 
   { initialize FPrepareParams.InternalGlobalFog }
+  if Fog <> nil then
+    FPrepareParams.InternalGlobalFog := Fog.InternalFogNode
+  else
+  {$warnings off} // using deprecated MainScene to keep it working
   if UseGlobalFog and
      (Items.MainScene <> nil) then
     FPrepareParams.InternalGlobalFog := Items.MainScene.FogStack.Top
+  {$warnings on}
   else
     FPrepareParams.InternalGlobalFog := nil;
 
@@ -2396,9 +2456,11 @@ procedure TCastleViewport.RenderFromViewEverything(const RenderingCamera: TRende
     if Background <> nil then
       BackgroundRenderer := Background.InternalBackgroundRenderer
     else
+    {$warnings off} // using deprecated MainScene to keep it working
     if Items.MainScene <> nil then
       BackgroundRenderer := Items.MainScene.InternalBackgroundRenderer
     else
+    {$warnings on}
       BackgroundRenderer := nil;
 
     if BackgroundRenderer <> nil then
@@ -2457,17 +2519,16 @@ begin
   FRenderParams.RenderingCamera := RenderingCamera;
 
   { calculate FRenderParams.Projection*, simplified from just like CalculateProjection does }
-  FRenderParams.ProjectionBox := ItemsBoundingBox;
+  FRenderParams.ProjectionBox := {$ifdef FPC}@{$endif} ItemsWithGizmosBoundingBox;
   FRenderParams.ProjectionViewportWidth := EffectiveWidthForChildren;
   FRenderParams.ProjectionViewportHeight := EffectiveHeightForChildren;
-  FRenderParams.ProjectionShadowVolumesPossible :=
-    ((GLFeatures = nil) or GLFeatures.ShadowVolumesPossible) and ShadowVolumes;
 
   { calculate FRenderParams.FGlobalLights }
   FRenderParams.FGlobalLights.Clear;
   { Add headlight }
   InitializeGlobalLights(FRenderParams.FGlobalLights);
   { Add lights from MainScene  }
+  {$warnings off} // using deprecated MainScene to keep it working
   if Items.MainScene <> nil then
     AddGlobalLightsFromScene(Items.MainScene);
   { Add lights from all scenes with CastGlobalLights }
@@ -2475,12 +2536,18 @@ begin
     for SceneCastingLights in Items.InternalScenesCastGlobalLights do
       if Items.MainScene <> SceneCastingLights then // MainScene is already accounted for above
         AddGlobalLightsFromScene(SceneCastingLights);
+  {$warnings on}
 
   { calculate FRenderParams.GlobalFog }
+  if Fog <> nil then
+    FRenderParams.GlobalFog := Fog.InternalFogNode
+  else
+  {$warnings off} // using deprecated MainScene to keep it working
   if UseGlobalFog and
      (Items.MainScene <> nil) then
     FRenderParams.GlobalFog := Items.MainScene.FogStack.Top
   else
+  {$warnings on}
     FRenderParams.GlobalFog := nil;
 
   RenderFromView3D(FRenderParams);
@@ -2591,6 +2658,7 @@ begin
   if ScreenSpaceReflections then
     SSRShaderInitialize;
 
+  {$warnings off} // using deprecated MainScene to keep it working
   if ScreenSpaceAmbientOcclusion and (SSAOShader <> nil) and ScreenSpaceReflections and (SSRShader <> nil) then
   begin
     if Index = 0 then
@@ -2620,6 +2688,7 @@ begin
   else
     { no Index is valid, since ScreenEffectsCount = 0 in this class }
     Result := nil;
+  {$warnings on}
 end;
 
 function TCastleViewport.ScreenEffectsCount: Integer;
@@ -2629,10 +2698,13 @@ begin
   if ScreenSpaceReflections then
     SSRShaderInitialize;
 
+  {$warnings off} // using deprecated MainScene to keep it working
   if Items.MainScene <> nil then
     Result := Items.MainScene.ScreenEffectsCount
   else
     Result := 0;
+  {$warnings off}
+
   if ScreenSpaceAmbientOcclusion and (SSAOShader <> nil) then
     Inc(Result);
   if ScreenSpaceReflections and (SSRShader <> nil) then
@@ -2650,9 +2722,11 @@ begin
     Exit(true);
   if ScreenSpaceReflections and (SSRShader <> nil) then
     Exit(true);
+  {$warnings off} // using deprecated MainScene to keep it working
   if Items.MainScene <> nil then
     Result := Items.MainScene.ScreenEffectsNeedDepth
   else
+  {$warnings on}
     Result := false;
 end;
 
@@ -2789,7 +2863,9 @@ begin
     Exit; // abort, until you assign Camera
 
   Box := ItemsBoundingBox;
+  {$warnings off} // using deprecated MainScene to keep it working
   Scene := Items.MainScene;
+  {$warnings on}
   if Scene <> nil then
   begin
     Scene.InternalUpdateCamera(Camera, Box, false, false);
@@ -2822,7 +2898,9 @@ begin
     { up } Vector3(0, 1, 0));
   Camera.GravityUp := Vector3(0, 1, 0);
   Camera.ProjectionType := ptOrthographic;
+  {$warnings off} // using deprecated MainScene to keep it working
   AutoCamera := false;
+  {$warnings on}
 end;
 
 procedure TCastleViewport.PositionToPrerequisites;
@@ -3080,7 +3158,9 @@ end;
 
 function TCastleViewport.GetMainScene: TCastleScene;
 begin
+  {$warnings off} // using deprecated MainScene to keep it working
   Result := Items.MainScene;
+  {$warnings on}
 end;
 
 function TCastleViewport.MouseRayHitContains(const Item: TCastleTransform): boolean;
@@ -3209,8 +3289,10 @@ begin
   Result := C <> nil;
   if Result then
   begin
+    {$warnings off} // TODO: using deprecated Navigation for now
     if (Navigation is TCastleMouseLookNavigation) and
        TCastleMouseLookNavigation(Navigation).MouseLook then
+    {$warnings on}
       MousePosition := RenderRect.Center
     else
       MousePosition := C.MousePosition;
@@ -3444,10 +3526,12 @@ function TCastleViewport.PointingDeviceMove: boolean;
         end;
 
     // call MainScene.PointingDeviceMove, to allow to update X3D sensors "isOver"
+    {$warnings off} // using deprecated MainScene to keep it working
     if (Items.MainScene <> nil) and
        (CapturePointingDevice <> Items.MainScene) and
        ((RayHit = nil) or (RayHit.IndexOfItem(Items.MainScene) = -1)) then
       CallMove(FakeRayCollisionNode(RayOrigin, RayDirection, Items.MainScene), Distance);
+    {$warnings on}
   end;
 
 begin
@@ -3575,11 +3659,13 @@ end;
 
 procedure TCastleViewport.MainSceneAndCamera_BoundViewpointChanged(Sender: TObject);
 begin
+  {$warnings off} // using deprecated AutoCamera and MainScene to keep it working
   if AutoCamera then
   begin
-    Items.MainScene.InternalUpdateCamera(Camera, ItemsBoundingBox, false);
+    Items.MainScene.InternalUpdateCamera(Camera, ItemsBoundingBox, false, true);
     BoundViewpointChanged;
   end;
+  {$warnings on}
 end;
 
 procedure TCastleViewport.MainSceneAndCamera_BoundNavigationInfoChanged(Sender: TObject);
@@ -3589,11 +3675,11 @@ end;
 
 procedure TCastleViewport.MainSceneAndCamera_BoundViewpointVectorsChanged(Sender: TObject);
 begin
-  { TODO: It may be useful to enable camera animation by some specific property,
-    like AnimateCameraByViewpoint (that works even when AutoCamera = false,
-    as we advise for new viewports). }
+  {$warnings off} // using deprecated AutoCamera and MainScene to keep it working
   if AutoCamera { or AnimateCameraByViewpoint } then
-    Items.MainScene.InternalUpdateCamera(Camera, ItemsBoundingBox, true);
+    Items.MainScene.InternalUpdateCamera(Camera, ItemsBoundingBox, true,
+      { AllowTransitionAnimate - this would break Viewpoint animation from X3D if true } false);
+  {$warnings on}
 end;
 
 class procedure TCastleViewport.CreateComponentWithChildren3D(Sender: TObject);
@@ -3630,7 +3716,7 @@ begin
   Plane := TCastlePlane.Create(Owner);
   Plane.Name := InternalProposeName(TCastlePlane, Owner);
   Plane.Axis := 2;
-  Plane.Size := Vector2(100, 100);
+  Plane.Size := Vector2(200, 200);
   Plane.Material := pmUnlit;
   Items.Add(Plane);
 
@@ -3685,7 +3771,7 @@ begin
     serves as floor to place new 3D stuff }
   Plane := TCastlePlane.Create(Owner);
   Plane.Name := InternalProposeName(TCastlePlane, Owner);
-  Plane.Size := Vector2(5, 5);
+  Plane.Size := Vector2(10, 10);
   Items.Add(Plane);
 
   if InternalDesignManipulation then
@@ -3729,6 +3815,7 @@ begin
      (PropertyName = 'Camera') or
      (PropertyName = 'Navigation') or
      (PropertyName = 'Background') or
+     (PropertyName = 'Fog') or
      (PropertyName = 'BackgroundColorPersistent') then
     Result := [psBasic]
   else
@@ -3762,6 +3849,7 @@ var
   Nav: TInternalDesignNavigationType;
   InternalDesignNavigationTypeInt: Integer;
   CopyFromViewport: TCastleViewport;
+  AutoNavigation: Boolean;
 begin
   inherited;
 
@@ -3804,6 +3892,15 @@ begin
           GetEnumName(TypeInfo(TInternalDesignNavigationType), Ord(Nav)) + ']',
           FInternalDesignNavigations[Nav], true);
     end;
+  end;
+
+  AutoNavigation := false;
+  SerializationProcess.ReadWriteBoolean('AutoNavigation', AutoNavigation, false);
+  if AutoNavigation then
+  begin
+    WritelnWarning('Viewport named "%s" uses AutoNavigation, this is no longer supported. Instead: 1. (Advised) Add explicit navigation instance to viewport. 2. (Eventually, a temporary solution) Use TCastleAutoNavigationViewport.', [
+      Name
+    ]);
   end;
 end;
 
