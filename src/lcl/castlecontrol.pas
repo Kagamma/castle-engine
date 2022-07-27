@@ -1207,7 +1207,7 @@ begin
     Without this fix, we'll have an OpenGL error.
 
     Doing MakeCurrent here is consistent with TCastleWindow.DoUpdate . }
-  MakeCurrent;
+  // MakeCurrent;
   Container.EventUpdate;
 end;
 
