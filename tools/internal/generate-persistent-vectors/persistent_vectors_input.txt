@@ -57,9 +57,6 @@
 ../../../src/transform/ TCastleTransform ScaleOrientation TVector4
 ../../../src/transform/ TCastleTransform Translation TVector3
 
-../../../src/transform/ TCastleCamera InitialPosition TVector3
-../../../src/transform/ TCastleCamera InitialDirection TVector3
-../../../src/transform/ TCastleCamera InitialUp TVector3
 ../../../src/transform/ TCastleCamera GravityUp TVector3
 
 ../../../src/transform/ TCastleOrthographic Origin TVector2
@@ -83,6 +80,8 @@
 ../../../src/scene/ TCastleBackground GroundBottomColor TCastleColorRGB
 ../../../src/scene/ TCastleBackground GroundEquatorColor TCastleColorRGB
 ../../../src/scene/ TCastleBackground Rotation TVector4
+
+../../../src/scene/ TCastleFog Color TCastleColorRGB
 
 ../../../src/scene/ TCastlePointLight Color TCastleColorRGB
 ../../../src/scene/ TCastlePointLight Attenuation TVector3

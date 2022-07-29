@@ -316,9 +316,7 @@
     { @groupEnd }
 
     { @exclude
-      Fix X3D names inside to:
-      - make sure all TX3DNode.X3DName within Node are unique
-      - make sure all nodes that are part of ROUTE have non-empty names. }
+      Fix X3D names inside to make sure all nodes that are part of ROUTE have non-empty names. }
     procedure InternalFixNodeNames;
   end;
 
@@ -849,7 +847,7 @@ function TFixNamesHandler.HandleNode(ParentNode, Node: TX3DNode): Pointer;
 
     if LogsDone < MaxLogsDone then
     begin
-      WritelnLog('Renaming node "%s" -> "%s" to have unique name', [
+      WritelnLog('Renaming node "%s" -> "%s" to have unique name; these renames are done to allow saving ROUTEs later', [
         OriginalName,
         Node.X3DName
       ]);
@@ -903,9 +901,17 @@ begin
     Exit;
   Visited.Add(Node);
 
-  { make sure node name is unique }
+  { make sure node name is unique.
+
+    Not done anymore: see discussion in src/scene/load/README_node_names_at_import.md .
+    These renames to not prevent 100% name clashes anyway,
+    and they are not expected and not reliable (from user's POV,
+    it is hard to predict which node gets _2, _3 suffix).
+  }
+  (*
   if Node.X3DName <> '' then
     MakeUniquelyNamed(Node);
+  *)
 
   { make sure nodes used in ROUTEs are uniquely named }
   for I := 0 to Node.RoutesCount - 1 do
@@ -915,7 +921,26 @@ begin
     MakeNamed(Route.DestinationNode);
   end;
 
-  { recursively check children }
+  { Recursively check children.
+
+    Should we descend into TInlineNode?
+    Strictly thinking about X3D namespace, the names don't have to be unique
+    across multiple files, each file is a separate namespace. Actually even prototypes
+    have a separate namespace.
+
+    That said, in CGE our TCastleScene.Node and TX3DRootNode node searching methods
+    access the graph as a whole, because this is much easier to use in normal case
+    (and allows developer to "not care" whether something is wrapped in Inline or not).
+    So for CGE, we just make all names unique.
+
+    So we don't have here condition like
+
+      if not (Node is TInlineNode) then
+
+    Just do this for all nodes.
+
+    Moreover, the ROUTEs have to be fixed in Inlines too.
+  }
   Node.DirectEnumerateAll({$ifdef FPC}@{$endif} Self.HandleNode);
 end;
 

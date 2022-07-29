@@ -116,6 +116,7 @@ type
       FDesignUrl: String;
       FDesignLoaded: TCastleUserInterface;
       FDesignLoadedOwner: TComponent;
+      FAutoFocus: Boolean;
 
     { Sometimes, releasing shift / alt / ctrl keys will not be reported
       properly to KeyDown / KeyUp. Example: opening a menu
@@ -349,6 +350,15 @@ type
     property Visible;
     property TabOrder;
     property TabStop default true;
+
+    { Automatically make this control focused (receiving key input)
+      when user clicks on it.
+
+      If this is @true, consider showing it in some way, e.g. draw something special
+      in OnRender when this control is focused. You can check "Focused" property
+      ( https://lazarus-ccr.sourceforge.io/docs/lcl/controls/twincontrol.focused.html )
+      or FormXxx.ActiveControl or register OnEnter / OnExit LCL events. }
+    property AutoFocus: Boolean read FAutoFocus write FAutoFocus default false;
 
     property Container: TContainer read FContainer;
 
@@ -898,6 +908,16 @@ to be realized. }
 
 function TCastleControl.MakeCurrent(SaveOldToStack: boolean): boolean;
 begin
+  { This call makes no sense when OpenGL context is no longer available,
+    which means Handle = 0.
+    Inherited would make error - LOpenGLMakeCurrent in LCL would
+    make "RaiseGDBException('LOpenGLSwapBuffers Handle=0');".
+    For some reason, it may be reported as EDivByZero, "Division by zero".
+
+    Better to just exit with false. }
+  if Handle = 0 then
+    Exit(false);
+
   Result := inherited MakeCurrent(SaveOldToStack);
 
   RenderContext := Container.Context;
@@ -943,9 +963,43 @@ begin
 end;
 
 procedure TCastleControl.ReleaseAllKeysAndMouse;
+
+  { This does a subset of MouseUp implementation, only caring about updating CGE state now. }
+  procedure CastleMouseUp(const MyButton: TCastleMouseButton);
+  begin
+    Container.MousePressed := Container.MousePressed - [MyButton];
+    Container.EventRelease(InputMouseButton(MousePosition, MyButton, 0));
+  end;
+
+  { This does a subset of KeyUp implementation, only caring about updating CGE state now. }
+  procedure CastleKeyUp(const MyKey: TKey);
+  var
+    MyKeyString: String;
+  begin
+    { Do this before anything else, in particular before even Pressed.KeyUp below.
+      This may call OnPress (which sets Pressed to true). }
+    FKeyPressHandler.Flush;
+
+    Pressed.KeyUp(MyKey, MyKeyString);
+
+    if (MyKey <> keyNone) or (MyKeyString <> '') then
+      Container.EventRelease(InputKey(MousePosition, MyKey, MyKeyString));
+  end;
+
+var
+  Key: TKey;
+  MouseButton: TCastleMouseButton;
 begin
-  Pressed.Clear;
-  Container.MousePressed := [];
+  { This should also take care of releasing Characters. }
+  for Key := Low(Key) to High(Key) do
+    if Pressed[Key] then
+      CastleKeyUp(Key);
+
+  for MouseButton := Low(MouseButton) to High(MouseButton) do
+    if MouseButton in MousePressed then
+      CastleMouseUp(MouseButton);
+
+  Container.MouseLookIgnoreNextMotion;
 end;
 
 procedure TCastleControl.UpdateShiftState(const Shift: TShiftState);
@@ -1048,6 +1102,9 @@ procedure TCastleControl.MouseDown(Button: Controls.TMouseButton;
 var
   MyButton: TCastleMouseButton;
 begin
+  if AutoFocus and not Focused then
+    SetFocus;
+
   FMousePosition := Vector2(X, Height - 1 - Y);
 
   if MouseButtonLCLToCastle(Button, MyButton) then
@@ -1133,6 +1190,24 @@ procedure TCastleControl.DoUpdate;
 begin
   if AutoRedisplay then Invalidate;
   FKeyPressHandler.Flush; // finish any pending key presses
+
+  { Update event also requires that proper OpenGL context is current.
+
+    This matters because OpenGL resources may be used durign update,
+    e.g. TCastleScene.Update will update auto-generated textures,
+    doing e.g. TGLGeneratedCubeMapTextureNode.Update.
+    This should run in proper OpenGL context.
+    Esp. as not all resources must be shared between contexts:
+    FBO are not shared in new OpenGL versions, see
+    https://stackoverflow.com/questions/4385655/is-it-possible-to-share-an-opengl-framebuffer-object-between-contexts-threads
+
+    Testcase: open examples/mobile/simple_3d_demo/ in editor,
+    open main design,
+    click on previews with GeneratedCubeMap like castle_with_lights_and_camera.wrl .
+    Without this fix, we'll have an OpenGL error.
+
+    Doing MakeCurrent here is consistent with TCastleWindow.DoUpdate . }
+  MakeCurrent;
   Container.EventUpdate;
 end;
 
@@ -1238,35 +1313,57 @@ procedure TCastleControl.LoadDesign;
   methods in TUIState. Here they are much simplified, as we have no concept
   of "started" / "stopped", so no DesignPreload too. }
 
+var
+  OldCastleDesignMode: Boolean;
 begin
   if DesignUrl <> '' then
   begin
-    { make sure CastleDesignMode is correct, to not e.g. do physics in Lazarus/Delphi form designer. }
-    CastleDesignMode := csDesigning in ComponentState;
+    { Make sure CastleDesignMode is correct, to
+      - not e.g. do physics in Lazarus/Delphi form designer.
+      - not show design-time stuff in DesignUrl loaded in CGE editor "help->system information".
 
-    FDesignLoadedOwner := TComponent.Create(nil);
+      Note that we restore later CastleDesignMode.
+      This way we avoid changing CastleDesignMode for future loads,
+      when TCastleControl is used inside castle-editor.
+      Testcase:
+        in CGE editor:
+        - open tools/castle-editor project
+        - double click on demo design in data/demo_animation/
+        - open help->system information (this uses TCastleControl too, with DesignUrl assigned)
+        - close help->system information
+        - close design
+        - reopen design
+    }
+    OldCastleDesignMode := CastleDesignMode;
     try
-      FDesignLoaded := UserInterfaceLoad(DesignUrl, FDesignLoadedOwner);
-      {$ifdef HAS_RENDER_AT_DESIGN_TIME}
-      Options := Options + [ocoRenderAtDesignTime];
-      {$endif}
-    except
-      { If loading design file failed, and we're inside form designer,
-        merely report a warning. This allows deserializing LFMs with broken URLs. }
-      on E: Exception do
-      begin
-        if CastleDesignMode then
+      CastleDesignMode := csDesigning in ComponentState;
+
+      FDesignLoadedOwner := TComponent.Create(nil);
+      try
+        FDesignLoaded := UserInterfaceLoad(DesignUrl, FDesignLoadedOwner);
+        {$ifdef HAS_RENDER_AT_DESIGN_TIME}
+        Options := Options + [ocoRenderAtDesignTime];
+        {$endif}
+      except
+        { If loading design file failed, and we're inside form designer,
+          merely report a warning. This allows deserializing LFMs with broken URLs. }
+        on E: Exception do
         begin
-          WritelnWarning('TCastleControl', 'Failed to load design "%s": %s', [
-            URIDisplay(DesignUrl),
-            ExceptMessage(E)
-          ]);
-          Exit;
-        end else
-          raise;
+          if CastleDesignMode then
+          begin
+            WritelnWarning('TCastleControl', 'Failed to load design "%s": %s', [
+              URIDisplay(DesignUrl),
+              ExceptMessage(E)
+            ]);
+            Exit;
+          end else
+            raise;
+        end;
       end;
+      Controls.InsertFront(FDesignLoaded);
+    finally
+      CastleDesignMode := OldCastleDesignMode;
     end;
-    Controls.InsertFront(FDesignLoaded);
   end;
 end;
 

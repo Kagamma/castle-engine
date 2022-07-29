@@ -24,6 +24,7 @@
   and such call it automatically when needed. }
 {$ifdef read_interface_type}
 // type (continue type section from previous include file)
+  { Constraints on texture size, used by @link(ResizeToTextureSize) and @link(IsTextureSized). }
   TTextureSizing = (
     { Texture size does not have to be a power of two
       (unless GLFeatures.TextureNonPowerOfTwo = @false, in which case all textures
@@ -174,10 +175,15 @@ procedure LoadGLGeneratedTexture(const TextureId: TGLTextureId; const image: TEn
   const GUITexture: boolean = false); overload;
 { @groupEnd }
 
-{ Decompress texture image by loading it to temporary OpenGL texture and
-  reading back. So this internally uses current OpenGL context.
+{ Decompress texture image by loading it to a temporary OpenGL(ES) texture and
+  reading back. IOW, this does decompression by using current OpenGL(ES) context.
 
-  @raises(ECannotLoadCompressedTexture If cannot decompress S3TC, for example
+  TODO: Note that the current implementation will always raise ECannotLoadCompressedTexture
+  on OpenGLES, e.g. on mobile. Same as SaveTextureContents.
+  This is fixable (we need to use FBO instead of glGetTexImage on OpenGLES),
+  please submit a bugreport if you need it.
+
+  @raises(ECannotLoadCompressedTexture If we cannot decompress, for example
     because we cannot load to OpenGL this compressed texture (for example
     because appropriate OpenGL extensions are not available, or such).) }
 function GLDecompressTexture(Image: TGPUCompressedImage): TCastleImage;
@@ -186,6 +192,7 @@ function GLDecompressTexture(Image: TGPUCompressedImage): TCastleImage;
 
 {$ifdef read_interface_type}
 // type (continue type section from previous include file)
+  { Raised by SaveTextureContents when we cannot get texture contents. }
   ECannotSaveTextureContents = class(Exception);
 {$endif read_interface_type}
 

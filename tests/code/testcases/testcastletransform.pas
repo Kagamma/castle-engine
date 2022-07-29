@@ -57,6 +57,9 @@ type
     procedure TestRemoveDelayed_Destructor;
     procedure TestRemoveDelayed_EarlyFree;
     procedure TestExistsInRoot;
+    procedure TestGetSetWorldView;
+    procedure TestCameraDefaults;
+    procedure TestExcludeBoundingVolume;
   end;
 
 implementation
@@ -1695,6 +1698,210 @@ begin
   FreeAndNil(T1);
   FreeAndNil(T2);
   FreeAndNil(T3);
+end;
+
+procedure TTestCastleTransform.TestGetSetWorldView;
+var
+  TChild: TCastleTransform;
+  TParent: TCastleRootTransform;
+  CamChild: TCastleCamera;
+  P, D, U: TVector3;
+begin
+  CamChild := TCastleCamera.Create(nil);
+  TChild := TCastleTransform.Create(nil);
+  TParent := TCastleRootTransform.Create(nil);
+  try
+    AssertVectorEquals(TVector3.Zero, TChild.Translation);
+    AssertVectorEquals(TVector4.Zero, TChild.Rotation);
+    AssertVectorEquals(TVector3.Zero, CamChild.Translation);
+    AssertVectorEquals(TVector4.Zero, CamChild.Rotation);
+
+    TParent.Add(CamChild);
+    TParent.Add(TChild);
+
+    AssertVectorEquals(TVector3.Zero, TChild.WorldTranslation);
+    AssertVectorEquals(TVector3.Zero, CamChild.WorldTranslation);
+
+    TChild.GetView(P, D, U);
+
+    AssertVectorEquals(TVector3.Zero, TChild.Translation); // no change
+    AssertVectorEquals(TVector4.Zero, TChild.Rotation); // no change
+    AssertVectorEquals(TVector3.Zero, P);
+    // for non-camera transformations, the default Orientation=otUpYDirectionZ
+    AssertVectorEquals(Vector3(0, 0, 1), D);
+    AssertVectorEquals(Vector3(0, 1, 0), U);
+
+    TChild.GetWorldView(P, D, U);
+
+    // GetWorldView and GetView should give the same answers, as TParent has no transformation yet
+    AssertVectorEquals(TVector3.Zero, TChild.Translation); // no change
+    AssertVectorEquals(TVector4.Zero, TChild.Rotation); // no change
+    AssertVectorEquals(TVector3.Zero, P);
+    // for non-camera transformations, the default Orientation=otUpYDirectionZ
+    AssertVectorEquals(Vector3(0, 0, 1), D);
+    AssertVectorEquals(Vector3(0, 1, 0), U);
+
+    CamChild.GetView(P, D, U);
+
+    AssertVectorEquals(TVector3.Zero, CamChild.Translation);
+    AssertVectorEquals(TVector4.Zero, CamChild.Rotation);
+    AssertVectorEquals(TVector3.Zero, P);
+    // for camera transformations, the default Orientation=otUpYDirectionMinusZ
+    AssertVectorEquals(Vector3(0, 0, -1), D);
+    AssertVectorEquals(Vector3(0, 1, 0), U);
+
+    CamChild.GetWorldView(P, D, U);
+
+    // GetWorldView and GetView should give the same answers, as TParent has no transformation yet
+    AssertVectorEquals(TVector3.Zero, CamChild.Translation);
+    AssertVectorEquals(TVector4.Zero, CamChild.Rotation);
+    AssertVectorEquals(TVector3.Zero, P);
+    // for camera transformations, the default Orientation=otUpYDirectionMinusZ
+    AssertVectorEquals(Vector3(0, 0, -1), D);
+    AssertVectorEquals(Vector3(0, 1, 0), U);
+
+    // now apply transformations on everything
+    TParent.Translation := Vector3(1, 2, 3);
+    TChild.Translation := Vector3(100, 200, 300);
+    CamChild.Translation := Vector3(100, 200, 300);
+
+    TChild.GetView(P, D, U);
+
+    AssertVectorEquals(Vector3(100, 200, 300), TChild.Translation);
+    AssertVectorEquals(TVector4.Zero, TChild.Rotation); // no change
+    AssertVectorEquals(Vector3(100, 200, 300), P);
+    // for non-camera transformations, the default Orientation=otUpYDirectionZ
+    AssertVectorEquals(Vector3(0, 0, 1), D);
+    AssertVectorEquals(Vector3(0, 1, 0), U);
+
+    TChild.GetWorldView(P, D, U);
+
+    AssertVectorEquals(Vector3(100, 200, 300), TChild.Translation);
+    AssertVectorEquals(TVector4.Zero, TChild.Rotation); // no change
+    AssertVectorEquals(Vector3(100, 200, 300) + Vector3(1, 2, 3), P);
+    AssertVectorEquals(Vector3(100, 200, 300) + Vector3(1, 2, 3), TChild.WorldTranslation);
+    // for non-camera transformations, the default Orientation=otUpYDirectionZ
+    AssertVectorEquals(Vector3(0, 0, 1), D);
+    AssertVectorEquals(Vector3(0, 1, 0), U);
+
+    CamChild.GetView(P, D, U);
+
+    AssertVectorEquals(Vector3(100, 200, 300), CamChild.Translation);
+    AssertVectorEquals(TVector4.Zero, CamChild.Rotation);
+    AssertVectorEquals(Vector3(100, 200, 300), P);
+    // for camera transformations, the default Orientation=otUpYDirectionMinusZ
+    AssertVectorEquals(Vector3(0, 0, -1), D);
+    AssertVectorEquals(Vector3(0, 1, 0), U);
+
+    CamChild.GetWorldView(P, D, U);
+
+    AssertVectorEquals(Vector3(100, 200, 300), CamChild.Translation);
+    AssertVectorEquals(TVector4.Zero, CamChild.Rotation);
+    AssertVectorEquals(Vector3(100, 200, 300) + Vector3(1, 2, 3), P);
+    AssertVectorEquals(Vector3(100, 200, 300) + Vector3(1, 2, 3), CamChild.WorldTranslation);
+    // for camera transformations, the default Orientation=otUpYDirectionMinusZ
+    AssertVectorEquals(Vector3(0, 0, -1), D);
+    AssertVectorEquals(Vector3(0, 1, 0), U);
+
+    TChild.SetWorldView(Vector3(400, 500, 600) + Vector3(1, 2, 3),
+      Vector3(0, 0, 1),
+      Vector3(0, 1, 0));
+    TChild.GetWorldView(P, D, U);
+
+    AssertVectorEquals(Vector3(400, 500, 600), TChild.Translation);
+    AssertVectorEquals(Vector4(0, 0, 1, 0), TChild.Rotation);
+    AssertVectorEquals(Vector3(400, 500, 600) + Vector3(1, 2, 3), P);
+    AssertVectorEquals(Vector3(400, 500, 600) + Vector3(1, 2, 3), TChild.WorldTranslation);
+    // for non-camera transformations, the default Orientation=otUpYDirectionZ
+    AssertVectorEquals(Vector3(0, 0, 1), D);
+    AssertVectorEquals(Vector3(0, 1, 0), U);
+
+    CamChild.SetWorldView(Vector3(400, 500, 600) + Vector3(1, 2, 3),
+      Vector3(0, 0, -1),
+      Vector3(0, 1, 0));
+    CamChild.GetWorldView(P, D, U);
+
+    AssertVectorEquals(Vector3(400, 500, 600), CamChild.Translation);
+    AssertVectorEquals(Vector4(0, 0, 1, 0), CamChild.Rotation);
+    AssertVectorEquals(Vector3(400, 500, 600) + Vector3(1, 2, 3), P);
+    AssertVectorEquals(Vector3(400, 500, 600) + Vector3(1, 2, 3), CamChild.WorldTranslation);
+    // for camera transformations, the default Orientation=otUpYDirectionMinusZ
+    AssertVectorEquals(Vector3(0, 0, -1), D);
+    AssertVectorEquals(Vector3(0, 1, 0), U);
+  finally
+    FreeAndNil(CamChild);
+    FreeAndNil(TChild);
+    FreeAndNil(TParent);
+  end;
+end;
+
+procedure TTestCastleTransform.TestCameraDefaults;
+var
+  Parent: TCastleRootTransform;
+  C: TCastleCamera;
+  P, D, U: TVector3;
+begin
+  Parent := TCastleRootTransform.Create(nil);
+  C := TCastleCamera.Create(nil);
+  try
+    AssertVectorEquals(TVector3.Zero, C.Position);
+    AssertVectorEquals(TVector3.Zero, C.Translation);
+    AssertVectorEquals(DefaultCameraDirection, C.Direction);
+    AssertVectorEquals(DefaultCameraUp, C.Up);
+    // even zero axis; keeping this default is important, otherwise reading design files would be broken, if we change defaults
+    AssertVectorEquals(TVector4.Zero, C.Rotation);
+
+    Parent.Add(C);
+
+    AssertVectorEquals(TVector3.Zero, C.Position);
+    AssertVectorEquals(TVector3.Zero, C.Translation);
+    AssertVectorEquals(DefaultCameraDirection, C.Direction);
+    AssertVectorEquals(DefaultCameraUp, C.Up);
+    AssertVectorEquals(TVector4.Zero, C.Rotation);
+
+    C.GetView(P, D, U);
+
+    AssertVectorEquals(TVector3.Zero, P);
+    AssertVectorEquals(DefaultCameraDirection, D);
+    AssertVectorEquals(DefaultCameraUp, U);
+
+    C.GetWorldView(P, D, U);
+
+    AssertVectorEquals(TVector3.Zero, P);
+    AssertVectorEquals(DefaultCameraDirection, D);
+    AssertVectorEquals(DefaultCameraUp, U);
+  finally
+    FreeAndNil(C);
+    FreeAndNil(Parent);
+  end;
+end;
+
+procedure TTestCastleTransform.TestExcludeBoundingVolume;
+var
+  T, Box: TCastleTransform;
+begin
+  T := nil;
+  Box := nil;
+  try
+    T := TCastleTransform.Create(nil);
+    Box := TCastleBox.Create(nil);
+
+    AssertTrue(T.BoundingBox.IsEmpty);
+    AssertFalse(Box.BoundingBox.IsEmpty);
+
+    T.Add(Box);
+
+    AssertFalse(T.BoundingBox.IsEmpty);
+    AssertFalse(Box.BoundingBox.IsEmpty);
+
+    Box.InternalExcludeFromParentBoundingVolume := true;
+
+    AssertTrue(T.BoundingBox.IsEmpty);
+    AssertFalse(Box.BoundingBox.IsEmpty);
+  finally
+    FreeAndNil(T);
+    FreeAndNil(Box);
+  end;
 end;
 
 initialization
