@@ -40,7 +40,7 @@ uses
   CastleCameras, CastleBoxes, CastleTransform, CastleDebugTransform,
   CastleColors, CastleScene,
   // editor units
-  FrameAnchors,
+  FrameAnchors, CastleShellCtrls,
   DesignVisualizeTransform, DesignUndoSystem, DesignCameraPreview;
 
 type
@@ -165,6 +165,9 @@ type
         function Release(const Event: TInputPressRelease): Boolean; override;
         function Motion(const Event: TInputMotion): Boolean; override;
         procedure Render; override;
+        { UI under given mouse position.
+          AMousePosition is in coordinates local to TCastleControl and follows
+          CGE conventions that Y goes from bottom to top. }
         function HoverUserInterface(const AMousePosition: TVector2): TCastleUserInterface;
         function HoverTransform(const AMousePosition: TVector2): TCastleTransform;
       end;
@@ -222,6 +225,20 @@ type
       CollectionPropertyEditorForm: TCollectionPropertyEditorForm;
       FCurrentViewport: TCastleViewport;
       FCurrentViewportObserver: TFreeNotificationObserver;
+
+    { Create and add to the designed parent a new component,
+      whose type best matches currently selected file in SourceShellList.
+      May return @nil (and do nothing) if the SourceShellList does not
+      have a suitable file selected for the given parent. }
+    function ShellListAddComponent(
+      const SourceShellList: TCastleShellListView;
+      const ParentComponent: TComponent): TComponent;
+    { Returns exactly the class that will be returned by
+      ShellListAddComponent for the same arguments.
+      May return @nil exactly if ShellListAddComponent also returns @nil. }
+    function ShellListComponentClass(
+      const SourceShellList: TCastleShellListView;
+      const ParentComponent: TComponent): TComponentClass;
 
     function CameraToSynchronize(const V: TCastleViewport): TCastleCamera;
     procedure CameraSynchronize(const Source, Target: TCastleCamera; const MakeUndo: Boolean);
@@ -285,6 +302,8 @@ type
       var aShow: Boolean);
     procedure InspectorLayoutFilter(Sender: TObject; AEditor: TPropertyEditor;
       var aShow: Boolean);
+    procedure InspectorAllFilter(Sender: TObject; AEditor: TPropertyEditor;
+      var aShow: Boolean);
     procedure MarkModified;
     function UndoMessageModified(const Sel: TPersistent;
       const ModifiedProperty, ModifiedValue: String; const SelectedCount: Integer): String;
@@ -336,8 +355,12 @@ type
     procedure ChangeMode(const NewMode: TMode);
     procedure ModifiedOutsideObjectInspector(const UndoComment: String;
       const UndoCommentPriority: TUndoCommentPriority; const UndoOnRelease: Boolean = false);
-    procedure InspectorFilter(Sender: TObject;
-      AEditor: TPropertyEditor; var AShow: Boolean; const Section: TPropertySection);
+    { Filter property in object inspector.
+      When FilterBySection = true, then Section matters and only properties in this section
+      are displayed. }
+    procedure InspectorFilter(const Sender: TObject; const AEditor: TPropertyEditor;
+      var AShow: Boolean;
+      const FilterBySection: Boolean; const Section: TPropertySection);
     procedure GizmoHasModifiedParent(Sender: TObject);
     procedure GizmoStopDrag(Sender: TObject);
     { Fix camera position, to look at Pos.XY in case of 2D games.
@@ -433,7 +456,7 @@ uses
   TypInfo, StrUtils, Math, Graphics, Types, Dialogs, LCLType, ObjInspStrConsts,
   { CGE units }
   CastleUtils, CastleComponentSerialize, CastleFileFilters, CastleGLUtils, CastleImages,
-  CastleLog, CastleProjection, CastleShellCtrls, CastleStringUtils, CastleTimeUtils,
+  CastleLog, CastleProjection, CastleStringUtils, CastleTimeUtils,
   CastleURIUtils, X3DLoad, CastleFilesUtils,
   { CGE unit to keep in uses clause even if they are not explicitly used by FrameDesign,
     to register the core CGE components for (de)serialization. }
@@ -1187,6 +1210,7 @@ begin
   Inspector[itLayout].AnchorToNeighbour(akTop, 0, PanelLayoutTop);
 
   Inspector[itAll] := CommonInspectorCreate;
+  Inspector[itAll].OnEditorFilter := @InspectorAllFilter;
   Inspector[itAll].Parent := TabAll;
   Inspector[itAll].Filter := tkProperties;
 
@@ -2472,43 +2496,30 @@ end;
 procedure TDesignFrame.CastleControlDragOver(Sender, Source: TObject; X,
   Y: Integer; State: TDragState; var Accept: Boolean);
 var
-  ShellList: TCastleShellListView;
-  SelectedFileName: String;
-  SelectedURL: String;
+  SourceShellList: TCastleShellListView;
+  UI: TCastleUserInterface;
+  ParentComponent: TComponent;
 begin
   Accept := false;
   if Source is TCastleShellListView then
   begin
-    ShellList := TCastleShellListView(Source);
+    SourceShellList := TCastleShellListView(Source);
+    UI := FDesignerLayer.HoverUserInterface(Vector2(X, CastleControl.Height - Y));
+    if (UI is TCastleViewport) and not (ssShift in GetKeyShiftState) then
+      ParentComponent := TCastleViewport(UI).Items
+    else
+      ParentComponent := UI;
+    if ParentComponent = nil then // may happen because UI was nil
+      Exit;
 
-    { ShellList.Selected may be nil, testcase:
-      - open any project (empty from template is OK)
-      - create new design using menu item
-        (looks like this step is necessary into tricking LCL that we're
-        in the middle of drag-and-drop on GTK?)
-      - double-click on some design file in data/ by double-clicking
-      - mouse over the design -> without this check, would have access violation
-        due to TDesignFrame.CastleControlDragOver being called with
-        ShellList.Selected = nil. }
-
-    if ShellList.Selected <> nil then
-    begin
-      SelectedFileName := ShellList.GetPathFromItem(ShellList.Selected);
-      SelectedURL := FilenameToURISafe(SelectedFileName);
-
-      Accept :=
-        TFileFilterList.Matches(LoadScene_FileFilters, SelectedURL) or
-        TFileFilterList.Matches(LoadSound_FileFilters, SelectedURL);
-    end;
+    Accept := ShellListComponentClass(SourceShellList, ParentComponent) <> nil;
   end;
 end;
 
 procedure TDesignFrame.CastleControlDragDrop(Sender, Source: TObject; X, Y: Integer);
-var
-  Viewport: TCastleViewport;
 
   { Calculate 3D position of a TCastleTransform created by drag-and-drop on a vieport. }
-  function DropPosition(out DropPos: TVector3): Boolean;
+  function DropPosition(const Viewport: TCastleViewport; out DropPos: TVector3): Boolean;
   var
     RayOrigin, RayDirection: TVector3;
     RayHit: TRayCollision;
@@ -2558,80 +2569,208 @@ var
     end;
   end;
 
-  function AddImage(const Url: String): TCastleTransform;
-  var
-    ImageTransform: TCastleImageTransform;
-  begin
-    ImageTransform := AddComponent(Viewport.Items, TCastleImageTransform, nil) as TCastleImageTransform;
-    ImageTransform.Url := Url;
-    Result := ImageTransform;
-  end;
-
-  function AddScene(const Url: String): TCastleTransform;
-  var
-    Scene: TCastleScene;
-  begin
-    Scene := AddComponent(Viewport.Items, TCastleScene, nil) as TCastleScene;
-    Scene.Url := Url;
-    Result := Scene;
-  end;
-
-  function AddSound(const Url: String): TCastleTransform;
-  var
-    Transform: TCastleTransform;
-    SoundSource: TCastleSoundSource;
-    Sound: TCastleSound;
-  begin
-    Transform := AddComponent(Viewport.Items, TCastleTransform, nil) as TCastleTransform;
-    SoundSource := AddComponent(Transform, TCastleSoundSource, nil) as TCastleSoundSource;
-    Sound := AddComponent(SoundSource, TCastleSound, nil) as TCastleSound;
-    Sound.Url := Url;
-    SoundSource.Sound := Sound;
-    Result := Transform;
-  end;
-
 var
-  ShellList: TCastleShellListView;
-  SelectedFileName: String;
-  SelectedUrl: String;
+  SourceShellList: TCastleShellListView;
+  ParentComponent, NewComponent: TComponent;
+  NewComponentClass: TComponentClass;
   UI: TCastleUserInterface;
+  Viewport: TCastleViewport;
+  DropPosition2D: TVector2;
   DropPos: TVector3;
   Transform: TCastleTransform;
 begin
   if Source is TCastleShellListView then
   begin
-    ShellList := TCastleShellListView(Source);
-    if ShellList.Selected <> nil then
-    begin
-      SelectedFileName := ShellList.GetPathFromItem(ShellList.Selected);
-      SelectedUrl := MaybeUseDataProtocol(FilenameToURISafe(SelectedFileName));
+    SourceShellList := TCastleShellListView(Source);
+    DropPosition2D := Vector2(X, CastleControl.Height - Y);
+    UI := FDesignerLayer.HoverUserInterface(DropPosition2D);
+    if (UI is TCastleViewport) and not (ssShift in GetKeyShiftState) then
+      ParentComponent := TCastleViewport(UI).Items
+    else
+      ParentComponent := UI;
+    if ParentComponent = nil then // may happen because UI was nil
+      Exit;
 
-      UI := FDesignerLayer.HoverUserInterface(Vector2(X, Y));
+    NewComponentClass := ShellListComponentClass(SourceShellList, ParentComponent);
+    if NewComponentClass = nil then
+      Exit;
+
+    if NewComponentClass.InheritsFrom(TCastleTransform) then
+    begin
       if not (UI is TCastleViewport) then
+      begin
+        WritelnWarning('Cannot drag-and-drop %s on UI %s', [
+          NewComponentClass.ClassName,
+          UI.ClassName
+        ]);
         Exit;
+      end;
       Viewport := TCastleViewport(UI);
 
-      if not DropPosition(DropPos) then
+      if not DropPosition(Viewport, DropPos) then
+      begin
+        WritelnWarning('Cannot drag-and-drop %s on viewport, cannot determine drop position', [
+          NewComponentClass.ClassName
+        ]);
         Exit;
+      end;
 
-      if LoadImage_FileFilters.Matches(SelectedUrl) then
-        Transform := AddImage(SelectedUrl)
-      else
-      if TFileFilterList.Matches(LoadScene_FileFilters, SelectedUrl) then
-        Transform := AddScene(SelectedUrl)
-      else
-      if TFileFilterList.Matches(LoadSound_FileFilters, SelectedUrl) then
-        Transform := AddSound(SelectedUrl)
-      else
-        Exit; // cannot drop such file type
-
+      { We can assume that ShellListAddComponent creates non-nil,
+        and TCastleTransform, because ShellListComponentClass
+        returned non-nil TCastleTransform descendant. }
+      Transform := ShellListAddComponent(SourceShellList, ParentComponent) as TCastleTransform;
       Transform.Translation := DropPos;
+    end else
+    if NewComponentClass.InheritsFrom(TCastleUserInterface) then
+    begin
+      NewComponent := ShellListAddComponent(SourceShellList, ParentComponent);
+      if (NewComponent is TCastleUserInterface) and
+         (ParentComponent is TCastleUserInterface) then
+      begin
+        TCastleUserInterface(NewComponent).AnchorDelta :=
+          TCastleUserInterface(ParentComponent).ContainerToLocalPosition(DropPosition2D, true);
+      end;
+    end else
+    begin
+      WritelnWarning('Cannot drag-and-drop %s on UI %s', [
+        NewComponentClass.ClassName,
+        UI.ClassName
+      ]);
     end;
   end;
 end;
 
-procedure TDesignFrame.InspectorFilter(Sender: TObject;
-  AEditor: TPropertyEditor; var AShow: Boolean; const Section: TPropertySection);
+const
+  LoadUiDesign_FileFilters = 'CGE User Interace Design (*.castle-user-interface)|*.castle-user-interface';
+  LoadTransformDesign_FileFilters = 'CGE Transform Design (*.castle-transform)|*.castle-transform';
+
+function TDesignFrame.ShellListComponentClass(const SourceShellList: TCastleShellListView;
+  const ParentComponent: TComponent): TComponentClass;
+var
+  SelectedFileName: String;
+  SelectedUrl: String;
+  PreferTransform: Boolean;
+begin
+  Result := nil;
+  PreferTransform := ParentComponent is TCastleTransform;
+
+  { SourceShellList.Selected may be nil, testcase:
+    - open any project (empty from template is OK)
+    - create new design using menu item
+      (looks like this step is necessary into tricking LCL that we're
+      in the middle of drag-and-drop on GTK?)
+    - double-click on some design file in data/ by double-clicking
+    - mouse over the design -> without this check, would have access violation
+      due to TDesignFrame.CastleControlDragOver being called with
+      ShellList.Selected = nil. }
+
+  if SourceShellList.Selected <> nil then
+  begin
+    SelectedFileName := SourceShellList.GetPathFromItem(SourceShellList.Selected);
+    SelectedUrl := MaybeUseDataProtocol(FilenameToURISafe(SelectedFileName));
+
+    if LoadImage_FileFilters.Matches(SelectedUrl) then
+    begin
+      if PreferTransform then
+        Result := TCastleImageTransform
+      else
+        Result := TCastleImageControl;
+    end else
+    if TFileFilterList.Matches(LoadScene_FileFilters, SelectedUrl) then
+      Result := TCastleScene
+    else
+    if TFileFilterList.Matches(LoadSound_FileFilters, SelectedUrl) then
+      Result := TCastleTransform // ShellListAddComponent creates TCastleTransform with TCastleSoundSource behavior
+    else
+    if TFileFilterList.Matches(LoadUiDesign_FileFilters, SelectedUrl) then
+      Result := TCastleDesign
+    else
+    if TFileFilterList.Matches(LoadTransformDesign_FileFilters, SelectedUrl) then
+      Result := TCastleTransformDesign;
+  end;
+end;
+
+function TDesignFrame.ShellListAddComponent(const SourceShellList: TCastleShellListView;
+  const ParentComponent: TComponent): TComponent;
+
+  function AddImageTransform(const Url: String): TCastleImageTransform;
+  begin
+    Result := AddComponent(ParentComponent, TCastleImageTransform, nil) as TCastleImageTransform;
+    Result.Url := Url;
+  end;
+
+  function AddImageControl(const Url: String): TCastleImageControl;
+  begin
+    Result := AddComponent(ParentComponent, TCastleImageControl, nil) as TCastleImageControl;
+    Result.Url := Url;
+  end;
+
+  function AddScene(const Url: String): TCastleScene;
+  begin
+    Result := AddComponent(ParentComponent, TCastleScene, nil) as TCastleScene;
+    Result.Url := Url;
+  end;
+
+  function AddSound(const Url: String): TCastleTransform;
+  var
+    SoundSource: TCastleSoundSource;
+    Sound: TCastleSound;
+  begin
+    Result := AddComponent(ParentComponent, TCastleTransform, nil) as TCastleTransform;
+    SoundSource := AddComponent(Result, TCastleSoundSource, nil) as TCastleSoundSource;
+    Sound := AddComponent(SoundSource, TCastleSound, nil) as TCastleSound;
+    Sound.Url := Url;
+    SoundSource.Sound := Sound;
+  end;
+
+  function AddUiDesign(const Url: String): TCastleDesign;
+  begin
+    Result := AddComponent(ParentComponent, TCastleDesign, nil) as TCastleDesign;
+    Result.Url := Url;
+  end;
+
+  function AddTransformDesign(const Url: String): TCastleTransformDesign;
+  begin
+    Result := AddComponent(ParentComponent, TCastleTransformDesign, nil) as TCastleTransformDesign;
+    Result.Url := Url;
+  end;
+
+var
+  SelectedFileName: String;
+  SelectedUrl: String;
+  PreferTransform: Boolean;
+begin
+  Result := nil;
+  PreferTransform := ParentComponent is TCastleTransform;
+  if SourceShellList.Selected <> nil then
+  begin
+    SelectedFileName := SourceShellList.GetPathFromItem(SourceShellList.Selected);
+    SelectedUrl := MaybeUseDataProtocol(FilenameToURISafe(SelectedFileName));
+
+    if LoadImage_FileFilters.Matches(SelectedUrl) then
+    begin
+      if PreferTransform then
+        Result := AddImageTransform(SelectedUrl)
+      else
+        Result := AddImageControl(SelectedUrl);
+    end else
+    if TFileFilterList.Matches(LoadScene_FileFilters, SelectedUrl) then
+      Result := AddScene(SelectedUrl)
+    else
+    if TFileFilterList.Matches(LoadSound_FileFilters, SelectedUrl) then
+      Result := AddSound(SelectedUrl)
+    else
+    if TFileFilterList.Matches(LoadUiDesign_FileFilters, SelectedUrl) then
+      Result := AddUiDesign(SelectedUrl)
+    else
+    if TFileFilterList.Matches(LoadTransformDesign_FileFilters, SelectedUrl) then
+      Result := AddTransformDesign(SelectedUrl);
+  end;
+end;
+
+procedure TDesignFrame.InspectorFilter(const Sender: TObject;
+  const AEditor: TPropertyEditor; var AShow: Boolean;
+  const FilterBySection: Boolean; const Section: TPropertySection);
 var
   PropertyName: String;
   Instance: TPersistent;
@@ -2661,7 +2800,7 @@ begin
          (TComponent(Instance).Owner <> DesignOwner) then
         Exit;
 
-      if Instance is TCastleComponent then
+      if FilterBySection and (Instance is TCastleComponent) then
       begin
         AShow := Section in TCastleComponent(Instance).PropertySections(PropertyName);
       end else
@@ -2695,13 +2834,19 @@ end;
 procedure TDesignFrame.InspectorBasicFilter(Sender: TObject;
   AEditor: TPropertyEditor; var aShow: Boolean);
 begin
-  InspectorFilter(Sender, AEditor, AShow, psBasic);
+  InspectorFilter(Sender, AEditor, AShow, true, psBasic);
 end;
 
 procedure TDesignFrame.InspectorLayoutFilter(Sender: TObject;
   AEditor: TPropertyEditor; var aShow: Boolean);
 begin
-  InspectorFilter(Sender, AEditor, AShow, psLayout);
+  InspectorFilter(Sender, AEditor, AShow, true, psLayout);
+end;
+
+procedure TDesignFrame.InspectorAllFilter(Sender: TObject;
+  AEditor: TPropertyEditor; var aShow: Boolean);
+begin
+  InspectorFilter(Sender, AEditor, AShow, false, {Section doesn't matter here}psBasic);
 end;
 
 function TDesignFrame.UndoMessageModified(const Sel: TPersistent;
@@ -3677,22 +3822,32 @@ procedure TDesignFrame.ControlsTreeDragOver(Sender, Source: TObject; X,
 var
   Src, Dst: TTreeNode;
 begin
-  // Thanks to answer on https://stackoverflow.com/questions/18856374/delphi-treeview-drag-and-drop-between-nodes
-  Src := ControlsTree.Selected;
-  Dst := ControlsTree.GetNodeAt(X, Y);
-  ControlsTreeNodeUnderMouse := Dst;
+  Accept := false;
+  if Source = ControlsTree then
+  begin
+    // Thanks to answer on https://stackoverflow.com/questions/18856374/delphi-treeview-drag-and-drop-between-nodes
+    Src := ControlsTree.Selected;
+    Dst := ControlsTree.GetNodeAt(X, Y);
+    ControlsTreeNodeUnderMouse := Dst;
 
-  Accept := ControlsTreeAllowDrag(Src, Dst);
-  if not Accept then
-    ControlsTreeNodeUnderMouse := nil;
+    Accept := ControlsTreeAllowDrag(Src, Dst);
+    if not Accept then
+      ControlsTreeNodeUnderMouse := nil;
 
-  { We don't use TCustomTreeView.GetHitTestInfoAt,
-    it never contains flags htAbove, htBelow, htOnRight that interest us.
-    (Simply not implemented, marked by TODO in Lazarus sources.) }
-  //ControlsTreeNodeUnderMouseHit := ControlsTree.GetHitTestInfoAt(X, Y);
-  if ControlsTreeNodeUnderMouse <> nil then
-    ControlsTreeNodeUnderMouseSide := NodeSide(ControlsTreeNodeUnderMouse, X, Y);
-  ControlsTree.Invalidate; // force custom-drawn look redraw
+    { We don't use TCustomTreeView.GetHitTestInfoAt,
+      it never contains flags htAbove, htBelow, htOnRight that interest us.
+      (Simply not implemented, marked by TODO in Lazarus sources.) }
+    //ControlsTreeNodeUnderMouseHit := ControlsTree.GetHitTestInfoAt(X, Y);
+    if ControlsTreeNodeUnderMouse <> nil then
+      ControlsTreeNodeUnderMouseSide := NodeSide(ControlsTreeNodeUnderMouse, X, Y);
+    ControlsTree.Invalidate; // force custom-drawn look redraw
+  end else
+  if Source is TCastleShellListView then
+  begin
+    if SelectedComponent <> nil then
+      Accept := ShellListComponentClass(TCastleShellListView(Source),
+        SelectedComponent) <> nil;
+  end;
 end;
 
 procedure TDesignFrame.ControlsTreeEditing(Sender: TObject; Node: TTreeNode;
@@ -4038,64 +4193,72 @@ var
   end;
 
 begin
-  Src := ControlsTree.Selected;
-  Dst := ControlsTreeNodeUnderMouse;
-  { Paranoidally check ControlsTreeAllowDrag again.
-    It happens that Src is nil, in my tests. }
-  if ControlsTreeAllowDrag(Src, Dst) then
+  if Source = ControlsTree then
   begin
-    SrcComponent := TComponent(Src.Data);
-    DstComponent := TComponent(Dst.Data);
-    if (SrcComponent is TCastleUserInterface) and
-       (DstComponent is TCastleUserInterface) then
+    Src := ControlsTree.Selected;
+    Dst := ControlsTreeNodeUnderMouse;
+    { Paranoidally check ControlsTreeAllowDrag again.
+      It happens that Src is nil, in my tests. }
+    if ControlsTreeAllowDrag(Src, Dst) then
     begin
-      MoveUserInterface(
-        TCastleUserInterface(SrcComponent),
-        TCastleUserInterface(DstComponent));
-      { Fixes selection after drag'n'drop.
-        I think when we use TTreeNode.MoveTo(), TTreeView.Selected property value
-        is changed to nil but in TTreeNode.Selected stays true. That's why we see
-        selection but TTreeView.Selected state is incorect }
-      ControlsTree.Selected := Src;
-    end else
-    if (SrcComponent is TCastleTransform) and
-       (DstComponent is TCastleTransform) then
-    begin
-      MoveTransform(
-        TCastleTransform(SrcComponent),
-        TCastleTransform(DstComponent));
-      { Fixes selection after drag'n'drop.
-        I think when we use TTreeNode.MoveTo(), TTreeView.Selected property value
-        is changed to nil but in TTreeNode.Selected stays true. That's why we see
-        selection but TTreeView.Selected state is incorect }
-      ControlsTree.Selected := Src;
-    end else
-    if (SrcComponent is TCastleBehavior) and
-       (DstComponent is TCastleTransform) then
-    begin
-      MoveBehavior(
-        TCastleBehavior(SrcComponent),
-        TCastleTransform(DstComponent));
-      // as for now we just refresh tree view, so set SelectedComponent and don't do ValidateHierarchy
-      SelectedComponent := SrcComponent;
-      Exit;
-    end else
-    if (not ( (SrcComponent is TCastleBehavior) or
-              (SrcComponent is TCastleTransform) or
-              (SrcComponent is TCastleUserInterface) ) ) and
-       (DstComponent is TCastleComponent) and
-       (Src.Parent <> nil) and
-       (SelectedFromNode(Src.Parent) is TCastleComponent) then
-    begin
-      MoveNonVisual(
-        TCastleComponent(SelectedFromNode(Src.Parent)),
-        SrcComponent,
-        TCastleComponent(DstComponent));
-      // as for now we just refresh tree view, so set SelectedComponent and don't do ValidateHierarchy
-      SelectedComponent := SrcComponent;
-      Exit;
+      SrcComponent := TComponent(Src.Data);
+      DstComponent := TComponent(Dst.Data);
+      if (SrcComponent is TCastleUserInterface) and
+         (DstComponent is TCastleUserInterface) then
+      begin
+        MoveUserInterface(
+          TCastleUserInterface(SrcComponent),
+          TCastleUserInterface(DstComponent));
+        { Fixes selection after drag'n'drop.
+          I think when we use TTreeNode.MoveTo(), TTreeView.Selected property value
+          is changed to nil but in TTreeNode.Selected stays true. That's why we see
+          selection but TTreeView.Selected state is incorect }
+        ControlsTree.Selected := Src;
+      end else
+      if (SrcComponent is TCastleTransform) and
+         (DstComponent is TCastleTransform) then
+      begin
+        MoveTransform(
+          TCastleTransform(SrcComponent),
+          TCastleTransform(DstComponent));
+        { Fixes selection after drag'n'drop.
+          I think when we use TTreeNode.MoveTo(), TTreeView.Selected property value
+          is changed to nil but in TTreeNode.Selected stays true. That's why we see
+          selection but TTreeView.Selected state is incorect }
+        ControlsTree.Selected := Src;
+      end else
+      if (SrcComponent is TCastleBehavior) and
+         (DstComponent is TCastleTransform) then
+      begin
+        MoveBehavior(
+          TCastleBehavior(SrcComponent),
+          TCastleTransform(DstComponent));
+        // as for now we just refresh tree view, so set SelectedComponent and don't do ValidateHierarchy
+        SelectedComponent := SrcComponent;
+        Exit;
+      end else
+      if (not ( (SrcComponent is TCastleBehavior) or
+                (SrcComponent is TCastleTransform) or
+                (SrcComponent is TCastleUserInterface) ) ) and
+         (DstComponent is TCastleComponent) and
+         (Src.Parent <> nil) and
+         (SelectedFromNode(Src.Parent) is TCastleComponent) then
+      begin
+        MoveNonVisual(
+          TCastleComponent(SelectedFromNode(Src.Parent)),
+          SrcComponent,
+          TCastleComponent(DstComponent));
+        // as for now we just refresh tree view, so set SelectedComponent and don't do ValidateHierarchy
+        SelectedComponent := SrcComponent;
+        Exit;
+      end;
+      ValidateHierarchy;
     end;
-    ValidateHierarchy;
+  end else
+  if Source is TCastleShellListView then
+  begin
+    if SelectedComponent <> nil then
+      ShellListAddComponent(TCastleShellListView(Source), SelectedComponent);
   end;
 end;
 

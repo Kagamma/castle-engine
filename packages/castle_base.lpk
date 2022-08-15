@@ -74,7 +74,7 @@ This is the same license as used by Lazarus LCL and FPC RTL.
 See https://castle-engine.io/license.php for details.
 "/>
     <Version Major="6" Minor="5"/>
-    <Files Count="979">
+    <Files Count="983">
       <Item1>
         <Filename Value="../src/audio/castleinternalabstractsoundbackend.pas"/>
         <UnitName Value="CastleInternalAbstractSoundBackend"/>
@@ -504,8 +504,8 @@ See https://castle-engine.io/license.php for details.
         <UnitName Value="CastleCurves"/>
       </Item107>
       <Item108>
-        <Filename Value="../src/castlescript/castlenoise.pas"/>
-        <UnitName Value="CastleNoise"/>
+        <Filename Value="../src/scene/castleinternalnoise.pas"/>
+        <UnitName Value="CastleInternalNoise"/>
       </Item108>
       <Item109>
         <Filename Value="../src/castlescript/castlescript.pas"/>
@@ -1286,11 +1286,11 @@ See https://castle-engine.io/license.php for details.
         <UnitName Value="CastleInternalSphericalHarmonics"/>
       </Item297>
       <Item298>
-        <Filename Value="../src/transform/castlenoise_interpolatednoise2d_linear_cosine.inc"/>
+        <Filename Value="../src/scene/castleinternalnoise_interpolatednoise2d_linear_cosine.inc"/>
         <Type Value="Include"/>
       </Item298>
       <Item299>
-        <Filename Value="../src/transform/castlenoise_interpolatednoise2d_spline.inc"/>
+        <Filename Value="../src/scene/castleinternalnoise_interpolatednoise2d_spline.inc"/>
         <Type Value="Include"/>
       </Item299>
       <Item300>
@@ -4021,6 +4021,22 @@ See https://castle-engine.io/license.php for details.
         <Filename Value="../src/scene/auto_generated_persistent_vectors/tcastlefog_persistent_vectors.inc"/>
         <Type Value="Include"/>
       </Item979>
+      <Item980>
+        <Filename Value="../src/scene/load/x3dloadinternaltiledmap.pas"/>
+        <UnitName Value="X3DLoadInternalTiledMap"/>
+      </Item980>
+      <Item981>
+        <Filename Value="../src/base/castlerenderoptions_globals.inc"/>
+        <Type Value="Include"/>
+      </Item981>
+      <Item982>
+        <Filename Value="../src/scene/glsl/generated-pascal/terrain.fs.inc"/>
+        <Type Value="Include"/>
+      </Item982>
+      <Item983>
+        <Filename Value="../src/scene/glsl/generated-pascal/terrain.vs.inc"/>
+        <Type Value="Include"/>
+      </Item983>
     </Files>
     <RequiredPkgs Count="3">
       <Item1>
