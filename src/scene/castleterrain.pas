@@ -58,10 +58,6 @@
   Smaller TODOs:
 
   @unorderedList(
-    @item(
-      Randomization should be independent from compiler/platform/future.
-      Let's just use CastleRandom?
-      Or just store the final heights... this makes sense, as we also want to later allow editing terrains.)
     @item(TCastleTerrain configurable textures number.)
     @item(TCastleTerrain Use GridCount, GridStep instead of Subdivisions, Size?
       See wyrd-forest arguments.)
@@ -1423,6 +1419,10 @@ constructor TCastleTerrain.Create(AOwner: TComponent);
     { initialize Effect node, for a shader effect }
     Effect := TEffectNode.Create;
     Effect.Language := slGLSL;
+    { If no light sources are present, it is normal that almost all uniforms
+      in this effect do not exist -- because they affect only
+      the TPhysicalMaterialNode.BaseTexture, which is meaningless when no light shines. }
+    Effect.UniformMissing := umIgnore;
     Appearance.SetEffects([Effect]);
 
     for Layer := 1 to LayersCount do
