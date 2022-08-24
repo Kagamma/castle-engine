@@ -9,87 +9,77 @@
 'uniform sampler2D tex_1;' + LineEnding +
 'uniform sampler2D tex_2;' + LineEnding +
 'uniform sampler2D tex_3;' + LineEnding +
+'uniform sampler2D tex_4;' + LineEnding +
 '' + LineEnding +
-'uniform float uv_scale_1;' + LineEnding +
-'uniform float uv_scale_2;' + LineEnding +
-'uniform float uv_scale_3;' + LineEnding +
+'uniform vec3 color_1;' + LineEnding +
+'uniform vec3 color_2;' + LineEnding +
+'uniform vec3 color_3;' + LineEnding +
+'uniform vec3 color_4;' + LineEnding +
 '' + LineEnding +
-'uniform float normal_dark;' + LineEnding +
-'uniform float normal_darkening;' + LineEnding +
-'uniform float texture_mix;' + LineEnding +
+'// These values are packed in vec4, one float per layer' + LineEnding +
+'uniform vec4 uv_scale;' + LineEnding +
+'uniform vec4 metallic;' + LineEnding +
+'uniform vec4 roughness;' + LineEnding +
 '' + LineEnding +
-'uniform float h0; // below is tex_1' + LineEnding +
-'uniform float h1; // below is tex_2 mixed with tex_1' + LineEnding +
-'uniform float h2; // below is tex_2' + LineEnding +
-'uniform float h3; // below is tex_3 mixed with tex_2' + LineEnding +
-'                  // above is tex_3' + LineEnding +
+'uniform float height_1;' + LineEnding +
+'uniform float height_2;' + LineEnding +
+'' + LineEnding +
+'uniform float layers_influence;' + LineEnding +
+'uniform float steep_emphasize;' + LineEnding +
 '' + LineEnding +
 'varying vec3 terrain_position;' + LineEnding +
 'varying vec3 terrain_normal;' + LineEnding +
 '' + LineEnding +
+'// avoid redeclaring when no "separate compilation units" available (OpenGLES)' + LineEnding +
+'#ifndef GL_ES' + LineEnding +
+'vec4 castle_texture_color_to_linear(const in vec4 srgbIn);' + LineEnding +
+'#endif' + LineEnding +
+'' + LineEnding +
 'void PLUG_main_texture_apply(inout vec4 fragment_color, const in vec3 normal)' + LineEnding +
 '{' + LineEnding +
-'  vec4 tex;' + LineEnding +
 '  float h = terrain_position.y;' + LineEnding +
+'' + LineEnding +
 '  /* We flip terrain_position.z, to map texture more naturally, when viewed from above.' + LineEnding +
-'     This consistent with calculating TexCoord for TCastleTerrainData.Height.' + LineEnding +
+'     This is consistent with calculating TexCoord for TCastleTerrainData.Height.' + LineEnding +
 '     We just flip the sign, because the terrain textures always have repeat = true,' + LineEnding +
 '     so there''s no need to shift the texture in any way.' + LineEnding +
 '  */' + LineEnding +
 '  vec2 uv = vec2(terrain_position.x, -terrain_position.z);' + LineEnding +
+'' + LineEnding +
+'  /* What does this mean?' + LineEnding +
+'     normal_slope (normal.y)' + LineEnding +
+'     = 0 means a vertical face' + LineEnding +
+'     = 1 means a horizontal face' + LineEnding +
+'  */' + LineEnding +
 '  float normal_slope = normalize(terrain_normal).y;' + LineEnding +
 '' + LineEnding +
-'  /*' + LineEnding +
-'  if (h <= h0) {' + LineEnding +
-'    tex = texture2D(tex_1, uv);' + LineEnding +
-'  } else' + LineEnding +
-'  if (h <= h1) {' + LineEnding +
-'    float mixfactor = smoothstep(h0, h1, h);' + LineEnding +
-'      //clamp((h - h0) / (h1 - h0), 0.0, 1.0);' + LineEnding +
-'    tex = mix(texture2D(tex_1, uv), texture2D(tex_2, uv), mixfactor);' + LineEnding +
-'  } else' + LineEnding +
-'  if (h <= h2) {' + LineEnding +
-'    tex = texture2D(tex_2, uv);' + LineEnding +
-'  } else' + LineEnding +
-'  if (h <= h3) {' + LineEnding +
-'    float mixfactor = smoothstep(h2, h3, h);' + LineEnding +
-'      //clamp((h - h2) / (h3 - h2), 0.0, 1.0);' + LineEnding +
-'    tex = mix(texture2D(tex_2, uv), texture2D(tex_3, uv), mixfactor);' + LineEnding +
-'  } else' + LineEnding +
-'  {' + LineEnding +
-'    tex = texture2D(tex_3, uv);' + LineEnding +
-'  }' + LineEnding +
-'  */' + LineEnding +
+'  vec3 c1 = color_1 * castle_texture_color_to_linear(texture2D(tex_1, uv * uv_scale.x)).rgb;' + LineEnding +
+'  vec3 c2 = color_2 * castle_texture_color_to_linear(texture2D(tex_2, uv * uv_scale.y)).rgb;' + LineEnding +
+'  vec3 c3 = color_3 * castle_texture_color_to_linear(texture2D(tex_3, uv * uv_scale.z)).rgb;' + LineEnding +
+'  vec3 c4 = color_4 * castle_texture_color_to_linear(texture2D(tex_4, uv * uv_scale.w)).rgb;' + LineEnding +
 '' + LineEnding +
-'  /* This achieves the same effect as above (because smoothstep' + LineEnding +
-'     does clamp() inside), but better:' + LineEnding +
-'     - one 1 "if", instead of 4 "if"s' + LineEnding +
-'     - no weird artifacts when h is precisely at h0, h1, h2 or h3.' + LineEnding +
+'  float height_mix = smoothstep(height_1, height_2, h);' + LineEnding +
+'  vec3 flat_color = mix(c1, c3, height_mix);' + LineEnding +
+'  vec3 steep_color = mix(c2, c4, height_mix);' + LineEnding +
+'  vec3 modified_color = mix(steep_color, flat_color, pow(normal_slope, steep_emphasize));' + LineEnding +
 '' + LineEnding +
-'       (previous code was sometimes showing a weird color at these borders,' + LineEnding +
-'       possibly GPU was forcing all neighboring pixels to have the same' + LineEnding +
-'       "if" outcome -- observed with' + LineEnding +
-'         Renderer: GeForce GTS 450/PCIe/SSE2' + LineEnding +
-'         Version: 4.5.0 NVIDIA 375.82' + LineEnding +
-'         on Linux/x86_64.' + LineEnding +
-'       ).' + LineEnding +
-'  */' + LineEnding +
+'  fragment_color.rgb = mix(fragment_color.rgb, modified_color, layers_influence);' + LineEnding +
+'}' + LineEnding +
 '' + LineEnding +
-'  float hhalf = (h1 + h2) * 0.5;' + LineEnding +
-'  if (h < hhalf) {' + LineEnding +
-'    float mixfactor = smoothstep(h0, h1, h);' + LineEnding +
-'    tex = mix(' + LineEnding +
-'      texture2D(tex_1, uv * uv_scale_1),' + LineEnding +
-'      texture2D(tex_2, uv * uv_scale_2), mixfactor);' + LineEnding +
-'  } else {' + LineEnding +
-'    float mixfactor = smoothstep(h2, h3, h);' + LineEnding +
-'    tex = mix(' + LineEnding +
-'      texture2D(tex_2, uv * uv_scale_2),' + LineEnding +
-'      texture2D(tex_3, uv * uv_scale_3), mixfactor);' + LineEnding +
-'  }' + LineEnding +
+'void PLUG_material_metallic_roughness(inout float metallic_final, inout float roughness_final)' + LineEnding +
+'{' + LineEnding +
+'  float h = terrain_position.y;' + LineEnding +
+'  float normal_slope = normalize(terrain_normal).y;' + LineEnding +
+'  float height_mix = smoothstep(height_1, height_2, h);' + LineEnding +
 '' + LineEnding +
-'  fragment_color.rgb = mix(fragment_color.rgb, tex.rgb, texture_mix);' + LineEnding +
+'  float flat_metallic = mix(metallic.x, metallic.z, height_mix);' + LineEnding +
+'  float steep_metallic = mix(metallic.y, metallic.w, height_mix);' + LineEnding +
+'  float modified_metallic = mix(steep_metallic, flat_metallic, pow(normal_slope, steep_emphasize));' + LineEnding +
+'  metallic_final = mix(metallic_final, modified_metallic, layers_influence);' + LineEnding +
 '' + LineEnding +
-'  fragment_color.rgb *= mix(normal_darkening, 1.0, smoothstep(normal_dark, 1.0, normal_slope));' + LineEnding +
+'  float flat_roughness = mix(roughness.x, roughness.z, height_mix);' + LineEnding +
+'  float steep_roughness = mix(roughness.y, roughness.w, height_mix);' + LineEnding +
+'  float modified_roughness = mix(steep_roughness, flat_roughness, pow(normal_slope, steep_emphasize));' + LineEnding +
+'  roughness_final = mix(roughness_final, modified_roughness, layers_influence);' + LineEnding +
 '}' + LineEnding +
 ''
