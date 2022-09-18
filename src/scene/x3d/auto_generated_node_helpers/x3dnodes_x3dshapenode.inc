@@ -32,10 +32,6 @@
     procedure SetBBox(const Value: TBox3D);
     function GetShading: TShading;
     procedure SetShading(const Value: TShading);
-{$ifndef CASTLE_SLIM_NODES}
-    function GetOctreeTriangles: TKambiOctreePropertiesNode;
-    procedure SetOctreeTriangles(const Value: TKambiOctreePropertiesNode);
-{$endif not CASTLE_SLIM_NODES}
     function GetRender: Boolean;
     procedure SetRender(const Value: Boolean);
     function GetCollision: TShapeCollision;
@@ -45,51 +41,49 @@
     class function ClassX3DType: string; override;
 
     strict private FFdAppearance: TSFNode;
-    {  }
+    { Internal wrapper for property @link(Appearance). This wrapper API may change, we advise to access simpler @link(Appearance) instead. }
     public property FdAppearance: TSFNode read FFdAppearance;
     {  }
     property Appearance: TAppearanceNode read GetAppearance write SetAppearance;
 
     strict private FFdGeometry: TSFNode;
-    {  }
+    { Internal wrapper for property @link(Geometry). This wrapper API may change, we advise to access simpler @link(Geometry) instead. }
     public property FdGeometry: TSFNode read FFdGeometry;
     {  }
     property Geometry: TAbstractGeometryNode read GetGeometry write SetGeometry;
 
     strict private FFdBboxCenter: TSFVec3f;
-    {  }
+    { Internal wrapper for property @link(BboxCenter). This wrapper API may change, we advise to access simpler @link(BboxCenter) instead. }
     public property FdBboxCenter: TSFVec3f read FFdBboxCenter;
-    { Bounding box, as TBox3D. }
+    { You can provide a manually-calculated bounding box of the shape here, for optimization purposes. Leave this field as empty (TBox3D.Empty) to let the engine calculate best bounding box automatically.
+
+Manually providing the bounding box makes sense if you can do it more efficiently than the engine. E.g. if the shape vertexes are animated, then the engine would have to recalcualate the perfect bounding box every frame. It is more efficient to calculate a bounding box of all possible animation frames, and store it here.
+
+The glTF skinned animation automatically fills this field for the affected shapes.
+
+@italic(Note: This property is not useful if you want to know the bounding box of a shape, calculated by the engine). This property only allows to override the automatic engine calculation.
+
+To read the calculated bounding box, load the nodes to TCastleScene. You can then use @link(TCastleTransform.BoundingBox Scene.BoundingBox), @link(TCastleTransform.LocalBoundingBox Scene.LocalBoundingBox), @link(TCastleTransform.WorldBoundingBox Scene.WorldBoundingBox) to know bounding box of the scene. To get bounding box of a particular shape, enumerate @link(TCastleSceneCore.Shapes) to find the correct shape (using any criteria you want -- note that the same TShapeNode may be reused multiple times), and then read @link(TShape.BoundingBox), @link(TShape.LocalBoundingBox). }
     property BBox: TBox3D read GetBBox write SetBBox;
 
     strict private FFdBboxSize: TSFVec3f;
-    {  }
+    { Internal wrapper for property @link(BboxSize). This wrapper API may change, we advise to access simpler @link(BboxSize) instead. }
     public property FdBboxSize: TSFVec3f read FFdBboxSize;
 
     strict private FFdShading: TSFStringEnum;
-    {  }
+    { Internal wrapper for property @link(Shading). This wrapper API may change, we advise to access simpler @link(Shading) instead. }
     public property FdShading: TSFStringEnum read FFdShading;
     {  }
     property Shading: TShading read GetShading write SetShading;
 
-{$ifndef CASTLE_SLIM_NODES}
-    strict private FFdOctreeTriangles: TSFNode;
-    {  }
-    public property FdOctreeTriangles: TSFNode read FFdOctreeTriangles;
-{$endif not CASTLE_SLIM_NODES}
-{$ifndef CASTLE_SLIM_NODES}
-    {  }
-    property OctreeTriangles: TKambiOctreePropertiesNode read GetOctreeTriangles write SetOctreeTriangles;
-{$endif not CASTLE_SLIM_NODES}
-
     strict private FFdRender: TSFBool;
-    { Should we render this shape. Toggling this is guaranteed to be ultra-fast. See https://castle-engine.io/x3d_implementation_shape_extensions.php }
+    { Internal wrapper for property @link(Render). This wrapper API may change, we advise to access simpler @link(Render) instead. }
     public property FdRender: TSFBool read FFdRender;
-    { Should we render this shape. Toggling this is guaranteed to be ultra-fast. See https://castle-engine.io/x3d_implementation_shape_extensions.php }
+    { Is the shape visible. Toggling this is guaranteed to be ultra-fast. See https://castle-engine.io/x3d_implementation_shape_extensions.php }
     property Render: Boolean read GetRender write SetRender;
 
     strict private FFdCollision: TSFStringEnum;
-    {  }
+    { Internal wrapper for property @link(Collision). This wrapper API may change, we advise to access simpler @link(Collision) instead. }
     public property FdCollision: TSFStringEnum read FFdCollision;
     {  }
     property Collision: TShapeCollision read GetCollision write SetCollision;
@@ -151,21 +145,6 @@ begin
   FdShading.SendEnumValue(Ord(Value));
 end;
 
-{$ifndef CASTLE_SLIM_NODES}
-function TAbstractShapeNode.GetOctreeTriangles: TKambiOctreePropertiesNode;
-begin
-  if FdOctreeTriangles.Value is TKambiOctreePropertiesNode then
-    Result := TKambiOctreePropertiesNode(FdOctreeTriangles.Value)
-  else
-    Result := nil;
-end;
-
-procedure TAbstractShapeNode.SetOctreeTriangles(const Value: TKambiOctreePropertiesNode);
-begin
-  FdOctreeTriangles.Send(Value);
-end;
-
-{$endif not CASTLE_SLIM_NODES}
 function TAbstractShapeNode.GetRender: Boolean;
 begin
   Result := FdRender.Value;
@@ -214,12 +193,6 @@ begin
   FFdShading := TSFStringEnum.Create(Self, True, 'shading', @ShadingNames, Ord(High(ShadingNames)) + 1, Ord(shDefault));
    FdShading.ChangeAlways := chVisibleNonGeometry;
   AddField(FFdShading);
-
-{$ifndef CASTLE_SLIM_NODES}
-  FFdOctreeTriangles := TSFNode.Create(Self, False, 'octreeTriangles', [TKambiOctreePropertiesNode]);
-   FdOctreeTriangles.ChangeAlways := chVisibleNonGeometry;
-  AddField(FFdOctreeTriangles);
-{$endif not CASTLE_SLIM_NODES}
 
   FFdRender := TSFBool.Create(Self, True, 'render', true);
    FdRender.ChangeAlways := chVisibleNonGeometry;

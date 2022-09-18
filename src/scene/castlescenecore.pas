@@ -416,7 +416,7 @@ type
     During the lifetime of the scene, this X3D graph can change
     (e.g. because of animations), and you can always change it by code
     too. E.g. you can freely change @link(TTransformNode.Translation)
-    or add children by @link(TAbstractX3DGroupingNode.AddChildren RootNode.AddChildren).
+    or add children by @link(TAbstractGroupingNode.AddChildren RootNode.AddChildren).
     The X3D nodes graph works like a DOM tree for rendering HTML documents:
     it's typically initialized from a file (3D model), but during
     the game execution it is dynamic, always changing.
@@ -788,10 +788,6 @@ type
       const CameraVectors: TCameraVectors);
   private
     FCompiledScriptHandlers: TCompiledScriptHandlerInfoList;
-
-    function OverrideOctreeLimits(
-      const BaseLimits: TOctreeLimits;
-      const OP: TSceneOctreeProperties): TOctreeLimits;
 
     { Create octree containing all triangles or shapes from our scene.
       Create octree, inits it with our LocalBoundingBox
@@ -3702,7 +3698,7 @@ function TChangedAllTraverser.Traverse(
       So we cheat a little, knowing that internally every node implementing TTransformFunctionality
       does StateStack.Push inside BeforeTraverse exactly once and then
       modifies transformation.
-      (This happens for both TAbstractGroupingNode and THAnimHumanoidNode.
+      (This happens for both TAbstractInternalGroupingNode and THAnimHumanoidNode.
       Right now, node with TTransformFunctionality is always one of those.)
       So we know that previous state lies safely at PreviousTop.
 
@@ -5715,22 +5711,6 @@ end;
 
 { octrees -------------------------------------------------------------------- }
 
-function TCastleSceneCore.OverrideOctreeLimits(
-  const BaseLimits: TOctreeLimits;
-  const OP: TSceneOctreeProperties): TOctreeLimits;
-var
-  Props: TKambiOctreePropertiesNode;
-begin
-  Result := BaseLimits;
-  if (NavigationInfoStack.Top <> nil) and
-     (NavigationInfoStack.Top is TKambiNavigationInfoNode) then
-  begin
-    Props := TKambiNavigationInfoNode(NavigationInfoStack.Top).OctreeProperties(OP);
-    if Props <> nil then
-      Props.OverrideLimits(Result);
-  end;
-end;
-
 function TCastleSceneCore.TriangleOctreeLimits: POctreeLimits;
 begin
   Result := @FTriangleOctreeLimits;
@@ -5844,7 +5824,7 @@ begin
   if (ssRendering in Spatial) and (FOctreeRendering = nil) then
   begin
     FOctreeRendering := CreateShapeOctree(
-      OverrideOctreeLimits(FShapeOctreeLimits, opRendering),
+      FShapeOctreeLimits,
       ShapeOctreeProgressTitle,
       false);
     if LogChanges then
@@ -5859,7 +5839,7 @@ begin
   if (ssDynamicCollisions in Spatial) and (FOctreeDynamicCollisions = nil) then
   begin
     FOctreeDynamicCollisions := CreateShapeOctree(
-      OverrideOctreeLimits(FShapeOctreeLimits, opDynamicCollisions),
+      FShapeOctreeLimits,
       ShapeOctreeProgressTitle,
       true);
     if LogChanges then
@@ -5873,7 +5853,7 @@ function TCastleSceneCore.InternalOctreeVisibleTriangles: TTriangleOctree;
 begin
   if (ssVisibleTriangles in Spatial) and (FOctreeVisibleTriangles = nil) then
     FOctreeVisibleTriangles := CreateTriangleOctree(
-      OverrideOctreeLimits(FTriangleOctreeLimits, opVisibleTriangles),
+      FTriangleOctreeLimits,
       TriangleOctreeProgressTitle,
       false);
   Result := FOctreeVisibleTriangles;
@@ -5883,7 +5863,7 @@ function TCastleSceneCore.InternalOctreeStaticCollisions: TTriangleOctree;
 begin
   if (ssStaticCollisions in Spatial) and (FOctreeStaticCollisions = nil) then
     FOctreeStaticCollisions := CreateTriangleOctree(
-      OverrideOctreeLimits(FTriangleOctreeLimits, opStaticCollisions),
+      FTriangleOctreeLimits,
       TriangleOctreeProgressTitle,
       true);
   Result := FOctreeStaticCollisions;
@@ -7049,8 +7029,7 @@ end;
 procedure TCastleSceneCore.ResetTimeAtLoad;
 begin
   if (NavigationInfoStack.Top <> nil) and
-     (NavigationInfoStack.Top is TKambiNavigationInfoNode) and
-     TKambiNavigationInfoNode(NavigationInfoStack.Top).TimeOriginAtLoad then
+     NavigationInfoStack.Top.TimeOriginAtLoad then
     FTimeAtLoad := 0.0
   else
     FTimeAtLoad := DateTimeToUnix(CastleNow);
@@ -7536,11 +7515,10 @@ var
       Navigation.ClimbHeight := 0;
 
     { calculate Navigation.HeadBobbing* }
-    if (NavigationNode <> nil) and
-       (NavigationNode is TKambiNavigationInfoNode) then
+    if NavigationNode <> nil then
     begin
-      Navigation.HeadBobbing := TKambiNavigationInfoNode(NavigationNode).FdHeadBobbing.Value;
-      Navigation.HeadBobbingTime := TKambiNavigationInfoNode(NavigationNode).FdHeadBobbingTime.Value;
+      Navigation.HeadBobbing := NavigationNode.HeadBobbing;
+      Navigation.HeadBobbingTime := NavigationNode.HeadBobbingTime;
     end else
     begin
       Navigation.HeadBobbing := TCastleWalkNavigation.DefaultHeadBobbing;
@@ -7876,23 +7854,18 @@ begin
 end;
 
 function TCastleSceneCore.CustomHeadlight: TAbstractLightNode;
-var
-  MaybeResult: TX3DNode;
 begin
-  Result := nil;
-  if (NavigationInfoStack.Top <> nil) and
-     (NavigationInfoStack.Top is TKambiNavigationInfoNode) then
-  begin
-    MaybeResult := TKambiNavigationInfoNode(NavigationInfoStack.Top).FdheadlightNode.Value;
-    if MaybeResult is TAbstractLightNode then
-      Result := TAbstractLightNode(MaybeResult);
-  end;
+  if NavigationInfoStack.Top <> nil then
+    Result := NavigationInfoStack.Top.HeadlightNode
+  else
+    Result := nil;
 end;
 
 procedure TCastleSceneCore.UpdateHeadlightOnFromNavigationInfo;
 begin
   if NavigationInfoStack.Top <> nil then
-    HeadlightOn := NavigationInfoStack.Top.FdHeadlight.Value else
+    HeadlightOn := NavigationInfoStack.Top.Headlight
+  else
     HeadlightOn := DefaultNavigationInfoHeadlight;
 end;
 

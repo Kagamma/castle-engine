@@ -35,13 +35,13 @@
     class function ClassX3DType: string; override;
 
     strict private FFdFontStyle: TSFNode;
-    {  }
+    { Internal wrapper for property @link(FontStyle). This wrapper API may change, we advise to access simpler @link(FontStyle) instead. }
     public property FdFontStyle: TSFNode read FFdFontStyle;
     {  }
     property FontStyle: TAbstractFontStyleNode read GetFontStyle write SetFontStyle;
 
     strict private FFdLength: TMFFloat;
-    {  }
+    { Internal wrapper for property @link(Length). This wrapper API may change, we advise to access simpler @link(Length) instead. }
     public property FdLength: TMFFloat read FFdLength;
     {  }
     procedure SetLength(const Value: array of Single); overload;
@@ -49,24 +49,24 @@
     procedure SetLength(const Value: TSingleList); overload;
 
     strict private FFdMaxExtent: TSFFloat;
-    {  }
+    { Internal wrapper for property @link(MaxExtent). This wrapper API may change, we advise to access simpler @link(MaxExtent) instead. }
     public property FdMaxExtent: TSFFloat read FFdMaxExtent;
     {  }
     property MaxExtent: Single read GetMaxExtent write SetMaxExtent;
 
     strict private FFdMaxDisplayChars: TSFInt32;
-    {  }
+    { Internal wrapper for property @link(MaxDisplayChars). This wrapper API may change, we advise to access simpler @link(MaxDisplayChars) instead. }
     public property FdMaxDisplayChars: TSFInt32 read FFdMaxDisplayChars;
     {  }
     property MaxDisplayChars: Integer read GetMaxDisplayChars write SetMaxDisplayChars;
 
     strict private FFdString: TMFString;
-    {  }
+    { Internal wrapper for property @link(Text). This wrapper API may change, we advise to access simpler @link(Text) instead. }
     public property FdString: TMFString read FFdString;
     {  }
-    procedure SetString(const Value: array of string); overload;
+    procedure SetText(const Value: array of string); overload;
     {  }
-    procedure SetString(const Value: TCastleStringList); overload;
+    procedure SetText(const Value: TCastleStringList); overload;
 
     strict private FEventLineBounds: TMFVec2fEvent;
     {  }
@@ -81,11 +81,11 @@
     public property EventTextBounds: TSFVec2fEvent read FEventTextBounds;
 
     strict private FFdSolid: TSFBool;
-    {  }
+    { Internal wrapper for property @link(Solid). This wrapper API may change, we advise to access simpler @link(Solid) instead. }
     public property FdSolid: TSFBool read FFdSolid;
 
     strict private FFdTexCoord: TSFNode;
-    {  }
+    { Internal wrapper for property @link(TexCoord). This wrapper API may change, we advise to access simpler @link(TexCoord) instead. }
     public property FdTexCoord: TSFNode read FFdTexCoord;
 
 {$endif read_interface}
@@ -137,12 +137,12 @@ begin
   FdMaxDisplayChars.Send(Value);
 end;
 
-procedure TTextNode.SetString(const Value: array of string);
+procedure TTextNode.SetText(const Value: array of string);
 begin
   FdString.Send(Value);
 end;
 
-procedure TTextNode.SetString(const Value: TCastleStringList);
+procedure TTextNode.SetText(const Value: TCastleStringList);
 begin
   FdString.Send(Value);
 end;
