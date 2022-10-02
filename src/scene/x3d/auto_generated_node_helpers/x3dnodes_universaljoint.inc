@@ -43,43 +43,43 @@
     class function ClassX3DType: string; override;
 
     strict private FFdAnchorPoint: TSFVec3f;
-    {  }
+    { Internal wrapper for property @link(AnchorPoint). This wrapper API may change, we advise to access simpler @link(AnchorPoint) instead. }
     public property FdAnchorPoint: TSFVec3f read FFdAnchorPoint;
     {  }
     property AnchorPoint: TVector3 read GetAnchorPoint write SetAnchorPoint;
 
     strict private FFdAxis1: TSFVec3f;
-    {  }
+    { Internal wrapper for property @link(Axis1). This wrapper API may change, we advise to access simpler @link(Axis1) instead. }
     public property FdAxis1: TSFVec3f read FFdAxis1;
     {  }
     property Axis1: TVector3 read GetAxis1 write SetAxis1;
 
     strict private FFdAxis2: TSFVec3f;
-    {  }
+    { Internal wrapper for property @link(Axis2). This wrapper API may change, we advise to access simpler @link(Axis2) instead. }
     public property FdAxis2: TSFVec3f read FFdAxis2;
     {  }
     property Axis2: TVector3 read GetAxis2 write SetAxis2;
 
     strict private FFdStopBounce1: TSFFloat;
-    {  }
+    { Internal wrapper for property @link(StopBounce1). This wrapper API may change, we advise to access simpler @link(StopBounce1) instead. }
     public property FdStopBounce1: TSFFloat read FFdStopBounce1;
     {  }
     property StopBounce1: Single read GetStopBounce1 write SetStopBounce1;
 
     strict private FFdStop1ErrorCorrection: TSFFloat;
-    {  }
+    { Internal wrapper for property @link(Stop1ErrorCorrection). This wrapper API may change, we advise to access simpler @link(Stop1ErrorCorrection) instead. }
     public property FdStop1ErrorCorrection: TSFFloat read FFdStop1ErrorCorrection;
     {  }
     property Stop1ErrorCorrection: Single read GetStop1ErrorCorrection write SetStop1ErrorCorrection;
 
     strict private FFdStop2Bounce: TSFFloat;
-    {  }
+    { Internal wrapper for property @link(Stop2Bounce). This wrapper API may change, we advise to access simpler @link(Stop2Bounce) instead. }
     public property FdStop2Bounce: TSFFloat read FFdStop2Bounce;
     {  }
     property Stop2Bounce: Single read GetStop2Bounce write SetStop2Bounce;
 
     strict private FFdStop2ErrorCorrection: TSFFloat;
-    {  }
+    { Internal wrapper for property @link(Stop2ErrorCorrection). This wrapper API may change, we advise to access simpler @link(Stop2ErrorCorrection) instead. }
     public property FdStop2ErrorCorrection: TSFFloat read FFdStop2ErrorCorrection;
     {  }
     property Stop2ErrorCorrection: Single read GetStop2ErrorCorrection write SetStop2ErrorCorrection;
@@ -199,18 +199,22 @@ begin
 
   FFdStopBounce1 := TSFFloat.Create(Self, True, 'stopBounce1', 0);
    FdStopBounce1.ChangeAlways := chVisibleNonGeometry;
+   FdStopBounce1.MustBeNonnegative := true;
   AddField(FFdStopBounce1);
 
   FFdStop1ErrorCorrection := TSFFloat.Create(Self, True, 'stop1ErrorCorrection', 0.8);
    FdStop1ErrorCorrection.ChangeAlways := chVisibleNonGeometry;
+   FdStop1ErrorCorrection.MustBeNonnegative := true;
   AddField(FFdStop1ErrorCorrection);
 
   FFdStop2Bounce := TSFFloat.Create(Self, True, 'stop2Bounce', 0);
    FdStop2Bounce.ChangeAlways := chVisibleNonGeometry;
+   FdStop2Bounce.MustBeNonnegative := true;
   AddField(FFdStop2Bounce);
 
   FFdStop2ErrorCorrection := TSFFloat.Create(Self, True, 'stop2ErrorCorrection', 0.8);
    FdStop2ErrorCorrection.ChangeAlways := chVisibleNonGeometry;
+   FdStop2ErrorCorrection.MustBeNonnegative := true;
   AddField(FFdStop2ErrorCorrection);
 
   FEventBody1AnchorPoint := TSFVec3fEvent.Create(Self, 'body1AnchorPoint', false);

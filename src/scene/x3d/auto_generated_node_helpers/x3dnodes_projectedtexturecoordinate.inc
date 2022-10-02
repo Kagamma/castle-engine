@@ -23,11 +23,32 @@
 
 {$ifdef read_interface}
 
+  public
+    procedure CreateNode; override;
+    class function ClassX3DType: string; override;
+
+    strict private FFdProjector: TSFNode;
+    { Internal wrapper for property @link(Projector). This wrapper API may change, we advise to access simpler @link(Projector) instead. }
+    public property FdProjector: TSFNode read FFdProjector;
 
 {$endif read_interface}
 
 {$ifdef read_implementation}
 
 { TProjectedTextureCoordinateNode ----------------------------------------------- }
+
+class function TProjectedTextureCoordinateNode.ClassX3DType: String;
+begin
+  Result := 'ProjectedTextureCoordinate';
+end;
+
+procedure TProjectedTextureCoordinateNode.CreateNode;
+begin
+  inherited;
+
+  FFdProjector := TSFNode.Create(Self, True, 'projector', [TSpotLightNode, TDirectionalLightNode, TAbstractViewpointNode, TSpotLightNode_1, TDirectionalLightNode_1]);
+   FdProjector.ChangeAlways := chTextureCoordinate;
+  AddField(FFdProjector);
+end;
 
 {$endif read_implementation}

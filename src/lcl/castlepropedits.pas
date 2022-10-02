@@ -49,7 +49,8 @@ uses // FPC and LCL units
   CastleVectors, CastleUtils, CastleColors, CastleViewport, CastleDialogs,
   CastleTiledMap, CastleGLImages, CastleStringUtils, CastleFilesUtils,
   CastleInternalExposeTransformsDialog, CastleSoundEngine, CastleFonts,
-  CastleScriptParser, CastleInternalLclDesign, CastleTerrain;
+  CastleScriptParser, CastleInternalLclDesign, CastleTerrain, CastleLog,
+  CastleEditorAccess;
 
 {$define read_implementation}
 {$I castlepropedits_url.inc}
@@ -63,6 +64,12 @@ uses // FPC and LCL units
 {$I castlepropedits_image.inc}
 {$I castlepropedits_number.inc}
 {$I castlepropedits_exposetransforms.inc}
+{$I castlepropedits_component_transform.inc}
+{$I castlepropedits_component_scene.inc}
+{$I castlepropedits_component_imagetransform.inc}
+{$I castlepropedits_component_imagecontrol.inc}
+{$I castlepropedits_component_transformdesign.inc}
+{$I castlepropedits_component_design.inc}
 
 procedure Register;
 begin
@@ -152,6 +159,13 @@ begin
     TSceneAutoAnimationPropertyEditor);
   RegisterPropertyEditor(TypeInfo(TStrings), TCastleSceneCore, 'ExposeTransforms',
     TExposeTransformsPropertyEditor);
+
+  RegisterComponentEditor(TCastleTransform, TCastleTransformComponentEditor);
+  RegisterComponentEditor(TCastleScene, TCastleSceneComponentEditor);
+  RegisterComponentEditor(TCastleImageTransform, TCastleImageTransformComponentEditor);
+  RegisterComponentEditor(TCastleImageControl, TCastleImageControlComponentEditor);
+  RegisterComponentEditor(TCastleTransformDesign, TCastleTransformDesignComponentEditor);
+  RegisterComponentEditor(TCastleDesign, TCastleDesignComponentEditor);
 end;
 
 initialization

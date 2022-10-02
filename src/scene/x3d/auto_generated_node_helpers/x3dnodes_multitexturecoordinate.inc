@@ -24,6 +24,12 @@
 {$ifdef read_interface}
 
   public
+    procedure CreateNode; override;
+    class function ClassX3DType: string; override;
+
+    strict private FFdTexCoord: TMFNode;
+    { Internal wrapper for property @link(TexCoord). This wrapper API may change, we advise to access simpler @link(TexCoord) instead. }
+    public property FdTexCoord: TMFNode read FFdTexCoord;
     {  }
     procedure SetTexCoord(const Value: array of TAbstractSingleTextureCoordinateNode);
 
@@ -43,6 +49,20 @@ begin
   if L > 0 then
     Move(Value[0], A[0], L * SizeOf(TAbstractSingleTextureCoordinateNode));
   FdTexCoord.Send(A);
+end;
+
+class function TMultiTextureCoordinateNode.ClassX3DType: String;
+begin
+  Result := 'MultiTextureCoordinate';
+end;
+
+procedure TMultiTextureCoordinateNode.CreateNode;
+begin
+  inherited;
+
+  FFdTexCoord := TMFNode.Create(Self, True, 'texCoord', [TAbstractSingleTextureCoordinateNode]);
+   FdTexCoord.ChangeAlways := chTextureCoordinate;
+  AddField(FFdTexCoord);
 end;
 
 {$endif read_implementation}

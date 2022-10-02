@@ -22,7 +22,7 @@ type
 
   { What to do when shader uniform variable is set
     but doesn't exist in the shader.
-    See @link(TEffectPartNode.UniformMissing). }
+    See @link(TGLSLProgram.UniformMissing). }
   TUniformMissing = (
     { Report that uniform variable not found to WritelnWarning. }
     umWarning,
@@ -408,6 +408,58 @@ const
     'Parallax',
     'Steep Parallax',
     'Steep Parallax With Self-Shadowing'
+  );
+
+  { Names for TBlendingSourceFactor used by TBlendModeNode when it is read/written in X3D file.
+    Deliberately compatible with (a subset of) X3DOM BlendMode specification on
+    https://doc.x3dom.org/author/Shape/BlendMode.html . }
+  BlendingSourceFactorNames: array [TBlendingSourceFactor] of string =
+  (
+    'SRC_ALPHA',
+    'ONE_MINUS_SRC_ALPHA',
+    'ZERO',
+    'ONE',
+
+    'DST_COLOR',
+    'SRC_COLOR',
+    'DST_ALPHA',
+
+    'ONE_MINUS_DST_COLOR',
+    'ONE_MINUS_SRC_COLOR',
+    'ONE_MINUS_DST_ALPHA',
+
+    'SRC_ALPHA_SATURATE',
+
+    'CONSTANT_COLOR',
+    'ONE_MINUS_CONSTANT_COLOR',
+    'CONSTANT_ALPHA',
+    'ONE_MINUS_CONSTANT_ALPHA'
+  );
+
+  { Names for TBlendingDestinationFactor used by TBlendModeNode when it is read/written in X3D file.
+    Deliberately compatible with (a subset of) X3DOM BlendMode specification on
+    https://doc.x3dom.org/author/Shape/BlendMode.html . }
+  BlendingDestinationFactorNames: array [TBlendingDestinationFactor] of string =
+  (
+    'SRC_ALPHA',
+    'ONE_MINUS_SRC_ALPHA',
+    'ZERO',
+    'ONE',
+
+    'DST_COLOR',
+    'SRC_COLOR',
+    'DST_ALPHA',
+
+    'ONE_MINUS_DST_COLOR',
+    'ONE_MINUS_SRC_COLOR',
+    'ONE_MINUS_DST_ALPHA',
+
+    // 'SRC_ALPHA_SATURATE', // NOT SUPPORTED AS DESTINATION FACTOR
+
+    'CONSTANT_COLOR',
+    'ONE_MINUS_CONSTANT_COLOR',
+    'CONSTANT_ALPHA',
+    'ONE_MINUS_CONSTANT_ALPHA'
   );
 
   DefaultColorSpace = csLinearWhenPhysicalMaterial;
