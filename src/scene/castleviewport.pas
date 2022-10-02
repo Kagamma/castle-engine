@@ -248,11 +248,11 @@ type
     procedure RecalculateCursor(Sender: TObject);
 
     { Bounding box of everything non-design.
-      Similar to just usign Items.BoundingBox, but
+      Similar to just using Items.BoundingBox, but
 
       1. handles Items=nil case OK
 
-      2. ignores bbox at design-time of gizmos (lights and cameras).
+      2. ignores bbox at design-time of gizmos (lights, cameras, visualize transform).
       This is important to avoid AutoCamera at design-time to calculate something unexpected
       (move camera far away), because it would adjust to the camera and lights gizmo bbox
       (see TTestCastleViewport.TestAutoCameraIgnoresGizmos). }
@@ -2120,8 +2120,12 @@ end;
 function TCastleViewport.ItemsWithGizmosBoundingBox: TBox3D;
 begin
   if Items <> nil then
-    Result := Items.BoundingBox
-  else
+  begin
+    Inc(InternalGizmoBoundingBox);
+    try
+      Result := Items.BoundingBox;
+    finally Dec(InternalGizmoBoundingBox) end;
+  end else
     Result := TBox3D.Empty;
 end;
 
@@ -3322,7 +3326,12 @@ begin
   begin
     {$warnings off} // TODO: using deprecated Navigation for now
     if (Navigation is TCastleMouseLookNavigation) and
-       TCastleMouseLookNavigation(Navigation).MouseLook then
+       { Note: We need to check InternalUsingMouseLook, not just MouseLook,
+         to prevent from honoring MouseLook on user-designed TCastleWalkNavigation component
+         at design-time. At design-time, only MouseLook on TCastleWalkNavigationDesign
+         should have any effect.
+         See https://forum.castle-engine.io/t/gizmos-for-transforming-objects-stopped-working/643/5 . }
+       TCastleMouseLookNavigation(Navigation).InternalUsingMouseLook then
     {$warnings on}
       MousePosition := RenderRect.Center
     else

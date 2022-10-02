@@ -1,6 +1,7 @@
 ../../../src/base/ TCastleRenderOptions WireframeColor TCastleColorRGB
 
 ../../../src/ui/ TCastleUserInterface BorderColor TCastleColor
+../../../src/ui/ TCastleUserInterface Translation TVector2
 
 ../../../src/ui/ TCastleRectangleControl Color TCastleColor
 ../../../src/ui/ TStateDialog BackgroundColor TCastleColor
@@ -50,6 +51,8 @@
 ../../../src/ui/ TCastleCheckbox CheckboxColor TCastleColor
 
 ../../../src/ui/ TCastleTiledMapControl Origin TVector2
+
+../../../src/ui/ TCastleCrosshair Color TCastleColor
 
 ../../../src/transform/ TCastleTransform Center TVector3
 ../../../src/transform/ TCastleTransform Rotation TVector4
