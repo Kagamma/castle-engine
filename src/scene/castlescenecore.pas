@@ -892,6 +892,8 @@ type
     function ShapeOctreeLimits: POctreeLimits;
 
     procedure SetSpatial(const Value: TSceneSpatialStructures);
+    function GetPreciseCollisions: Boolean;
+    procedure SetPreciseCollisions(const Value: Boolean);
   private
     FMainLightForShadowsExists: boolean;
     FMainLightForShadows: TVector4;
@@ -1836,7 +1838,7 @@ type
 
       @exclude
       Should only be used internally by TCastleViewport. }
-    function InternalMainLightForShadows(out AMainLightPosition: TVector4): boolean;
+    function InternalMainLightForShadowVolumes(out AMainLightPosition: TVector4): boolean;
 
     { Light node that should be used for headlight, or @nil if default
       directional headlight is suitable.
@@ -2051,31 +2053,42 @@ type
       deprecated 'use ForceAnimationPose overload with "Loop: boolean" parameter';
 
     { Play an animation specified by name.
-      If the given animation name exists,
-      then we return @true and stop previously playing named animation (if any).
-      Otherwise we return @false and the current animation is unchanged.
+
+      You can specify the animation name, whether it should loop,
+      and whether to play it forward or backward using parameters to this method.
+
+      Or you can specify even more parameters using TPlayAnimationParameters instance.
+      TPlayAnimationParameters can additionally specify a stop notification,
+      initial time and more.
+      It is OK to create a short-lived TPlayAnimationParameters instance and destroy
+      it right after calling this method.
+      This method doesn't store the TPlayAnimationParameters instance reference.
 
       To get the list of available animations, see @link(AnimationsList).
+
+      This is one of the simplest way to play animations using Castle Game Engine.
+      Alternative (that calls PlayAnimation under the hood) is to set AutoAnimation
+      and AutoAnimationLoop.
+      See https://castle-engine.io/viewport_3d#_play_animation .
+
+      Playing an already-playing animation is guaranteed to restart it from
+      the beginning (more precisely: from TPlayAnimationParameters.InitialTime,
+      if you pass TPlayAnimationParameters).
+
+      If the given animation name exists,
+      then we stop previously playing animation (if any),
+      calling it's stop notification (see TPlayAnimationParameters.StopNotification),
+      start playing the new animation, and return @true.
+      If the animation name does not exist then we return @false,
+      make a warning and the current animation is unchanged.
+
+      The change from previous to new animation can be smooth (using animation
+      cross-fading) if you use TPlayAnimationParameters with @link(TPlayAnimationParameters.TransitionDuration)
+      or if you set DefaultAnimationTransition to something non-zero.
 
       This automatically turns on @link(ProcessEvents),
       if it wasn't turned on already.
       Processing events is necessary for playing animations.
-
-      This is the simplest way to play animations using Castle Game Engine.
-      For a nice overview about using PlayAnimation, see the manual
-      https://castle-engine.io/manual_scene.php , section "Play animation".
-
-      Playing an already-playing animation is guaranteed to restart it from
-      the beginning.
-
-      You can specify whether the animation should loop,
-      whether to play it forward or backward,
-      whether to do animation blending and some other options
-      using @link(TPlayAnimationParameters).
-      If you use an overloaded version with the TPlayAnimationParameters,
-      note that you can (and usually should) free the TPlayAnimationParameters
-      instance right after calling this method. We do not keep reference to
-      the TPlayAnimationParameters instance, and we do not free it ourselves.
 
       More details about how this works:
 
@@ -2279,7 +2292,8 @@ type
       1.0 means that 1 second  of real time equals to 1 unit of world time. }
     property TimePlayingSpeed: Single read FTimePlayingSpeed write FTimePlayingSpeed {$ifdef FPC}default 1.0{$endif};
 
-    { Which spatial structures (octrees) should be created and used.
+    { In most cases you should get / set simpler @link(PreciseCollisions) property, not this.
+      Which spatial structures (octrees) should be created and used.
 
       Using "spatial structures" allows to achieve various things:
 
@@ -2378,7 +2392,19 @@ type
         @item(Allow developer to adjust TriangleOctreeLimits
           before creating the octree.)
       ) }
-    property Spatial: TSceneSpatialStructures read FSpatial write SetSpatial default [];
+    property Spatial: TSceneSpatialStructures read FSpatial write SetSpatial
+      stored false default [];
+      {$ifdef FPC}deprecated 'use PreciseCollisions';{$endif}
+
+    { Resolve collisions precisely with the scene triangles.
+      When this is @false we will only consider the bounding box of scene for collisions.
+
+      Internal notes:
+      When @true, this sets @link(TCastleSceneCore.Spatial) to [ssRendering, ssDynamicCollisions].
+      This is a good setting for scenes that may be dynamic.
+      When @false, this sets @link(TCastleSceneCore.Spatial) to [].
+      When reading, any @link(TCastleSceneCore.Spatial) <> [] means "precise collisions". }
+    property PreciseCollisions: Boolean read GetPreciseCollisions write SetPreciseCollisions default false;
 
     { Should the event mechanism (a basic of animations and interactions) work.
 
@@ -3462,12 +3488,7 @@ begin
       if PlayAnimation(AutoAnimation, AutoAnimationLoop) then
         { call ForceInitialAnimationPose, to avoid blinking with "setup pose"
           right after loading the UI design from file. }
-        ForceInitialAnimationPose
-      else
-        WritelnWarning('Animation "%s" not found on "%s"', [
-          AutoAnimation,
-          URIDisplay(URL)
-        ]);
+        ForceInitialAnimationPose;
     end else
     if StopIfPlaying then
     begin
@@ -3859,7 +3880,7 @@ begin
       shape must have octree created. Normally, this is watched over by
       SetSpatial. In this case, we just created new Shape, so we have
       to set it's Spatial property correctly. }
-    if (ssDynamicCollisions in ParentScene.Spatial) and
+    if (ssDynamicCollisions in ParentScene.FSpatial) and
        Shape.Collidable then
     begin
       Shape.InternalTriangleOctreeProgressTitle := ParentScene.TriangleOctreeProgressTitle;
@@ -5767,11 +5788,19 @@ procedure TCastleSceneCore.SetSpatial(const Value: TSceneSpatialStructures);
 var
   Old, New: boolean;
 begin
-  if Value <> Spatial then
+  if Value <> FSpatial then
   begin
+    if ( (Value <> []) and
+         (Value <> [ssRendering, ssDynamicCollisions]) and
+         (Value <> [ssDynamicCollisions])
+       ) then
+      WritelnWarning('%s: Spatial values different than [], [ssRendering,ssDynamicCollisions], [ssDynamicCollisions] may not be allowed in future engine versions. We advise to use TCastleScene.PreciseCollisions instead of TCastleScene.Spatial.', [
+        Name
+      ]);
+
     { Handle OctreeRendering }
 
-    Old := ssRendering in Spatial;
+    Old := ssRendering in FSpatial;
     New := ssRendering in Value;
 
     if Old and not New then
@@ -5779,7 +5808,7 @@ begin
 
     { Handle OctreeDynamicCollisions and Shapes[I].Spatial }
 
-    Old := ssDynamicCollisions in Spatial;
+    Old := ssDynamicCollisions in FSpatial;
     New := ssDynamicCollisions in Value;
 
     if Old and not New then
@@ -5798,7 +5827,7 @@ begin
 
     { Handle OctreeVisibleTriangles }
 
-    Old := ssVisibleTriangles in Spatial;
+    Old := ssVisibleTriangles in FSpatial;
     New := ssVisibleTriangles in Value;
 
     if Old and not New then
@@ -5806,7 +5835,7 @@ begin
 
     { Handle OctreeStaticCollisions }
 
-    Old := ssStaticCollisions in Spatial;
+    Old := ssStaticCollisions in FSpatial;
     New := ssStaticCollisions in Value;
 
     if Old and not New then
@@ -5819,9 +5848,26 @@ begin
   end;
 end;
 
+function TCastleSceneCore.GetPreciseCollisions: Boolean;
+begin
+  {$warnings off} // this uses deprecated Spatial, which should be Internal at some point
+  Result := Spatial <> [];
+  {$warnings on}
+end;
+
+procedure TCastleSceneCore.SetPreciseCollisions(const Value: Boolean);
+begin
+  {$warnings off} // this uses deprecated Spatial, which should be Internal at some point
+  if Value then
+    Spatial := [ssRendering, ssDynamicCollisions]
+  else
+    Spatial := [];
+  {$warnings on}
+end;
+
 function TCastleSceneCore.InternalOctreeRendering: TShapeOctree;
 begin
-  if (ssRendering in Spatial) and (FOctreeRendering = nil) then
+  if (ssRendering in FSpatial) and (FOctreeRendering = nil) then
   begin
     FOctreeRendering := CreateShapeOctree(
       FShapeOctreeLimits,
@@ -5836,7 +5882,7 @@ end;
 
 function TCastleSceneCore.InternalOctreeDynamicCollisions: TShapeOctree;
 begin
-  if (ssDynamicCollisions in Spatial) and (FOctreeDynamicCollisions = nil) then
+  if (ssDynamicCollisions in FSpatial) and (FOctreeDynamicCollisions = nil) then
   begin
     FOctreeDynamicCollisions := CreateShapeOctree(
       FShapeOctreeLimits,
@@ -5851,7 +5897,7 @@ end;
 
 function TCastleSceneCore.InternalOctreeVisibleTriangles: TTriangleOctree;
 begin
-  if (ssVisibleTriangles in Spatial) and (FOctreeVisibleTriangles = nil) then
+  if (ssVisibleTriangles in FSpatial) and (FOctreeVisibleTriangles = nil) then
     FOctreeVisibleTriangles := CreateTriangleOctree(
       FTriangleOctreeLimits,
       TriangleOctreeProgressTitle,
@@ -5861,7 +5907,7 @@ end;
 
 function TCastleSceneCore.InternalOctreeStaticCollisions: TTriangleOctree;
 begin
-  if (ssStaticCollisions in Spatial) and (FOctreeStaticCollisions = nil) then
+  if (ssStaticCollisions in FSpatial) and (FOctreeStaticCollisions = nil) then
     FOctreeStaticCollisions := CreateTriangleOctree(
       FTriangleOctreeLimits,
       TriangleOctreeProgressTitle,
@@ -5880,7 +5926,7 @@ end;
 
 function TCastleSceneCore.UseInternalOctreeCollisions: boolean;
 begin
-  Result := Spatial * [ssStaticCollisions, ssDynamicCollisions] <> [];
+  Result := FSpatial * [ssStaticCollisions, ssDynamicCollisions] <> [];
   Assert((not Result) or (InternalOctreeCollisions <> nil));
 
   { We check whether to use InternalOctreeCollisions
@@ -7833,7 +7879,7 @@ begin
   end;
 end;
 
-function TCastleSceneCore.InternalMainLightForShadows(
+function TCastleSceneCore.InternalMainLightForShadowVolumes(
   out AMainLightPosition: TVector4): boolean;
 begin
   ValidateMainLightForShadows;
@@ -8417,6 +8463,13 @@ begin
     NewPlayingAnimationTransitionDuration := Parameters.TransitionDuration;
     NewPlayingAnimationInitialTime := Parameters.InitialTime;
     NewPlayingAnimationUse := true;
+  end else
+  begin
+    WritelnWarning('Animation "%s" not found on scene %s (loaded from %s)', [
+      Parameters.Name,
+      Name,
+      URIDisplay(URL)
+    ]);
   end;
 end;
 
@@ -8567,7 +8620,7 @@ begin
      (PropertyName = 'AutoAnimation') or
      (PropertyName = 'AutoAnimationLoop') or
      (PropertyName = 'DefaultAnimationTransition') or
-     (PropertyName = 'Spatial') or
+     (PropertyName = 'PreciseCollisions') or
      (PropertyName = 'ExposeTransforms') or
      (PropertyName = 'TimePlaying') or
      (PropertyName = 'TimePlayingSpeed') then
