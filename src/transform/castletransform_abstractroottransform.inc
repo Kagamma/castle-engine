@@ -79,6 +79,7 @@
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure Update(const SecondsPassed: Single; var RemoveMe: TRemoveType); override;
+    function PropertySections(const PropertyName: String): TPropertySections; override;
 
     { @exclude
       TCastleTransform instances that listen on press/release.
@@ -250,16 +251,7 @@
       where player and creatures go.
       Player is honoring this if it uses @link(WorldMoveAllowed),
       in particular our @link(TCastleWalkNavigation) navigation honors it.
-      Creatures honor it if they use @link(WorldMoveAllowed)
-      for their decision,
-      in particular all creatures in @link(CastleCreatures) use it.
-
-      Note that the @link(TLevel.Load) always
-      assigns this property to be non-empty.
-      It either determines it by CasMoveLimit placeholder
-      in the level 3D model, or by calculating
-      to include level bounding box + some space for flying.
-    }
+      Creatures honor it if they use @link(WorldMoveAllowed) for their decision. }
     property MoveLimit: TBox3D read FMoveLimit write FMoveLimit;
 
     { Central camera, that controls the features that require
@@ -576,6 +568,15 @@ begin
   for I := Count - 1 downto 0 do
     if not (Items[I] is TCastleCamera) then
       Delete(I);
+end;
+
+function TCastleAbstractRootTransform.PropertySections(const PropertyName: String): TPropertySections;
+begin
+  if (PropertyName = 'TimeScale') or
+     (PropertyName = 'Paused') then
+      Result := [psBasic]
+    else
+      Result := inherited PropertySections(PropertyName);
 end;
 
 {$endif read_implementation}

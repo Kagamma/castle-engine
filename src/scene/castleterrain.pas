@@ -50,7 +50,7 @@
 
       Adding trees, boulders and other large things (their density should
       also be dynamic for fast rendering, but at close distance they are just
-      3D models).
+      3D models).)
 
     @item(
       Add non-trivial rendering algorithm.
@@ -493,7 +493,7 @@ type
 
   published
     { Scale the @link(Texture).
-      Setting UV scale to be equal to 1/@link(TCastleTerrainData.Size)
+      Setting UV scale to be equal to 1/@link(TCastleTerrain.Size)
       reliably makes the texture image size match the whole terrain. }
     property UvScale: Single read GetUvScale write SetUvScale {$ifdef FPC}default DefaultUvScale{$endif};
 
@@ -1746,7 +1746,7 @@ begin
   Scene := TCastleScene.Create(Self);
   //Scene.ProcessEvents := true; // not necessary right now for anything
   Scene.SetTransient;
-  Scene.Spatial := [ssDynamicCollisions]; // following FPreciseCollisions = true
+  Scene.PreciseCollisions := true;
   Add(Scene);
 
   Appearance := TAppearanceNode.Create;
@@ -1978,12 +1978,7 @@ begin
   if FPreciseCollisions <> Value then
   begin
     FPreciseCollisions := Value;
-    if Value then
-      Scene.Spatial := [ssDynamicCollisions]
-    else
-      Scene.Spatial := [];
-    { Note that we don't add ssRendering,
-      would be largely useless as primitives are usually just 1 shape in an internal scene. }
+    Scene.PreciseCollisions := Value;
   end;
 end;
 

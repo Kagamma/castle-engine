@@ -35,16 +35,48 @@
     procedure SetBboxDisplay(const Value: Boolean);
 {$endif not CASTLE_SLIM_NODES}
   public
+    procedure CreateNode; override;
+    class function ClassX3DType: string; override;
+
+    strict private FEventAddChildren: TMFNodeEvent;
     {  }
-    procedure SetChildren(const Value: array of TAbstractChildNode);
-    { Bounding box, as TBox3D. }
+    public property EventAddChildren: TMFNodeEvent read FEventAddChildren;
+
+    strict private FEventRemoveChildren: TMFNodeEvent;
+    {  }
+    public property EventRemoveChildren: TMFNodeEvent read FEventRemoveChildren;
+
+    strict private FFdChildren: TMFNode;
+    { Internal wrapper for property @link(Children). This wrapper API may change, we advise to access simpler @link(Children) instead. }
+    public property FdChildren: TMFNode read FFdChildren;
+
+    strict private FFdBboxCenter: TSFVec3f;
+    { Internal wrapper for property @link(BboxCenter). This wrapper API may change, we advise to access simpler @link(BboxCenter) instead. }
+    public property FdBboxCenter: TSFVec3f read FFdBboxCenter;
+    { You can provide a manually-calculated bounding box of the group here, for optimization purposes. @italic(Ignored for now.) Leave this field as empty (TBox3D.Empty) to let the engine calculate best bounding box automatically. @seealso TAbstractShapeNode.BBox }
     property BBox: TBox3D read GetBBox write SetBBox;
+
+    strict private FFdBboxSize: TSFVec3f;
+    { Internal wrapper for property @link(BboxSize). This wrapper API may change, we advise to access simpler @link(BboxSize) instead. }
+    public property FdBboxSize: TSFVec3f read FFdBboxSize;
+
 {$ifndef CASTLE_SLIM_NODES}
-    {  }
-    property Visible: Boolean read GetVisible write SetVisible;
+    strict private FFdVisible: TSFBool;
+    { Internal wrapper for property @link(Visible). This wrapper API may change, we advise to access simpler @link(Visible) instead. }
+    public property FdVisible: TSFBool read FFdVisible;
 {$endif not CASTLE_SLIM_NODES}
 {$ifndef CASTLE_SLIM_NODES}
-    {  }
+    { Is this group visible (@italic(not implemented yet)). While this is not implemented for an entire group, note that you can use @link(TAbstractShapeNode.Render) to toggle visibility of each shape. }
+    property Visible: Boolean read GetVisible write SetVisible;
+{$endif not CASTLE_SLIM_NODES}
+
+{$ifndef CASTLE_SLIM_NODES}
+    strict private FFdBboxDisplay: TSFBool;
+    { Internal wrapper for property @link(BboxDisplay). This wrapper API may change, we advise to access simpler @link(BboxDisplay) instead. }
+    public property FdBboxDisplay: TSFBool read FFdBboxDisplay;
+{$endif not CASTLE_SLIM_NODES}
+{$ifndef CASTLE_SLIM_NODES}
+    { Is the bounding box of this group visible (@italic(not implemented yet)). While this is not implemented for an X3D group, note that you can use @link(TDebugTransformBox) to easily display bounding box of a whole @link(TCastleTransform). }
     property BboxDisplay: Boolean read GetBboxDisplay write SetBboxDisplay;
 {$endif not CASTLE_SLIM_NODES}
 
@@ -52,26 +84,14 @@
 
 {$ifdef read_implementation}
 
-{ TAbstractX3DGroupingNode ----------------------------------------------- }
+{ TAbstractGroupingNode ----------------------------------------------- }
 
-procedure TAbstractX3DGroupingNode.SetChildren(const Value: array of TAbstractChildNode);
-var
-  L: Integer;
-  A: array of TX3DNode;
-begin
-  L := High(Value) + 1;
-  SetLength(A, L);
-  if L > 0 then
-    Move(Value[0], A[0], L * SizeOf(TAbstractChildNode));
-  FdChildren.Send(A);
-end;
-
-function TAbstractX3DGroupingNode.GetBBox: TBox3D;
+function TAbstractGroupingNode.GetBBox: TBox3D;
 begin
   Result := TBox3D.FromCenterSize(FdBBoxCenter.Value, FdBBoxSize.Value);
 end;
 
-procedure TAbstractX3DGroupingNode.SetBBox(const Value: TBox3D);
+procedure TAbstractGroupingNode.SetBBox(const Value: TBox3D);
 var
   ValueCenter, ValueSize: TVector3;
 begin
@@ -81,27 +101,67 @@ begin
 end;
 
 {$ifndef CASTLE_SLIM_NODES}
-function TAbstractX3DGroupingNode.GetVisible: Boolean;
+function TAbstractGroupingNode.GetVisible: Boolean;
 begin
   Result := FdVisible.Value;
 end;
 
-procedure TAbstractX3DGroupingNode.SetVisible(const Value: Boolean);
+procedure TAbstractGroupingNode.SetVisible(const Value: Boolean);
 begin
   FdVisible.Send(Value);
 end;
 
 {$endif not CASTLE_SLIM_NODES}
 {$ifndef CASTLE_SLIM_NODES}
-function TAbstractX3DGroupingNode.GetBboxDisplay: Boolean;
+function TAbstractGroupingNode.GetBboxDisplay: Boolean;
 begin
   Result := FdBboxDisplay.Value;
 end;
 
-procedure TAbstractX3DGroupingNode.SetBboxDisplay(const Value: Boolean);
+procedure TAbstractGroupingNode.SetBboxDisplay(const Value: Boolean);
 begin
   FdBboxDisplay.Send(Value);
 end;
 
 {$endif not CASTLE_SLIM_NODES}
+class function TAbstractGroupingNode.ClassX3DType: String;
+begin
+  Result := 'X3DGroupingNode';
+end;
+
+procedure TAbstractGroupingNode.CreateNode;
+begin
+  inherited;
+
+  FEventAddChildren := TMFNodeEvent.Create(Self, 'addChildren', true);
+  AddEvent(FEventAddChildren);
+
+  FEventRemoveChildren := TMFNodeEvent.Create(Self, 'removeChildren', true);
+  AddEvent(FEventRemoveChildren);
+
+  FFdChildren := TMFNode.Create(Self, True, 'children', [TAbstractChildNode, TAbstractGeometryNode_1]);
+   FdChildren.ChangeAlways := chGroupChildren;
+  AddField(FFdChildren);
+
+  FFdBboxCenter := TSFVec3f.Create(Self, False, 'bboxCenter', Vector3(0, 0, 0));
+   FdBboxCenter.ChangeAlways := chVisibleNonGeometry;
+  AddField(FFdBboxCenter);
+
+  FFdBboxSize := TSFVec3f.Create(Self, False, 'bboxSize', Vector3(-1, -1, -1));
+   FdBboxSize.ChangeAlways := chVisibleNonGeometry;
+  AddField(FFdBboxSize);
+
+{$ifndef CASTLE_SLIM_NODES}
+  FFdVisible := TSFBool.Create(Self, True, 'visible', true);
+   FdVisible.ChangeAlways := chVisibleNonGeometry;
+  AddField(FFdVisible);
+{$endif not CASTLE_SLIM_NODES}
+
+{$ifndef CASTLE_SLIM_NODES}
+  FFdBboxDisplay := TSFBool.Create(Self, True, 'bboxDisplay', false);
+   FdBboxDisplay.ChangeAlways := chVisibleNonGeometry;
+  AddField(FFdBboxDisplay);
+{$endif not CASTLE_SLIM_NODES}
+end;
+
 {$endif read_implementation}

@@ -192,7 +192,11 @@ type
 
     function GetNavigation: TCastleNavigation;
     procedure SetNavigation(const Value: TCastleNavigation);
+
+    { Cast a ray that can collide with whole world (except AvoidNavigationCollisions).
+      Given parameters are in world coordinates. }
     function CameraRayCollision(const RayOrigin, RayDirection: TVector3): TRayCollision;
+
     procedure SetSceneManager(const Value: TCastleSceneManager);
     { Get current Container.MousePosition.
       Secured in case Container not assigned (returns @false)
@@ -248,11 +252,11 @@ type
     procedure RecalculateCursor(Sender: TObject);
 
     { Bounding box of everything non-design.
-      Similar to just usign Items.BoundingBox, but
+      Similar to just using Items.BoundingBox, but
 
       1. handles Items=nil case OK
 
-      2. ignores bbox at design-time of gizmos (lights and cameras).
+      2. ignores bbox at design-time of gizmos (lights, cameras, visualize transform).
       This is important to avoid AutoCamera at design-time to calculate something unexpected
       (move camera far away), because it would adjust to the camera and lights gizmo bbox
       (see TTestCastleViewport.TestAutoCameraIgnoresGizmos). }
@@ -281,10 +285,10 @@ type
       so you can do shadow volumes culling. }
     procedure RenderShadowVolume(const Params: TRenderParams);
 
-    { Detect position/direction of the main light that produces shadows.
-      Looks at MainScene.InternalMainLightForShadows.
+    { Detect position/direction of the main light that produces shadow volumes.
+      Looks at MainScene.InternalMainLightForShadowVolumes.
       Returns light position (or direction, if W = 0) in world space. }
-    function MainLightForShadows(out AMainLightPosition: TVector4): boolean;
+    function MainLightForShadowVolumes(out AMainLightPosition: TVector4): boolean;
 
     { Pass pointing device (mouse or touch) press event
       to TCastleTransform instances in @link(Items).
@@ -842,16 +846,20 @@ type
     property MouseRayHit: TRayCollision read FMouseRayHit;
 
     { Current object (TCastleTransform instance) under the mouse cursor.
+
+      This corresponds to the first @italic(not hidden) instance on the MouseRayHit list.
+      This makes the behavior most intuitive: it returns the TCastleTransform
+      instance you have explicitly created, like TCastleScene, TCastlePlane or TCastleImageTransform.
+      It will not return hidden (with csTransient flag) scenes that are internal
+      e.g. inside TCastlePlane or TCastleImageTransform.
+
       Updated in every mouse move. May be @nil. }
     function TransformUnderMouse: TCastleTransform;
 
     { Do not collide with this object when moving by @link(Navigation).
       It makes sense to put here player avatar (in 3rd person view)
       or player collision volume (in 1st person view)
-      to allow player to move, not colliding with its own body.
-
-      In case of using @link(TLevel), this is automatically
-      set when you set @link(TLevel.Player). }
+      to allow player to move, not colliding with its own body. }
     property AvoidNavigationCollisions: TCastleTransform
       read FAvoidNavigationCollisions
       write SetAvoidNavigationCollisions;
@@ -904,12 +912,16 @@ type
       stored false;
       {$ifdef FPC}deprecated 'no need to set this, instead add TCastleNavigation like "MyViewport.InsertBack(MyNavigation)"';{$endif}
 
-    { Check collisions with @link(Items) for TCastleNavigation. @exclude }
+    { Check collisions (for move) with whole world (except AvoidNavigationCollisions).
+      Given parameters are in world coordinates.
+      @exclude }
     function InternalNavigationMoveAllowed(const Sender: TCastleNavigation;
       const OldPos, ProposedNewPos: TVector3; out NewPos: TVector3;
       const Radius: Single; const BecauseOfGravity: Boolean): Boolean;
 
-    { Check collisions with @link(Items) for TCastleNavigation. @exclude }
+    { Check collisions (to query height) with whole world (except AvoidNavigationCollisions).
+      Given parameters are in world coordinates.
+      @exclude }
     function InternalNavigationHeight(const Sender: TCastleNavigation;
       const Position: TVector3;
       out AboveHeight: Single; out AboveGround: PTriangle): Boolean;
@@ -1924,12 +1936,19 @@ begin
 end;
 
 function TCastleViewport.TransformUnderMouse: TCastleTransform;
+var
+  I: Integer;
 begin
-  if (MouseRayHit <> nil) and
-     (MouseRayHit.Count <> 0) then
-    Result := MouseRayHit.First.Item
-  else
-    Result := nil;
+  if MouseRayHit <> nil then
+    for I := 0 to MouseRayHit.Count - 1 do
+    begin
+      Result := MouseRayHit[I].Item;
+      if not (csTransient in Result.ComponentStyle) then
+        Exit;
+    end;
+
+  // Return nil if all items on MouseRayHit list are csTransient, or MouseRayHit = nil
+  Result := nil;
 end;
 
 procedure TCastleViewport.RecalculateCursor(Sender: TObject);
@@ -2123,8 +2142,12 @@ end;
 function TCastleViewport.ItemsWithGizmosBoundingBox: TBox3D;
 begin
   if Items <> nil then
-    Result := Items.BoundingBox
-  else
+  begin
+    Inc(InternalGizmoBoundingBox);
+    try
+      Result := Items.BoundingBox;
+    finally Dec(InternalGizmoBoundingBox) end;
+  end else
     Result := TBox3D.Empty;
 end;
 
@@ -2224,34 +2247,61 @@ begin
     InternalCamera = InternalDesignCamera);
 end;
 
-function TCastleViewport.MainLightForShadows(out AMainLightPosition: TVector4): boolean;
-var
-  AMainLightPosition3D: PVector3;
-begin
-  {$warnings off} // using deprecated MainScene to keep it working
-  if Items.MainScene <> nil then
+function TCastleViewport.MainLightForShadowVolumes(out AMainLightPosition: TVector4): boolean;
+
+  { Check does scene define light for shadow volumes,
+    if yes - calculate the position/direction of it in world space to AMainLightPosition
+    and return @true.
+
+    May modify AMainLightPosition even when returns @false, the value AMainLightPosition
+    is undefined after returning @false. }
+  function LightForShadowVolumesFromScene(const Scene: TCastleScene;
+    out AMainLightPosition: TVector4): Boolean;
+  var
+    AMainLightPosition3D: PVector3;
   begin
     Result :=
-      Items.MainScene.InternalMainLightForShadows(AMainLightPosition) and
+      Scene.InternalMainLightForShadowVolumes(AMainLightPosition) and
       { We need WorldTransform for below conversion local<->world space.
         It may not be available, if
-        - MainScene is present multiple times in Items
-        - MainScene is not present in Items at all, temporarily, but is still a MainScene.
-        Testcase: castle-game, change from level to level using debug menu.
+        - Scene is present multiple times in Items
+        - Scene is not present in Items at all, temporarily, but is still a MainScene.
+          Testcase: castle-game, change from level to level using debug menu.
       }
-      Items.MainScene.HasWorldTransform;
-    { Transform AMainLightPosition to world space.
-      This matters in case MainScene (that contains shadow-casting light) has some transformation. }
+      Scene.HasWorldTransform;
+    { Transform AMainLightPosition to world space. }
     if Result then
     begin
       AMainLightPosition3D := PVector3(@AMainLightPosition);
       if AMainLightPosition.W = 0 then
-        AMainLightPosition3D^ := Items.MainScene.LocalToWorldDirection(AMainLightPosition3D^)
+        AMainLightPosition3D^ := Scene.LocalToWorldDirection(AMainLightPosition3D^)
       else
-        AMainLightPosition3D^ := Items.MainScene.LocalToWorld(AMainLightPosition3D^);
+        AMainLightPosition3D^ := Scene.LocalToWorld(AMainLightPosition3D^);
     end;
-  end else
-    Result := false;
+  end;
+
+var
+  SceneCastingLights: TCastleScene;
+begin
+  Result := false;
+
+  {$warnings off} // using deprecated MainScene to keep it working
+  if Items.MainScene <> nil then
+  begin
+    Result := LightForShadowVolumesFromScene(Items.MainScene, AMainLightPosition);
+    if Result then
+      Exit;
+  end;
+
+  { scan InternalScenesCastGlobalLights }
+  if Items.InternalScenesCastGlobalLights <> nil then
+    for SceneCastingLights in Items.InternalScenesCastGlobalLights do
+      if Items.MainScene <> SceneCastingLights then // MainScene is already accounted for above
+      begin
+        Result := LightForShadowVolumesFromScene(SceneCastingLights, AMainLightPosition);
+        if Result then
+          Exit;
+      end;
   {$warnings on}
 end;
 
@@ -2391,7 +2441,7 @@ end;
 
 procedure TCastleViewport.RenderFromView3D(const Params: TRenderParams);
 
-  procedure RenderNoShadows;
+  procedure RenderNoShadowVolumes;
   begin
     { We must first render all non-transparent objects,
       then all transparent objects. Otherwise transparent objects
@@ -2405,7 +2455,7 @@ procedure TCastleViewport.RenderFromView3D(const Params: TRenderParams);
     Params.Transparent := true ; Params.ShadowVolumesReceivers := [false, true]; RenderOnePass(Params);
   end;
 
-  procedure RenderWithShadows(const MainLightPosition: TVector4);
+  procedure RenderWithShadowVolumes(const MainLightPosition: TVector4);
   begin
     if (FProjection.ProjectionFar <> ZFarInfinity) and (not FWarningZFarInfinityDone) then
     begin
@@ -2423,10 +2473,10 @@ var
 begin
   if GLFeatures.ShadowVolumesPossible and
      ShadowVolumes and
-     MainLightForShadows(MainLightPosition) then
-    RenderWithShadows(MainLightPosition)
+     MainLightForShadowVolumes(MainLightPosition) then
+    RenderWithShadowVolumes(MainLightPosition)
   else
-    RenderNoShadows;
+    RenderNoShadowVolumes;
 end;
 
 procedure TCastleViewport.RenderFromViewEverything(const RenderingCamera: TRenderingCamera);
@@ -2474,7 +2524,7 @@ procedure TCastleViewport.RenderFromViewEverything(const RenderingCamera: TRende
 
     if GLFeatures.ShadowVolumesPossible and
        ShadowVolumes and
-       MainLightForShadows(MainLightPosition) then
+       MainLightForShadowVolumes(MainLightPosition) then
       Include(ClearBuffers, cbStencil);
 
     RenderContext.Clear(ClearBuffers, ClearColor);
@@ -2583,6 +2633,14 @@ begin
   else
   {$warnings on}
     FRenderParams.GlobalFog := nil;
+
+  if RenderingCamera.Target in [rtShadowMap, rtVarianceShadowMap] then
+    { When rendering shadows maps, we don't modify RenderContext.DepthRange
+      during rendering, it stays drFull. }
+    RenderContext.DepthRange := drFull
+  else
+    { In normal rendering, start with drBack, as this is the meaning of rlParent on Viewport.Items. }
+    RenderContext.DepthRange := drFar;
 
   RenderFromView3D(FRenderParams);
 end;
@@ -3269,7 +3327,7 @@ begin
 
   if GLFeatures.ShadowVolumesPossible and
      ShadowVolumes and
-     MainLightForShadows(MainLightPosition) then
+     MainLightForShadowVolumes(MainLightPosition) then
     Include(Options, prShadowVolume);
 
   { call TCastleScreenEffects.PrepareResources. }
@@ -3325,7 +3383,12 @@ begin
   begin
     {$warnings off} // TODO: using deprecated Navigation for now
     if (Navigation is TCastleMouseLookNavigation) and
-       TCastleMouseLookNavigation(Navigation).MouseLook then
+       { Note: We need to check InternalUsingMouseLook, not just MouseLook,
+         to prevent from honoring MouseLook on user-designed TCastleWalkNavigation component
+         at design-time. At design-time, only MouseLook on TCastleWalkNavigationDesign
+         should have any effect.
+         See https://forum.castle-engine.io/t/gizmos-for-transforming-objects-stopped-working/643/5 . }
+       TCastleMouseLookNavigation(Navigation).InternalUsingMouseLook then
     {$warnings on}
       MousePosition := RenderRect.Center
     else
@@ -3635,10 +3698,9 @@ function TCastleViewport.InternalNavigationMoveAllowed(const Sender: TCastleNavi
       (OldPos[GravityCoordinate] < Box.Data[0][GravityCoordinate]);
   end;
 
+var
+  SavedExists: Boolean;
 begin
-  { Both version result in calling WorldMoveAllowed.
-    AvoidNavigationCollisions version adds AvoidNavigationCollisions.Disable/Enable around. }
-
   // take into account PreventInfiniteFallingDown
   if BecauseOfGravity and
      PreventInfiniteFallingDown and
@@ -3646,37 +3708,53 @@ begin
     Exit(false);
 
   if UseAvoidNavigationCollisions then
-    Result := AvoidNavigationCollisions.MoveAllowed(OldPos, ProposedNewPos, NewPos, BecauseOfGravity)
-  else
-    Result := Items.WorldMoveAllowed(OldPos, ProposedNewPos, NewPos, true, Radius,
-      { We prefer to resolve collisions with navigation using sphere.
-        But for TCastleTransform implementations that can't use sphere, we can construct box. }
-      Box3DAroundPoint(OldPos, Radius * 2),
-      Box3DAroundPoint(ProposedNewPos, Radius * 2), BecauseOfGravity);
+  begin
+    SavedExists := AvoidNavigationCollisions.Exists;
+    AvoidNavigationCollisions.Exists := false;
+  end;
+
+  Result := Items.WorldMoveAllowed(OldPos, ProposedNewPos, NewPos, true, Radius,
+    { We prefer to resolve collisions with navigation using sphere.
+      But for TCastleTransform implementations that can't use sphere, we can construct box. }
+    Box3DAroundPoint(OldPos, Radius * 2),
+    Box3DAroundPoint(ProposedNewPos, Radius * 2), BecauseOfGravity);
+
+  if UseAvoidNavigationCollisions then
+    AvoidNavigationCollisions.Exists := SavedExists;
 end;
 
 function TCastleViewport.InternalNavigationHeight(const Sender: TCastleNavigation;
   const Position: TVector3;
   out AboveHeight: Single; out AboveGround: PTriangle): boolean;
+var
+  SavedExists: Boolean;
 begin
-  { Both version result in calling WorldHeight.
-    AvoidNavigationCollisions version adds AvoidNavigationCollisions.Disable/Enable around. }
+  if UseAvoidNavigationCollisions then
+  begin
+    SavedExists := AvoidNavigationCollisions.Exists;
+    AvoidNavigationCollisions.Exists := false;
+  end;
+
+  Result := Items.WorldHeight(Position, AboveHeight, AboveGround);
 
   if UseAvoidNavigationCollisions then
-    Result := AvoidNavigationCollisions.Height(Position, AboveHeight, AboveGround)
-  else
-    Result := Items.WorldHeight(Position, AboveHeight, AboveGround);
+    AvoidNavigationCollisions.Exists := SavedExists;
 end;
 
 function TCastleViewport.CameraRayCollision(const RayOrigin, RayDirection: TVector3): TRayCollision;
+var
+  SavedExists: Boolean;
 begin
-  { Both version result in calling WorldRay.
-    AvoidNavigationCollisions version adds AvoidNavigationCollisions.Disable/Enable around. }
+  if UseAvoidNavigationCollisions then
+  begin
+    SavedExists := AvoidNavigationCollisions.Exists;
+    AvoidNavigationCollisions.Exists := false;
+  end;
+
+  Result := Items.WorldRay(RayOrigin, RayDirection);
 
   if UseAvoidNavigationCollisions then
-    Result := AvoidNavigationCollisions.Ray(RayOrigin, RayDirection)
-  else
-    Result := Items.WorldRay(RayOrigin, RayDirection);
+    AvoidNavigationCollisions.Exists := SavedExists;
 end;
 
 procedure TCastleViewport.BoundViewpointChanged;

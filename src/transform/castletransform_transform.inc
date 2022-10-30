@@ -80,7 +80,7 @@
     class var
       NextTransformId: Cardinal;
     var
-      FCastShadowVolumes: Boolean;
+      FCastShadows: Boolean;
       FExists: Boolean;
       FParentExistsInRoot: Boolean;
       FExistsInRoot: Boolean;
@@ -100,6 +100,7 @@
       RegisteredGLContextCloseListener: Boolean;
       FPendingToRemove: TComponentList;
       FPendingToRemoveAndFree: TComponentList;
+      FRenderLayer: TRenderLayer;
 
       // transformation
       FCenter: TVector3;
@@ -753,10 +754,11 @@
     { Does the 3D object cast shadows by shadow volumes.
       See also TCastleScene.ReceiveShadowVolumes. }
     property CastShadowVolumes: boolean
-      read FCastShadowVolumes write FCastShadowVolumes default true;
+      read FCastShadows write FCastShadows default true;
+      {$ifdef FPC}deprecated 'use CastShadows';{$endif}
 
     { Render shadow quads for all the things rendered by @link(Render).
-      This is done only if @link(Exists) and @link(CastShadowVolumes).
+      This is done only if @link(Exists) and @link(CastShadows).
 
       It does shadow volumes culling inside (so ShadowVolumeRenderer should
       have FrustumCullingInit already initialized).
@@ -1873,6 +1875,21 @@
       This usually makes dynamic objects, like player and creatures, collide better. }
     property CollisionSphereRadius: Single read FCollisionSphereRadius write FCollisionSphereRadius;
 
+    { Does the object cast shadows.
+
+      TODO: Right now this only affects casting shadows by shadow volumes.
+      It will be extended to account for shadow maps. }
+    property CastShadows: boolean
+      read FCastShadows write FCastShadows default true;
+
+    { Objects on front render layer are rendered in front of objects on back render layer,
+      regardless of their actual position (depth) relative to camera.
+
+      rlParent means that object follows the parent layer, which is by default back.
+
+      The typical use-case is to force some object to be in front, by setting rlFront. }
+    property RenderLayer: TRenderLayer read FRenderLayer write FRenderLayer default rlParent;
+
   {$define read_interface_class}
   {$I auto_generated_persistent_vectors/tcastletransform_persistent_vectors.inc}
   {$undef read_interface_class}
@@ -1907,7 +1924,7 @@ end;
 constructor TCastleTransform.Create(AOwner: TComponent);
 begin
   inherited;
-  FCastShadowVolumes := true;
+  FCastShadows := true;
   FCollides := true;
   FPickable := true;
   FVisible := true;
@@ -2429,7 +2446,21 @@ begin
   if Exists then
   begin
     for I := 0 to List.Count - 1 do
-      if not List[I].InternalExcludeFromParentBoundingVolume then
+      { Ignoring InternalExcludeFromParentBoundingVolume when
+        InternalGizmoBoundingBox <> 0 is a hack,
+        so that when TCastleViewport.ItemsWithGizmosBoundingBox is called,
+        then TGizmoScene box is taken into account.
+        Otherwise 2D projection in editor could cut off the TGizmoScene.
+
+        Testcase:
+        - 2d viewport
+        - add a few TCastleImageTransform with some image loaded with Z = -1000.
+        - add TCastleTransform with translation 0,0,0, select it
+        - -> the gizmo of it has to be visible, even though everything visible
+          (excluding gizmos) is at Z = -1000.
+      }
+      if not (List[I].InternalExcludeFromParentBoundingVolume and
+              (InternalGizmoBoundingBox = 0)) then
         Result.Include(List[I].BoundingBox);
   end;
 end;
@@ -2451,7 +2482,7 @@ procedure TCastleTransform.LocalRenderShadowVolume(const Params: TRenderParams;
 var
   I: Integer;
 begin
-  if Exists and CastShadowVolumes then
+  if Exists and CastShadows then
   begin
     for I := 0 to List.Count - 1 do
       List[I].RenderShadowVolume(Params, ShadowVolumeRenderer);
@@ -2920,6 +2951,8 @@ var
   OldParamsTransformIdentity, OldInMeaningfulParent: Boolean;
   OldFrustum: PFrustum;
   NewFrustumValue: TFrustum;
+  HasSavedDepthRange: Boolean;
+  SavedDepthRange: TDepthRange;
 begin
   OldInMeaningfulParent := Params.InMeaningfulParent;
   Params.InMeaningfulParent := Params.InMeaningfulParent and
@@ -2928,6 +2961,27 @@ begin
       should still be rendered. }
     //((Parent = nil) or Parent.MeaningfulParent);
     MeaningfulParent;
+
+  HasSavedDepthRange := (RenderLayer <> rlParent) and
+    { Shadow maps require normal DepthRange,
+      don't mess with RenderContext.DepthRange in case when we render shadow maps. }
+    (not (Params.RenderingCamera.Target in [rtShadowMap, rtVarianceShadowMap]));
+  if HasSavedDepthRange then
+  begin
+    { The idea of using DepthRange for render layers is nice:
+      - you don't have to split rendering layers in passes,
+        you can render all objects in one pass,
+        just switching DepthRange as necessary.
+      - you can set DepthRange for 3D objects inside TCastleTransform,
+        like here TCastleTransform will just affect every child underneath.
+    }
+    SavedDepthRange := RenderContext.DepthRange;
+    case RenderLayer of
+      rlFront: RenderContext.DepthRange := drNear;
+      rlBack : RenderContext.DepthRange := drFar;
+      else ;
+    end;
+  end;
 
   if (not InternalExistsOnlyInMeaningfulParents) or Params.InMeaningfulParent then
   begin
@@ -2985,6 +3039,9 @@ begin
   end;
 
   Params.InMeaningfulParent := OldInMeaningfulParent;
+
+  if HasSavedDepthRange then
+    RenderContext.DepthRange := SavedDepthRange;
 end;
 
 procedure TCastleTransform.RenderShadowVolume(const Params: TRenderParams;
@@ -3337,16 +3394,19 @@ end;
 
 function TCastleTransform.PropertySections(const PropertyName: String): TPropertySections;
 begin
-  if (PropertyName = 'Exists') then
+  if ArrayContainsString(PropertyName, [
+       'Exists', 'CastShadows', 'RenderLayer'
+     ]) then
       Result := [psBasic]
   else
-  if (PropertyName = 'CenterPersistent') or
-     (PropertyName = 'ScaleOrientationPersistent') then
+  if ArrayContainsString(PropertyName, [
+       'CenterPersistent', 'ScaleOrientationPersistent'
+     ]) then
     Result := [psLayout]
   else
-  if (PropertyName = 'RotationPersistent') or
-     (PropertyName = 'ScalePersistent') or
-     (PropertyName = 'TranslationPersistent') then
+  if ArrayContainsString(PropertyName, [
+       'RotationPersistent', 'ScalePersistent', 'TranslationPersistent'
+     ]) then
     Result := [psBasic, psLayout]
   else
     Result := inherited PropertySections(PropertyName);

@@ -324,7 +324,7 @@ type
       It always uses silhouette optimization. This is the usual,
       fast method of rendering shadow volumes.
       Will not do anything (treat scene like not casting shadows,
-      like CastShadowVolumes = false) if the model is not perfect 2-manifold,
+      like CastShadows = false) if the model is not perfect 2-manifold,
       i.e. has some BorderEdges (although we could handle some BorderEdges
       for some points of view, this could leading to rendering artifacts).
 
@@ -609,6 +609,7 @@ const
 {$I castlescene_fog.inc}
 {$I castlescene_editorgizmo.inc}
 {$I castlescene_abstractlight.inc}
+{$I castlescene_punctuallight.inc}
 {$I castlescene_pointlight.inc}
 {$I castlescene_directionallight.inc}
 {$I castlescene_spotlight.inc}
@@ -638,6 +639,7 @@ uses Math,
 {$I castlescene_fog.inc}
 {$I castlescene_editorgizmo.inc}
 {$I castlescene_abstractlight.inc}
+{$I castlescene_punctuallight.inc}
 {$I castlescene_pointlight.inc}
 {$I castlescene_directionallight.inc}
 {$I castlescene_spotlight.inc}
@@ -1331,7 +1333,7 @@ procedure TCastleScene.PrepareResources(
     { calculate OwnParams, GoodParams }
     if Params = nil then
     begin
-      WritelnWarning('PrepareResources', 'Do not pass Params=nil to TCastleScene.PrepareResources or T3DResource.Prepare or friends. Get the params from Viewport.PrepareParams (create a temporary TCastleViewport if you need to).');
+      WritelnWarning('PrepareResources', 'Do not pass Params=nil to TCastleScene.PrepareResources. Get the params from Viewport.PrepareParams (create a temporary TCastleViewport if you need to).');
       OwnParams := TPrepareParams.Create;
       GoodParams := OwnParams;
     end else
@@ -1508,8 +1510,20 @@ procedure TCastleScene.LocalRenderOutside(
   {$ifndef OpenGLES}
   { This code uses a lot of deprecated stuff. It is already marked with TODO above. }
   {$warnings off}
+  var
+    WireframeEffect: TWireframeEffect;
   begin
-    case RenderOptions.WireframeEffect of
+    WireframeEffect := RenderOptions.WireframeEffect;
+    if InternalForceWireframe <> weNormal then
+    begin
+      { Do not allow InternalForceWireframe to fill (make non-wireframe) polygons
+        that were supposed to be wireframe. This would look weird, e.g. some wireframe
+        gizmos would become filled. }
+      if not ( (WireframeEffect = weWireframeOnly) and
+               (InternalForceWireframe = weSolidWireframe) ) then
+        WireframeEffect := InternalForceWireframe;
+    end;
+    case WireframeEffect of
       weNormal:
         begin
           InternalScenePass := 0;
@@ -1726,7 +1740,12 @@ var
   T: TMatrix4;
   ForceOpaque: boolean;
 begin
-  if CheckVisible and CastShadowVolumes then
+  if CheckVisible and
+     CastShadows and
+     { Do not render shadow volumes when rendering wireframe.
+       Shadow volumes assume that object is closed (2-manifold),
+       otherwise weird artifacts are visible. }
+     (RenderOptions.WireframeEffect <> weWireframeOnly) then
   begin
     SVRenderer := ShadowVolumeRenderer as TGLShadowVolumeRenderer;
 
@@ -1744,6 +1763,14 @@ begin
       ShapeList := Shapes.TraverseList({ OnlyActive } true, { OnlyVisible } true);
       for Shape in ShapeList do
       begin
+        { Do not render shadows for objects eliminated by DistanceCulling.
+          Otherwise: Not only shadows for invisible objects would look weird,
+          but they would actually show errors.
+          Shadow volumes *assume* that shadow caster is also rendered (shadow quads
+          are closed). }
+        if (DistanceCulling > 0) and not DistanceCullingCheck(Shape) then
+          Continue;
+
         ShapeBox := Shape.BoundingBox;
         if not Params.TransformIdentity then
           ShapeBox := ShapeBox.Transform(Params.Transform^);

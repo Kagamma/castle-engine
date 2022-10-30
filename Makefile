@@ -59,6 +59,7 @@
 #       QtCreator (*.pro.user)...
 #     - pasdoc generated documentation in doc/pasdoc/ and doc/reference/
 #     - closed-source libs you may have left in tools/build-tool/data
+#     - FPC from cge-fpc
 #     This is a useful step when packing the release of CGE.
 #
 #   cleanall --
@@ -467,6 +468,7 @@ cleanmore: clean
 	       tools/build-tool/data/ios/services/game_analytics/cge_project_name/game_analytics/GameAnalytics.h \
 	       tools/build-tool/data/ios/services/game_analytics/cge_project_name/game_analytics/libGameAnalytics.a
 	rm -f castle-engine*.zip tools/internal/pack_release/castle-engine*.zip
+	rm -Rf fpc-*.zip tools/contrib/fpc/
 
 cleanall: cleanmore
 
@@ -493,6 +495,10 @@ tests:
 	$(BUILD_TOOL) $(CASTLE_ENGINE_TOOL_OPTIONS) --project tests/ clean
 	$(BUILD_TOOL) $(CASTLE_ENGINE_TOOL_OPTIONS) --project tests/ --mode=release --compiler-option=-dNO_WINDOW_SYSTEM compile
 	$(BUILD_TOOL) $(CASTLE_ENGINE_TOOL_OPTIONS) --project tests/ run -- --console
+# Run tests in tools/build-tool/tests
+	$(BUILD_TOOL) $(CASTLE_ENGINE_TOOL_OPTIONS) --project tools/build-tool/tests/ clean
+	$(BUILD_TOOL) $(CASTLE_ENGINE_TOOL_OPTIONS) --project tools/build-tool/tests/ --mode=debug compile
+	$(BUILD_TOOL) $(CASTLE_ENGINE_TOOL_OPTIONS) --project tools/build-tool/tests/ run -- --all
 
 # fpmake ---------------------------------------------------------------------
 

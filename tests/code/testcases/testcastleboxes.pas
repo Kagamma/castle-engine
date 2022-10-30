@@ -42,6 +42,7 @@ type
 implementation
 
 uses CastleVectors, CastleUtils, CastleBoxes, CastleStringUtils, CastleTimeUtils,
+  CastleLog,
   TestCastleVectors, CastleTriangles;
 
 procedure TTestCastleBoxes.TestIsCenteredBox3DPlaneCollision;
@@ -672,8 +673,10 @@ procedure TTestCastleBoxes.TestBox3DTransform;
   begin
     for I := 0 to 2 do
     begin
-      Val1 := 50 - Random * 100;
-      Val2 := 50 - Random * 100;
+      repeat
+        Val1 := 50 - Random * 100;
+        Val2 := 50 - Random * 100;
+      until Abs(Val2 - Val1) > 1; // do not accept too close Val1 and Val2 values
       OrderUp(Val1, Val2);
       {$warnings off} // silence FPC warning about Normal uninitialized
       Result.Data[0].InternalData[I] := Val1;
@@ -691,14 +694,40 @@ begin
   begin
     Box := RandomBox;
     Matrix := RandomMatrix;
-    AssertBoxesEqual(Slower(Box, Matrix), Box.Transform(Matrix), 0.01);
+    try
+      AssertBoxesEqual(Slower(Box, Matrix), Box.Transform(Matrix), 0.01);
+    except
+      on E: Exception do
+      begin
+        WritelnWarning('TestBox3DTransform failed at test with RandomMatrix:' + NL +
+          'Box: %s' + NL +
+          'Matrix: %s', [
+          Box.ToString,
+          Matrix.ToString
+        ]);
+        raise;
+      end;
+    end;
   end;
 
   for I := 0 to 1000 do
   begin
     Box := RandomBox;
     Matrix := RandomNonProjectionMatrix;
-    AssertBoxesEqual(Slower(Box, Matrix), Box.Transform(Matrix), 0.01);
+    try
+      AssertBoxesEqual(Slower(Box, Matrix), Box.Transform(Matrix), 0.01);
+    except
+      on E: Exception do
+      begin
+        WritelnWarning('TestBox3DTransform failed at test with RandomNonProjectionMatrix:' + NL +
+          'Box: %s' + NL +
+          'Matrix: %s', [
+          Box.ToString,
+          Matrix.ToString
+        ]);
+        raise;
+      end;
+    end;
   end;
 
   { $define BOX3D_TRANSFORM_SPEED_TEST}
