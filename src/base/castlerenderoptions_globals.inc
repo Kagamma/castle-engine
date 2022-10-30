@@ -196,12 +196,10 @@ type
     TCastleRenderOptions.LineWidth, quite self-explanatory. }
   TWireframeEffect = (
 
-    { Default setting, model polygons are simply passed to OpenGL.
-      Whether this results in filled or wireframe look, depends on OpenGL
-      glPolygonMode setting, filled by default. }
+    { Default setting, polygons are rendered as filled polygons. }
     weNormal,
 
-    { The model is rendered in wireframe mode.
+    { Polygons are rendered as wireframe.
 
       LineWidth is used as wireframe line width (regardless of
       TCastleRenderOptions.Mode).
@@ -209,7 +207,7 @@ type
       Depending on TCastleRenderOptions.Mode value:
 
       @unorderedList(
-        @item(If <> rmFull then WireframeColor is used as wireframe
+        @item(If TCastleRenderOptions.Mode <> rmFull then WireframeColor is used as wireframe
           line color.)
 
         @item(If rmFull, then lines are colored
@@ -395,6 +393,9 @@ type
     bs3D
   );
 
+  { Render layer for @link(TCastleTransform.RenderLayer). }
+  TRenderLayer = (rlParent, rlBack, rlFront);
+
 const
   ShadowSamplingNames: array [TShadowSampling] of string =
   ( 'Simple', 'PCF 4', 'PCF 4 Bilinear', 'PCF 16', 'Variance Shadow Maps (Experimental)' );
@@ -464,6 +465,17 @@ const
 
   DefaultColorSpace = csLinearWhenPhysicalMaterial;
 
+  { Default for TCastleWindow.StencilBits and TCastleControl.StencilBits.
+
+    Non-zero now, which means that in both TCastleWindow and TCastleControl,
+    shadow volumes should work by default.
+
+    Note that TCastleWindow implementation makes a smooth fallback:
+    if we cannot get stencil, we retry initialization without stencil buffer.
+    This way we will open the window reliably, and in the worst case -- shadow volumes
+    will not work. }
+  DefaultStencilBits = 8;
+
 var
   { Log shadow volume information.
     See https://castle-engine.io/manual_log.php about the log. }
@@ -505,6 +517,9 @@ var
       )
     ) }
   ToneMapping: TToneMapping = tmNone;
+
+  { Force given rendering for all scenes, if not weNormal. }
+  InternalForceWireframe: TWireframeEffect;
 
 {$ifdef FPC}
 function GetGammaCorrection: TGammaCorrection;

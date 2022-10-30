@@ -40,6 +40,14 @@ uses
 type
   TProposeOpenDesignEvent = procedure (const DesignUrl: String) of object;
 
+  TMode = (
+    moInteract,
+    moSelect,
+    moTranslate,
+    moRotate,
+    moScale
+  );
+
   { Frame to visually design component hierarchy. }
   TDesignFrame = class(TFrame)
     ButtonResetTransformation: TButton;
@@ -178,14 +186,6 @@ type
 
       TTreeNodeMap = class(specialize TDictionary<TComponent, TTreeNode>)
       end;
-
-      TMode = (
-        moInteract,
-        moSelect,
-        moTranslate,
-        moRotate,
-        moScale
-      );
 
       TTreeNodeSide = (tnsRight, tnsBottom, tnsTop);
 
@@ -353,7 +353,6 @@ type
       "parent and self equal" and may hide the parent anchor frame if yes. }
     procedure UpdateAnchors(const UI: TCastleUserInterface;
       const AllowToHideParentAnchorsFrame: Boolean);
-    procedure ChangeMode(const NewMode: TMode);
     { Filter property in object inspector.
       When FilterBySection = true, then Section matters and only properties in this section
       are displayed. }
@@ -459,6 +458,11 @@ type
     procedure ViewportToggleProjection;
     procedure ViewportAlignViewToCamera;
     procedure ViewportAlignCameraToView;
+
+    procedure ReleaseAllKeysAndMouse;
+
+    procedure FocusDesign;
+    procedure ChangeMode(const NewMode: TMode);
   end;
 
 implementation
@@ -1319,7 +1323,6 @@ begin
   CastleControl.OnResize := @CastleControlResize;
   CastleControl.OnOpen := @CastleControlOpen;
   CastleControl.OnUpdate := @CastleControlUpdate;
-  CastleControl.StencilBits := 8; // enable shadow volumes
   CastleControl.OnDragOver := @CastleControlDragOver;
   CastleControl.OnDragDrop := @CastleControlDragDrop;
   CastleControl.Parent := PanelMiddle; // set Parent last, following https://wiki.freepascal.org/LCL_Tips#Set_the_Parent_as_last
@@ -2935,6 +2938,18 @@ begin
          (TComponent(Instance).Owner <> DesignOwner) then
         Exit;
 
+      { Hide editing transformation of TCastleAbstractRootTransform,
+        as it makes very unintuitive behavior because desing-time camera is also
+        a child of it, so e.g. moving Viewport.Items seems to do nothing
+        (TODO: but it breaks you mouse look works -- it should not). }
+      if (Instance is TCastleAbstractRootTransform) and
+         ( (PropertyName = 'CenterPersistent') or
+           (PropertyName = 'ScaleOrientationPersistent') or
+           (PropertyName = 'RotationPersistent') or
+           (PropertyName = 'ScalePersistent') or
+           (PropertyName = 'TranslationPersistent') ) then
+        Exit;
+
       if FilterBySection and (Instance is TCastleComponent) then
       begin
         AShow := Section in TCastleComponent(Instance).PropertySections(PropertyName);
@@ -3553,7 +3568,9 @@ var
   O: Pointer;
 begin
   if not Validate then
-    NodesToExpand := TObjectList.Create(false);
+    NodesToExpand := TObjectList.Create(false)
+  else
+    NodesToExpand := nil;
   try
     ChildrenNodesCount := 0;
     if DesignRoot is TCastleUserInterface then
@@ -3876,7 +3893,14 @@ begin
   else
     T := SelectedTransform;
   SetEnabledVisible(PanelLayoutTransform, T <> nil);
-  VisualizeTransformSelected.Parent := T; // works also in case SelectedTransform is nil
+
+  if T is TCastleAbstractRootTransform then
+    { Special case to disallow editing TCastleAbstractRootTransform transformation.
+      See InspectorFilter for explanation, in short: editing TCastleAbstractRootTransform
+      transformation is very unintuitive. }
+    VisualizeTransformSelected.Parent := nil
+  else
+    VisualizeTransformSelected.Parent := T; // works also in case SelectedTransform is nil
 
   if CameraPreview <> nil then
     CameraPreview.SelectedChanged(T, V);
@@ -4921,6 +4945,16 @@ begin
   OpenDesign(NewRoot, NewDesignOwner, '');
 
   RecordUndo('Start new design', High(TUndoCommentPriority)); // This Undo comment is never seen
+end;
+
+procedure TDesignFrame.ReleaseAllKeysAndMouse;
+begin
+  CastleControl.ReleaseAllKeysAndMouse;
+end;
+
+procedure TDesignFrame.FocusDesign;
+begin
+  CastleControl.SetFocus;
 end;
 
 initialization

@@ -1195,7 +1195,7 @@ begin
   Result.FallSpeed := FallSpeed;
   Result.GrowSpeed := GrowSpeed;
   {$warnings on}
-  Result.CastShadowVolumes := CastShadowVolumes;
+  Result.CastShadows := CastShadowVolumes;
   Result.MiddleHeight := MiddleHeight;
   Scale := RandomFloatRange(ScaleMin, ScaleMax);
   Result.Scale := Vector3(Scale, Scale, Scale);
@@ -1588,7 +1588,7 @@ procedure TCreature.Update(const SecondsPassed: Single; var RemoveMe: TRemoveTyp
       FDebugCaptions.Load(Root, true);
       FDebugCaptions.Collides := false;
       FDebugCaptions.Pickable := false;
-      FDebugCaptions.CastShadowVolumes := false;
+      FDebugCaptions.CastShadows := false;
       FDebugCaptions.ExcludeFromStatistics := true;
       FDebugCaptions.InternalExcludeFromParentBoundingVolume := true;
 

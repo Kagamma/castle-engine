@@ -14,8 +14,9 @@ uses Classes,
 type
   { Main state, where most of the application logic takes place. }
   TState${MAIN_STATE} = class(TUIState)
-  private
-    { Components designed using CGE editor, loaded from gamestate${MAIN_STATE_LOWERCASE}.castle-user-interface. }
+  published
+    { Components designed using CGE editor.
+      These fields will be automatically initialized at Start. }
     Viewport: TCastleViewport;
     SceneMain: TCastleScene;
     ButtonLoadKnight: TCastleButton;
@@ -24,7 +25,7 @@ type
     ButtonPlayAnimation: TCastleButton;
     ButtonStopAnimation: TCastleButton;
     LabelLoadedUrl, LabelFps: TCastleLabel;
-
+  private
     procedure Load(const Url: String);
     { Methods assigned to handle buttons' OnClick events. }
     procedure ClickLoadKnight(Sender: TObject);
@@ -58,17 +59,6 @@ end;
 procedure TState${MAIN_STATE}.Start;
 begin
   inherited;
-
-  { Find components, by name, that we need to access from code }
-  LabelFps := DesignedComponent('LabelFps') as TCastleLabel;
-  LabelLoadedUrl := DesignedComponent('LabelLoadedUrl') as TCastleLabel;
-  ButtonLoadKnight := DesignedComponent('ButtonLoadKnight') as TCastleButton;
-  ButtonLoadCar := DesignedComponent('ButtonLoadCar') as TCastleButton;
-  ButtonLoadCustom := DesignedComponent('ButtonLoadCustom') as TCastleButton;
-  ButtonPlayAnimation := DesignedComponent('ButtonPlayAnimation') as TCastleButton;
-  ButtonStopAnimation := DesignedComponent('ButtonStopAnimation') as TCastleButton;
-  Viewport := DesignedComponent('Viewport') as TCastleViewport;
-  SceneMain := DesignedComponent('SceneMain') as TCastleScene;
 
   { Assign OnClick handler to buttons }
   ButtonLoadKnight.OnClick := {$ifdef FPC}@{$endif} ClickLoadKnight;
@@ -132,6 +122,7 @@ procedure TState${MAIN_STATE}.Update(const SecondsPassed: Single; var HandleInpu
 begin
   inherited;
   { This virtual method is executed every frame.}
+  Assert(LabelFps <> nil, 'If you remove LabelFps from the design, remember to remove also the assignment "LabelFps.Caption := ..." from code');
   LabelFps.Caption := 'FPS: ' + Container.Fps.ToString;
 end;
 
