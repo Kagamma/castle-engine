@@ -42,10 +42,20 @@ const
 type
   { Main project management. }
   TProjectForm = class(TForm)
+    ActionViewportRenderNext: TAction;
+    ActionViewportRenderSolidWireframe: TAction;
+    ActionModeSelect: TAction;
+    ActionModeTranslate: TAction;
+    ActionModeRotate: TAction;
+    ActionModeScale: TAction;
+    ActionModeInteract: TAction;
+    ActionFocusDesign: TAction;
     ActionWarningsCopyAll: TAction;
     ActionWarningsCopySelected: TAction;
     ActionWarningsClean: TAction;
     ActionViewportGridAxis: TAction;
+    ActionViewportRenderWireframeOnly: TAction;
+    ActionViewportRenderNormal: TAction;
     ActionComponentDuplicate: TAction;
     ActionComponentSaveSelected: TAction;
     ActionComponentDelete: TAction;
@@ -81,6 +91,23 @@ type
     MenuItem15: TMenuItem;
     MenuItem21: TMenuItem;
     MenuItem22: TMenuItem;
+    MenuItem24: TMenuItem;
+    MenuItem27: TMenuItem;
+    MenuItem28: TMenuItem;
+    MenuItemCacheClean: TMenuItem;
+    MenuItemCache: TMenuItem;
+    SeparatorBeforeCache: TMenuItem;
+    MenuItemWireframe: TMenuItem;
+    MenuItem34: TMenuItem;
+    MenuItem35: TMenuItem;
+    MenuItem36: TMenuItem;
+    MenuItem37: TMenuItem;
+    Separator10: TMenuItem;
+    MenuItem29: TMenuItem;
+    MenuItem30: TMenuItem;
+    MenuItem31: TMenuItem;
+    MenuItem32: TMenuItem;
+    Separator8: TMenuItem;
     Separator7: TMenuItem;
     MenuItem25: TMenuItem;
     MenuItem26: TMenuItem;
@@ -252,12 +279,22 @@ type
     TabOutput: TTabSheet;
     ProcessUpdateTimer: TTimer;
     TabWarnings: TTabSheet;
+    procedure ActionFocusDesignExecute(Sender: TObject);
+    procedure ActionModeInteractExecute(Sender: TObject);
+    procedure ActionModeRotateExecute(Sender: TObject);
+    procedure ActionModeScaleExecute(Sender: TObject);
+    procedure ActionModeSelectExecute(Sender: TObject);
+    procedure ActionModeTranslateExecute(Sender: TObject);
     procedure ActionViewportGridAxisExecute(Sender: TObject);
     procedure ActionComponentCutExecute(Sender: TObject);
     procedure ActionComponentSaveSelectedExecute(Sender: TObject);
     procedure ActionViewportAlignCameraToViewExecute(Sender: TObject);
     procedure ActionViewportAlignViewToCameraExecute(Sender: TObject);
     procedure ActionViewportGridAxisUpdate(Sender: TObject);
+    procedure ActionViewportRenderNextExecute(Sender: TObject);
+    procedure ActionViewportRenderNormalExecute(Sender: TObject);
+    procedure ActionViewportRenderSolidWireframeExecute(Sender: TObject);
+    procedure ActionViewportRenderWireframeOnlyExecute(Sender: TObject);
     procedure ActionViewportToggleProjectionExecute(Sender: TObject);
     procedure ActionNavigation2DExecute(Sender: TObject);
     procedure ActionNavigationExamineExecute(Sender: TObject);
@@ -305,6 +342,8 @@ type
     procedure FormShow(Sender: TObject);
     procedure ListOutputClick(Sender: TObject);
     procedure ListOutputDblClick(Sender: TObject);
+    procedure MenuItemCacheCleanClick(Sender: TObject);
+    procedure MenuItemCacheClick(Sender: TObject);
     procedure MenuItemDesignNewNonVisualClick(Sender: TObject);
     procedure MenuItemEnableDisableDockingClick(Sender: TObject);
     procedure MenuItemInstallClick(Sender: TObject);
@@ -480,7 +519,7 @@ uses TypInfo, LCLType, RegExpr, StrUtils, LCLVersion,
   CastleTransform, CastleControls, CastleDownload, CastleApplicationProperties,
   CastleLog, CastleComponentSerialize, CastleSceneCore, CastleStringUtils,
   CastleFonts, X3DLoad, CastleFileFilters, CastleImages, CastleSoundEngine,
-  CastleClassUtils, CastleLclEditHack,
+  CastleClassUtils, CastleLclEditHack, CastleRenderOptions,
   FormAbout, FormChooseProject, FormPreferences, FormSpriteSheetEditor,
   FormSystemInformation,
   ToolCompilerInfo, ToolCommonUtils, ToolArchitectures, ToolProcessWait,
@@ -718,6 +757,38 @@ begin
   ActionViewportUpdate(Sender);
 end;
 
+procedure TProjectForm.ActionViewportRenderNextExecute(Sender: TObject);
+begin
+  case InternalForceWireframe of
+    weNormal        : ActionViewportRenderWireframeOnlyExecute(nil);
+    weWireframeOnly : ActionViewportRenderSolidWireframeExecute(nil);
+    weSolidWireframe: ActionViewportRenderNormalExecute(nil);
+    else
+      begin
+        WritelnWarning('Unexpected InternalForceWireframe value');
+        ActionViewportRenderWireframeOnlyExecute(nil);
+      end;
+  end;
+end;
+
+procedure TProjectForm.ActionViewportRenderNormalExecute(Sender: TObject);
+begin
+  InternalForceWireframe := weNormal;
+  ActionViewportRenderNormal.Checked := true;
+end;
+
+procedure TProjectForm.ActionViewportRenderSolidWireframeExecute(Sender: TObject);
+begin
+  InternalForceWireframe := weSolidWireframe;
+  ActionViewportRenderSolidWireframe.Checked := true;
+end;
+
+procedure TProjectForm.ActionViewportRenderWireframeOnlyExecute(Sender: TObject);
+begin
+  InternalForceWireframe := weWireframeOnly;
+  ActionViewportRenderWireframeOnly.Checked := true;
+end;
+
 procedure TProjectForm.ActionViewportAlignCameraToViewExecute(Sender: TObject);
 begin
   if Design <> nil then
@@ -734,6 +805,42 @@ procedure TProjectForm.ActionViewportGridAxisExecute(Sender: TObject);
 begin
   if (Design <> nil) and (Design.CurrentViewport <> nil) then
     Design.CurrentViewport.InternalGridAxis := not Design.CurrentViewport.InternalGridAxis;
+end;
+
+procedure TProjectForm.ActionFocusDesignExecute(Sender: TObject);
+begin
+  Assert(Design <> nil); // menu item is disabled otherwise
+  Design.FocusDesign;
+end;
+
+procedure TProjectForm.ActionModeInteractExecute(Sender: TObject);
+begin
+  Assert(Design <> nil); // menu item is disabled otherwise
+  Design.ChangeMode(moInteract);
+end;
+
+procedure TProjectForm.ActionModeRotateExecute(Sender: TObject);
+begin
+  Assert(Design <> nil); // menu item is disabled otherwise
+  Design.ChangeMode(moRotate);
+end;
+
+procedure TProjectForm.ActionModeScaleExecute(Sender: TObject);
+begin
+  Assert(Design <> nil); // menu item is disabled otherwise
+  Design.ChangeMode(moScale);
+end;
+
+procedure TProjectForm.ActionModeSelectExecute(Sender: TObject);
+begin
+  Assert(Design <> nil); // menu item is disabled otherwise
+  Design.ChangeMode(moSelect);
+end;
+
+procedure TProjectForm.ActionModeTranslateExecute(Sender: TObject);
+begin
+  Assert(Design <> nil); // menu item is disabled otherwise
+  Design.ChangeMode(moTranslate);
 end;
 
 procedure TProjectForm.ActionComponentSaveSelectedExecute(Sender: TObject);
@@ -1596,6 +1703,16 @@ begin
   end;
 end;
 
+procedure TProjectForm.MenuItemCacheCleanClick(Sender: TObject);
+begin
+  BuildToolCall(['cache-clean']);
+end;
+
+procedure TProjectForm.MenuItemCacheClick(Sender: TObject);
+begin
+  BuildToolCall(['cache']);
+end;
+
 procedure TProjectForm.MenuItemDesignNewNonVisualClick(Sender: TObject);
 begin
   if ProposeSaveDesign then
@@ -1851,6 +1968,21 @@ begin
   ActionComponentDuplicate.Enabled := Design <> nil;
   ActionComponentSaveSelected.Enabled := Design <> nil;
   ActionEditAssociatedUnit.Enabled := Design <> nil;
+  ActionFocusDesign.Enabled := Design <> nil;
+  ActionModeInteract.Enabled := Design <> nil;
+  ActionModeSelect.Enabled := Design <> nil;
+  ActionModeTranslate.Enabled := Design <> nil;
+  ActionModeRotate.Enabled := Design <> nil;
+  ActionModeScale.Enabled := Design <> nil;
+
+  { Options that toggle InternalForceWireframe could actually work with Design=nil,
+    with current implementation.
+    But their effect would be invisible, so better disable. }
+  ActionViewportRenderNormal.Enabled := Design <> nil;
+  ActionViewportRenderWireframeOnly.Enabled := Design <> nil;
+  ActionViewportRenderSolidWireframe.Enabled := Design <> nil;
+  ActionViewportRenderNext.Enabled := Design <> nil;
+  MenuItemWireframe.Enabled := Design <> nil;
 
   UpdateUndo(nil);
   UpdateRenameItem(nil);
@@ -2592,7 +2724,8 @@ begin
         (Command = 'generate-program') or
         (Command = 'editor') or
         (Command = 'editor-rebuild-if-needed') or
-        (Command = 'editor-run')
+        (Command = 'editor-run') or
+        (Command = 'cache')
       ) then
       AddModeParameters(QueueItem.Parameters);
     // add --compiler parameter
@@ -2603,7 +2736,8 @@ begin
     if (Command = 'compile') or
        (Command = 'run') or
        (Command = 'package') or
-       (Command = 'install') then
+       (Command = 'install') or
+       (Command = 'cache') then
       AddPlatformParameters(QueueItem.Parameters, PlatformsInfo[CurrentPlatformInfo]);
     // add --package-format
     if (Command = 'package') or
@@ -2692,6 +2826,8 @@ begin
   MenuItemAutoGenerateClean.Enabled := AEnabled;
   MenuItemRestartRebuildEditor.Enabled := AEnabled;
   MenuItemBreakProcess.Enabled := not AEnabled;
+  MenuItemCache.Enabled := AEnabled;
+  MenuItemCacheClean.Enabled := AEnabled;
 end;
 
 procedure TProjectForm.UpdateFormCaption(Sender: TObject);
