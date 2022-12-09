@@ -376,9 +376,14 @@ type
     procedure GLContextClose; override;
 
     procedure PrepareResources(const Options: TPrepareResourcesOptions;
-      const ProgressStep: boolean; const Params: TPrepareParams); override;
+      const Params: TPrepareParams); override;
 
     procedure BeforeNodesFree(const InternalChangedAll: boolean = false); override;
+
+    { Does this transform have a collision mesh that TCastleMeshCollider can use. }
+    function HasColliderMesh: Boolean; override;
+    { Enumerate triangles for a collision mesh that TCastleMeshCollider can use. }
+    procedure ColliderMesh(const TriangleEvent: TTriangleEvent); override;
 
     { Adjust parameters for rendering 2D scenes. Sets BlendingSort := bs2D,
       which is good when your transparent objects have proper order along the Z axis
@@ -1287,7 +1292,7 @@ end;
 
 procedure TCastleScene.PrepareResources(
   const Options: TPrepareResourcesOptions;
-  const ProgressStep: boolean; const Params: TPrepareParams);
+  const Params: TPrepareParams);
 
   procedure PrepareShapesResources;
   var
@@ -1669,7 +1674,7 @@ begin
       if everything is ready. }
     FTempPrepareParams.InternalGlobalLights := Params.GlobalLights;
     FTempPrepareParams.InternalGlobalFog := Params.GlobalFog;
-    PrepareResources([prRenderSelf], false, FTempPrepareParams);
+    PrepareResources([prRenderSelf], FTempPrepareParams);
 
     RenderWithShadowMaps;
   end;
@@ -1726,6 +1731,24 @@ begin
   GLContextClose;
 
   inherited;
+end;
+
+function TCastleScene.HasColliderMesh: Boolean;
+begin
+  Result := true;
+end;
+
+procedure TCastleScene.ColliderMesh(const TriangleEvent: TTriangleEvent);
+var
+  ShapesList: TShapeList;
+  I: Integer;
+begin
+  inherited ColliderMesh(TriangleEvent);
+
+  ShapesList := Shapes.TraverseList(true);
+    for I := 0 to ShapesList.Count - 1 do
+      if ShapesList[I].Collidable then
+        ShapesList[I].Triangulate(TriangleEvent);
 end;
 
 { Shadow volumes ------------------------------------------------------------- }
