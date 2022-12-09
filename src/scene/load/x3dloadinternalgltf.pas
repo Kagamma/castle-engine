@@ -523,7 +523,7 @@ const
         for Bee from https://github.com/castle-engine/view3dscene/issues/27 .
 
         For now just avoid having RoughnessFactor ridiculously low. }
-      RoughnessFactor := Max(RoughnessFactor, 0.5);
+      RoughnessFactor := Max(RoughnessFactor, 0.05);
     end;
 
     (*
@@ -550,7 +550,7 @@ const
     { Read PBR specular-glossiness subset.
       As we only read subset, we use it only when
       Material.PBRMetallicRoughness is empty, despite
-      https://github.com/KhronosGroup/glTF/tree/master/extensions/2.0/Khronos/KHR_materials_pbrSpecularGlossiness
+      https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Archived/KHR_materials_pbrSpecularGlossiness
       advising to use specular-glossiness if you can.
 
       Code below, to read specular-glossiness from JSON, is based on PasGLTF UnitGLTFOpenGL. }
@@ -906,6 +906,15 @@ var
   Lights: TPunctualLights;
 
   procedure ReadHeader;
+  const
+    SupportedExtensions: array [0..3] of String = (
+      'KHR_materials_pbrSpecularGlossiness',
+      'KHR_texture_transform',
+      'KHR_lights_punctual',
+      'KHR_materials_unlit'
+    );
+  var
+    ExtRequired: String;
   begin
     // too verbose to be done by default
     (*
@@ -955,8 +964,9 @@ var
       ])
     );
     *)
-    if Document.ExtensionsRequired.IndexOf('KHR_draco_mesh_compression') <> -1 then
-      WritelnWarning('Required extension KHR_draco_mesh_compression not supported by glTF reader');
+    for ExtRequired in Document.ExtensionsRequired do
+      if ArrayPosStr(ExtRequired, SupportedExtensions) = -1 then
+        WritelnWarning('Required extension "%s" not supported by glTF reader', [ExtRequired]);
   end;
 
   { Read glTF "extras" item, with given key and value (JSON array), into X3D "metadata" information. }
