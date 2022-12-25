@@ -854,6 +854,7 @@ var
   end;
 
 begin
+  Result := false;
   if not Valid then Exit;
 
   A := RealAvatarHierarchy;
@@ -1446,9 +1447,6 @@ var
             end;
           end;
         end;
-      {$ifndef COMPILER_CASE_ANALYSIS}
-      else raise EInternalError.Create('IsOnGround?');
-      {$endif}
     end;
   end;
 
@@ -1643,5 +1641,5 @@ end;
 {$undef read_implementation_methods}
 
 initialization
-  RegisterSerializableComponent(TCastleThirdPersonNavigation, 'Navigation/Third-Person');
+  RegisterSerializableComponent(TCastleThirdPersonNavigation, ['Navigation', 'Third-Person']);
 end.

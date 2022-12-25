@@ -42,11 +42,14 @@ const
 type
   { Main project management. }
   TProjectForm = class(TForm)
+    ActionViewportSort3D: TAction;
     ActionShowColliders: TAction;
     ActionSimulationPlayStop: TAction;
     ActionSimulationPauseUnpause: TAction;
     ActionViewportRenderNext: TAction;
     ActionViewportRenderSolidWireframe: TAction;
+    ActionPhysicsHideAllJointsTools: TAction;
+    ActionPhysicsShowAllJointsTools: TAction;
     ActionModeSelect: TAction;
     ActionModeTranslate: TAction;
     ActionModeRotate: TAction;
@@ -96,7 +99,9 @@ type
     MenuItem22: TMenuItem;
     MenuItem24: TMenuItem;
     MenuItem27: TMenuItem;
+    MenuItem2888888: TMenuItem;
     MenuItem28: TMenuItem;
+    MenuItem33: TMenuItem;
     MenuItemSimulationPauseUnpause: TMenuItem;
     MenuItemSimulationPlayStop: TMenuItem;
     SeparatorBeforeShowColliders: TMenuItem;
@@ -111,6 +116,7 @@ type
     MenuItem36: TMenuItem;
     MenuItem37: TMenuItem;
     Separator10: TMenuItem;
+    MenuShowJointTools28: TMenuItem;
     MenuItem29: TMenuItem;
     MenuItem30: TMenuItem;
     MenuItem31: TMenuItem;
@@ -119,6 +125,7 @@ type
     Separator7: TMenuItem;
     MenuItem25: TMenuItem;
     MenuItem26: TMenuItem;
+    Separator888888: TMenuItem;
     WarningsPopup: TPopupMenu;
     Separator6: TMenuItem;
     MenuItem23: TMenuItem;
@@ -178,10 +185,10 @@ type
     ActionRegenerateProject: TAction;
     ActionEditAssociatedUnit: TAction;
     ActionNewUnitHereClass: TAction;
-    ActionNewUnitHereState: TAction;
+    ActionNewUnitHereView: TAction;
     ActionNewUnitHereEmpty: TAction;
     ActionNewUnitClass: TAction;
-    ActionNewUnitState: TAction;
+    ActionNewUnitView: TAction;
     ActionNewUnitEmpty: TAction;
     ActionEditUnit: TAction;
     ActionOpenProjectCode: TAction;
@@ -192,10 +199,10 @@ type
     OpenPascalUnitDialog: TCastleOpenPascalUnitDialog;
     MenuItemPopupNewUnitEmpty: TMenuItem;
     MenuItemPopupNewUnitClass: TMenuItem;
-    MenuItemPopupNewUnitState: TMenuItem;
+    MenuItemPopupNewUnitView: TMenuItem;
     MenuItemPopupNewUnit: TMenuItem;
     N3: TMenuItem;
-    MenuItemNewUnitState: TMenuItem;
+    MenuItemNewUnitView: TMenuItem;
     MenuItemNewUnitClass: TMenuItem;
     MenuItemNewUnitEmpty: TMenuItem;
     MenuItemNewUnit: TMenuItem;
@@ -287,6 +294,8 @@ type
     TabOutput: TTabSheet;
     ProcessUpdateTimer: TTimer;
     TabWarnings: TTabSheet;
+    procedure ActionPhysicsShowAllJointsToolsExecute(Sender: TObject);
+    procedure ActionPhysicsHideAllJointsToolsExecute(Sender: TObject);
     procedure ActionFocusDesignExecute(Sender: TObject);
     procedure ActionModeInteractExecute(Sender: TObject);
     procedure ActionModeRotateExecute(Sender: TObject);
@@ -308,6 +317,7 @@ type
     procedure ActionViewportRenderNormalExecute(Sender: TObject);
     procedure ActionViewportRenderSolidWireframeExecute(Sender: TObject);
     procedure ActionViewportRenderWireframeOnlyExecute(Sender: TObject);
+    procedure ActionViewportSort3DExecute(Sender: TObject);
     procedure ActionViewportToggleProjectionExecute(Sender: TObject);
     procedure ActionNavigation2DExecute(Sender: TObject);
     procedure ActionNavigationExamineExecute(Sender: TObject);
@@ -322,8 +332,8 @@ type
     procedure ActionNewUnitEmptyExecute(Sender: TObject);
     procedure ActionNewUnitHereClassExecute(Sender: TObject);
     procedure ActionNewUnitHereEmptyExecute(Sender: TObject);
-    procedure ActionNewUnitHereStateExecute(Sender: TObject);
-    procedure ActionNewUnitStateExecute(Sender: TObject);
+    procedure ActionNewUnitHereViewExecute(Sender: TObject);
+    procedure ActionNewUnitViewExecute(Sender: TObject);
     procedure ActionOpenProjectCodeExecute(Sender: TObject);
     procedure ActionOutputCopyAllExecute(Sender: TObject);
     procedure ActionOutputCopySelectedExecute(Sender: TObject);
@@ -670,7 +680,7 @@ begin
     raise EInternalError.Create('No process is running now');
 
   OutputList.AddSeparator;
-  OutputList.AddLine('Stopping the process.', okError);
+  OutputList.AddLine('Stopping the process.', okInfo);
   RunningProcess.TerminateChildrenHarder;
   FreeProcess;
 end;
@@ -827,6 +837,12 @@ begin
   ActionViewportRenderWireframeOnly.Checked := true;
 end;
 
+procedure TProjectForm.ActionViewportSort3DExecute(Sender: TObject);
+begin
+  if Design <> nil then
+    Design.ViewportSort3D;
+end;
+
 procedure TProjectForm.ActionViewportAlignCameraToViewExecute(Sender: TObject);
 begin
   if Design <> nil then
@@ -843,6 +859,18 @@ procedure TProjectForm.ActionViewportGridAxisExecute(Sender: TObject);
 begin
   if (Design <> nil) and (Design.CurrentViewport <> nil) then
     Design.CurrentViewport.InternalGridAxis := not Design.CurrentViewport.InternalGridAxis;
+end;
+
+procedure TProjectForm.ActionPhysicsShowAllJointsToolsExecute(Sender: TObject);
+begin
+  Assert(Design <> nil); // menu item is disabled otherwise
+  Design.ShowAllJointsTools;
+end;
+
+procedure TProjectForm.ActionPhysicsHideAllJointsToolsExecute(Sender: TObject);
+begin
+  Assert(Design <> nil); // menu item is disabled otherwise
+  Design.HideAllJointsTools;
 end;
 
 procedure TProjectForm.ActionFocusDesignExecute(Sender: TObject);
@@ -1186,14 +1214,14 @@ begin
   ShowNewUnitForm(utEmpty, true);
 end;
 
-procedure TProjectForm.ActionNewUnitHereStateExecute(Sender: TObject);
+procedure TProjectForm.ActionNewUnitHereViewExecute(Sender: TObject);
 begin
-  ShowNewUnitForm(utState, true);
+  ShowNewUnitForm(utView, true);
 end;
 
-procedure TProjectForm.ActionNewUnitStateExecute(Sender: TObject);
+procedure TProjectForm.ActionNewUnitViewExecute(Sender: TObject);
 begin
-  ShowNewUnitForm(utState, false);
+  ShowNewUnitForm(utView, false);
 end;
 
 procedure TProjectForm.ShowNewUnitForm(const AUnitType: TNewUnitType;
@@ -1888,6 +1916,10 @@ end;
 
 procedure TProjectForm.UpdateUndo(Sender: TObject);
 begin
+  { It is important to disable these actions, as e.g. calling
+    TUndoSystem.Undo when IsUndoPossible=false will result in an exception.
+    Testcase: right after loading the design, undo should not be possible,
+    Ctrl+Z should do nothing. }
   if Design <> nil then
   begin
     MenuItemUndo.Enabled := Design.UndoSystem.IsUndoPossible;
@@ -2162,8 +2194,7 @@ begin
   if CastleApplicationMode in [appSimulation, appSimulationPaused] then
   begin
     Result := YesNoBox('The editor is during of physics simulation.'+ NL +
-      'Saving the design will save the current state, not the state ' + NL +
-      'before the start of the simulation. Do you want to continue?');
+      'Saving the design will save the current state, not the state before the start of the simulation. Do you want to continue?');
   end;
 end;
 

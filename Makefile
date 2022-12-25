@@ -224,7 +224,7 @@ endif
 
 EXAMPLES_BASE_NAMES :=
 
-# Note that src/library/castleengine must be compiled before
+# Note that src/deprecated_library/castleengine must be compiled before
 # cge_dynlib_tester, otherwise linking cge_dynlib_tester will fail.
 EXAMPLES_LAZARUS_BASE_NAMES := \
   src/deprecated_library/castleengine \
@@ -311,6 +311,7 @@ examples:
 	  '(' -path ./tools/castle-editor/data/project_templates -prune ')' -o \
 	  '(' -path ./tools/build-tool -prune ')' -o \
 	  '(' -path ./tests/delphi_tests -prune ')' -o \
+	  '(' -path ./examples/delphi -prune ')' -o \
 	  '(' -type d -iname castle-engine-output -prune ')' -o \
 	  '(' -type f -iname CastleEngineManifest.xml -print ')' > \
 	  /tmp/cge-projects.txt
@@ -392,7 +393,10 @@ clean: cleanexamples
 			   -iname '*.or'  -or \
 			   -iname '*.ppu' -or \
 			   '(' -iname '*.a' -and -not -iwholename '*/vampyre_imaginglib/*' ')' -or \
-			   '(' -iname '*.res' -and -not -iwholename '*/vampyre_imaginglib/*' ')' -or \
+			   '(' -iname '*.res' -and \
+			       -not -iwholename '*/vampyre_imaginglib/*' -and \
+			       -not -iwholename '*/examples/delphi/*' ')' \
+			       -or \
 			   -iname '*.rsj' -or \
 			   -iname '*.compiled' -or \
 			   -iname '*.lps' -or \
@@ -505,7 +509,9 @@ tests:
 .PHONY: build-using-fpmake
 build-using-fpmake:
 	fpc fpmake.pp
-	@echo 'Running fpmake. If this fails saying that "rtl" is not found, remember to set FPCDIR environment variable, see http://wiki.freepascal.org/FPMake .'
+	@echo 'Running fpmake.'
+	@echo '  If this fails saying that "rtl" is not found -> set FPCDIR environment variable, see http://wiki.freepascal.org/FPMake .'
+	@echo '  If this fails saying that "opengl" package is not found -> you maybe have broken FPC installation without Package.fpc files, consider using "export CASTLE_PACKAGE_NO_DEPENDENCIES=true" as a workaround.'
 # Workaround FPC >= 3.x problem (bug?) --- it ignores $FPCDIR, but --globalunitdir works
 	if [ '(' -n "$(FPCDIR)" ')' ]; then \
 	   ./fpmake --globalunitdir="$(FPCDIR)"; \
