@@ -1,5 +1,5 @@
 {
-  Copyright 2016-2021 Michalis Kamburelis.
+  Copyright 2016-2022 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -66,7 +66,11 @@ begin
   { turn off head bobbing, it makes a feeling that sprites sometimes "tremble" }
 //  WalkNavigation.HeadBobbing := 0;
 
+  // see https://castle-engine.io/multiple_viewports_to_display_one_world
+  MapViewport.Items.Remove(MapViewport.Camera);
   MapViewport.Items := MainViewport.Items;
+  MapViewport.Items.Add(MapViewport.Camera);
+
   MapViewport.Camera.SetView(
     Vector3(5, 92.00, 0.99),
     Vector3(0, -1, 0),
@@ -87,18 +91,18 @@ begin
     When StateAskDialog is active, we do *not* want to forcefully capture input
     (it would allow user to move by mouse dragging when StateAskDialog is open).
     So we set this in Resume, and turn off in Pause. }
-  StateContainer.ForceCaptureInput := MainViewport.Navigation;
+  Container.ForceCaptureInput := MainViewport.Navigation;
 end;
 
 procedure TStatePlay.Pause;
 begin
-  StateContainer.ForceCaptureInput := nil;
+  Container.ForceCaptureInput := nil;
   inherited;
 end;
 
 procedure TStatePlay.ClickBack(Sender: TObject);
 begin
-  TUIState.Current := StateMainMenu;
+  Container.View := StateMainMenu;
 end;
 
 function TStatePlay.Press(const Event: TInputPressRelease): boolean;
@@ -117,7 +121,7 @@ begin
          (Triangle^.MaterialInfo.Node.X3DName = 'MA_male_zombie_material')) then
     begin
       StateAskDialog.Male := Triangle^.MaterialInfo.Node.X3DName = 'MA_male_zombie_material';
-      TUIState.Push(StateAskDialog);
+      Container.PushView(StateAskDialog);
     end;
   end;
 end;
