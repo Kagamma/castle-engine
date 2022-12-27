@@ -14,9 +14,9 @@
 }
 
 (*Dialog windows (to display some information, or ask user for confirmation,
-  or ask user to input a simple value) as a user-interface state (@link(TUIState)).
+  or ask user to input a simple value) as a user-interface state (@link(TCastleView)).
   This unit defines the user-interface state classes
-  (@link(TUIState) descendants) to display given dialog.
+  (@link(TCastleView) descendants) to display given dialog.
 
   If you use @link(TCastleWindow) with most platforms (but not iOS),
   then it's usually more comfortable to use the unit @link(CastleMessages)
@@ -42,12 +42,12 @@
 
   In this case you should use this unit and instantiate the
   user-interface classes yourself, and you need to
-  @italic(organize your whole game using TUIState classes).
-  See https://castle-engine.io/states about how to use @link(TUIState). Like this:
+  @italic(organize your whole game using TCastleView classes).
+  See https://castle-engine.io/states about how to use @link(TCastleView). Like this:
 
   @longCode(#
   type
-    TMyGameState = class(TUIState)
+    TMyGameState = class(TCastleView)
     private
       DialogAskDeleteFile: TStateDialogYesNo;
     public
@@ -55,7 +55,7 @@
       procedure Resume; override;
     end;
 
-  function Press(const Event: TInputPressRelease): boolean; override;
+  function TMyGameState.Press(const Event: TInputPressRelease): boolean; override;
   begin
     Result := inherited;
     if Result then Exit;
@@ -64,11 +64,11 @@
     begin
       DialogAskDeleteFile := TStateDialogYesNo.Create(Self);
       DialogAskDeleteFile.Caption := 'Are you sure you want to delete this file?';
-      TUIState.Push(DialogAskDeleteFile);
+      Container.PushView(DialogAskDeleteFile);
     end;
   end;
 
-  procedure TStatePlay.Resume;
+  procedure TMyGameState.Resume;
   begin
     inherited;
     if DialogAskDeleteFile <> nil then // returning from DialogAskDeleteFile
@@ -90,13 +90,13 @@ interface
 uses Classes, Math,
   CastleGLUtils, CastleUtils, CastleImages,
   CastleStringUtils, CastleVectors, CastleKeysMouse, CastleControls,
-  CastleRectangles, CastleUIState, CastleColors, CastleUIControls,
+  CastleRectangles, CastleColors, CastleUIControls,
   CastleFonts, CastleInternalRichText, CastleTimeUtils;
 
 type
   { Abstract class for a modal dialog user-interface state.
     See unit @link(CastleDialogStates) documentation for example usage. }
-  TStateDialog = class abstract(TUIState)
+  TStateDialog = class abstract(TCastleView)
   strict private
     type
       {$define read_interface}
@@ -140,7 +140,7 @@ type
     procedure SaveScreenIfNecessary(const AContainer: TCastleContainer);
 
     { When user answers the dialog, this is set to @true.
-      The state also normally does TUIState.Pop, so there's no need to check
+      The state also normally does TCastleContainer.PopView, so there's no need to check
       this property, unless you set @link(PopOnAnswered) to @false. }
     property Answered: boolean read FAnswered;
 
@@ -204,7 +204,7 @@ type
     property BackgroundScreenshot: boolean
       read FBackgroundScreenshot write FBackgroundScreenshot default false;
 
-    { Should the state do @link(TUIState.Pop) when answered.
+    { Should the state do @link(TCastleContainer.PopView) when answered.
       This is usually most natural. }
     property PopOnAnswered: boolean
       read FPopOnAnswered write FPopOnAnswered default true;

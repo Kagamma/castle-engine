@@ -1174,7 +1174,7 @@ type
   private
     SceneManager: TCastleSceneManager;
   protected
-    procedure Notify({$ifdef FPC}constref{$else}const{$endif} Value: TCastleViewport;
+    procedure Notify({$ifdef GENERICS_CONSTREF}constref{$else}const{$endif} Value: TCastleViewport;
       Action: TCollectionNotification); override;
   end deprecated 'internal for TCastleSceneManager';
 
@@ -1473,7 +1473,7 @@ begin
     - remove (and eventually free),
     - rename,
     - see in editor (e.g. in dropdown Viewport.Camera),
-    - access at runtime using TUIState.DesignedComponent }
+    - access at runtime using TCastleView.DesignedComponent }
 
   Assert(Owner <> nil); // Use SetupDesignTimeCamera only on viewports with owner
 
@@ -4056,7 +4056,7 @@ end;
 
 { TCastleViewportList -------------------------------------------------- }
 
-procedure TCastleViewportList.Notify({$ifdef FPC}constref{$else}const{$endif} Value: TCastleViewport;
+procedure TCastleViewportList.Notify({$ifdef GENERICS_CONSTREF}constref{$else}const{$endif} Value: TCastleViewport;
   Action: TCollectionNotification);
 begin
   inherited;
