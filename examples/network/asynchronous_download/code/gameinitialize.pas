@@ -1,5 +1,5 @@
 {
-  Copyright 2020-2020 Michalis Kamburelis.
+  Copyright 2020-2022 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -22,8 +22,8 @@ interface
 
 implementation
 
-uses CastleWindow, CastleLog, CastleApplicationProperties, CastleUIState,
-  GameStateMain;
+uses CastleWindow, CastleLog, CastleApplicationProperties,
+  GameViewMain;
 
 var
   Window: TCastleWindow;
@@ -34,8 +34,8 @@ begin
   { Adjust container settings for a scalable UI (adjusts to any window size in a smart way). }
   Window.Container.LoadSettings('castle-data:/CastleSettings.xml');
 
-  StateMain := TStateMain.Create(Application);
-  TUIState.Current := StateMain;
+  ViewMain := TViewMain.Create(Application);
+  Window.Container.View := ViewMain;
 end;
 
 initialization

@@ -1,5 +1,5 @@
 {
-  Copyright 2020-2020 Michalis Kamburelis.
+  Copyright 2020-2022 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -22,8 +22,8 @@ implementation
 
 uses SysUtils, Math, Classes,
   {$ifdef FPC} {$ifndef VER3_0} OpenSSLSockets, {$endif} {$endif} // support HTTPS
-  CastleWindow, CastleLog, CastleApplicationProperties, CastleUIState,
-  GameStateMain, GameLogHandler;
+  CastleWindow, CastleLog, CastleApplicationProperties,
+  GameViewMain, GameLogHandler;
 
 var
   Window: TCastleWindow;
@@ -39,8 +39,8 @@ begin
   { Adjust container settings for a scalable UI (adjusts to any window size in a smart way). }
   Window.Container.LoadSettings('castle-data:/CastleSettings.xml');
 
-  StateMain := TStateMain.Create(Application);
-  TUIState.Current := StateMain;
+  ViewMain := TViewMain.Create(Application);
+  Window.Container.View := ViewMain;
 end;
 
 initialization

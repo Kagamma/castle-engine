@@ -1,5 +1,5 @@
 {
-  Copyright 2020-2021 Michalis Kamburelis.
+  Copyright 2020-2022 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -25,12 +25,12 @@ implementation
 uses SysUtils,
   CastleWindow, CastleScene, CastleControls, CastleLog,
   CastleFilesUtils, CastleSceneCore, CastleKeysMouse, CastleColors,
-  CastleUIControls, CastleApplicationProperties, CastleUIState, CastleSoundEngine,
+  CastleUIControls, CastleApplicationProperties, CastleSoundEngine,
   CastleTransform, CastleRenderOptions
   {$region 'Castle Initialization Uses'}
   // The content here may be automatically updated by CGE editor.
-  , GameStateMenu
-  , GameStatePlay
+  , GameViewMenu
+  , GameViewPlay
   {$endregion 'Castle Initialization Uses'};
 
 var
@@ -42,14 +42,14 @@ begin
   { Adjust container settings for a scalable UI (adjusts to any window size in a smart way). }
   Window.Container.LoadSettings('castle-data:/CastleSettings.xml');
 
-  { Create game states and set initial state }
-  {$region 'Castle State Creation'}
+  { Create game views and set initial view }
+  {$region 'Castle View Creation'}
   // The content here may be automatically updated by CGE editor.
-  StatePlay := TStatePlay.Create(Application);
-  StateMenu := TStateMenu.Create(Application);
-  {$endregion 'Castle State Creation'}
+  ViewPlay := TViewPlay.Create(Application);
+  ViewMenu := TViewMenu.Create(Application);
+  {$endregion 'Castle View Creation'}
 
-  TUIState.Current := StateMenu;
+  Window.Container.View := ViewMenu;
 
   SoundEngine.RepositoryURL := 'castle-data:/audio/index.xml';
   SoundEngine.LoopingChannel[0].Sound := SoundEngine.SoundFromName('dark_music');

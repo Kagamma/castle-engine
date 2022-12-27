@@ -322,7 +322,7 @@ function MessageInputQueryVector4(
 
 var
   { Change MessageOK behavior to create @link(TStateDialogOK)
-    and push it (using @link(TUIState.Push))
+    and push it (using @link(TCastleContainer.PushView))
     and immediately return, without waiting for user confirmation.
 
     Why you may want to use this (or not to use this)?
@@ -343,19 +343,19 @@ var
         On the other hand, the notification about unhandled exceptions
         (done by CastleWindow automatically, using MessageOK) is a little safer
         when this is @false. When this is @false, there's a greater chance that
-        the problematic code (e.g. the update method of some other TUIState)
+        the problematic code (e.g. the update method of some other TCastleView)
         it disabled during the display of the error messsage.)
     )
 
     If you turn this on, then you should organize your whole application
-    into states using TUIState. You can even pause the running game
-    in overridden @link(TUIState.Pause), to make game paused when
+    into states using TCastleView. You can even pause the running game
+    in overridden @link(TCastleView.Pause), to make game paused when
     the message dialog is displayed.
 
     Note that this feature doesn't change other routines in CastleMessages.
     For example @link(MessageYesNo) is still a modal function (it waits
     for user input), and it simply doesn't work on iOS.
-    If you want to use TUIState to manage all dialogs,
+    If you want to use TCastleView to manage all dialogs,
     then use explicitly states like @link(TStateDialogYesNo) from
     the @link(CastleDialogStates) unit.
   }
@@ -365,7 +365,7 @@ implementation
 
 uses SysUtils,
   CastleImages, CastleClassUtils, CastleInternalWindowModes, CastleLog,
-  CastleUIControls, CastleUIState, CastleDialogStates;
+  CastleUIControls, CastleDialogStates;
 
 { MessageCore ---------------------------------------------------------------- }
 
@@ -415,9 +415,10 @@ begin
     like "if MessageYesNo('Are you sure ?') then Window.Close;" }
   SavedMode := TGLMode.CreateReset(Window, nil, nil, @NoClose);
   try
-    { use State directly as UI control, not using TUIState.Push or TUIState.Current,
+    { use State directly as UI control, not using TCastleContainer.PushView
+      nor setting TCastleContainer.View,
       because we can (TGLMode already took care to pause everything),
-      and this way we don't mess TUIState stack (in case game is using it). }
+      and this way we don't mess TCastleView stack (in case game is using it). }
     Window.Controls.InsertFront(State);
 
     repeat
