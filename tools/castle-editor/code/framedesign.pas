@@ -1,5 +1,5 @@
 {
-  Copyright 2018-2022 Michalis Kamburelis.
+  Copyright 2018-2023 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -34,7 +34,7 @@ uses
   CastleSceneCore, CastleKeysMouse, CastleVectors, CastleRectangles,
   CastleViewport, CastleClassUtils, CastleControls, CastleTiledMap,
   CastleCameras, CastleBoxes, CastleTransform, CastleDebugTransform,
-  CastleColors, CastleScene,
+  CastleColors, CastleScene, CastleRenderOptions,
   // editor units
   FrameAnchors, CastleShellCtrls, EditorUtils,
   DesignVisualizeTransform, DesignUndoSystem, DesignCameraPreview,
@@ -55,6 +55,7 @@ type
 
   { Frame to visually design component hierarchy. }
   TDesignFrame = class(TFrame)
+    ActionApiReferenceOfCurrent: TAction;
     ActionPlayStop: TAction;
     ActionSimulationPauseUnpause: TAction;
     ActionSimulationPlayStop: TAction;
@@ -62,6 +63,7 @@ type
     ButtonResetTransformation: TButton;
     ButtonClearTranslation: TButton;
     ButtonPlayStop: TSpeedButton;
+    ButtonApiReferenceForCurrent: TSpeedButton;
     LabelPhysics: TLabel;
     LabelPlayStop: TLabel;
     LabelViewport: TLabel;
@@ -100,7 +102,6 @@ type
     CheckParentSelfAnchorsEqual: TCheckBox;
     ControlProperties: TPageControl;
     ControlsTree: TTreeView;
-    LabelUIScaling: TLabel;
     LabelControlSelected: TLabel;
     LabelHierarchy: TLabel;
     PanelMiddleTop: TPanel;
@@ -124,6 +125,7 @@ type
     TabLayout: TTabSheet;
     TabBasic: TTabSheet;
     UpdateObjectInspector: TTimer;
+    procedure ActionApiReferenceOfCurrentExecute(Sender: TObject);
     procedure ActionPlayStopExecute(Sender: TObject);
     procedure ActionPlayStopUpdate(Sender: TObject);
     procedure ActionSimulationPauseUnpauseExecute(Sender: TObject);
@@ -216,7 +218,7 @@ type
       TTreeNodeMap = class(specialize TDictionary<TComponent, TTreeNode>)
       end;
 
-      TTreeNodeSide = (tnsRight, tnsBottom, tnsTop);
+      TTreeNodeSide = (tnsInside, tnsBottom, tnsTop);
 
       TInspectorType = (itBasic, itLayout, itEvents, itAll);
 
@@ -475,7 +477,7 @@ type
     { Called always when CurrentViewport value changed. }
     OnCurrentViewportChanged: TNotifyEvent;
     OnProposeOpenDesign: TProposeOpenDesignEvent;
-    OnRunningToggle: TNotifyEvent;
+    OnRunningToggle, OnApiReferenceOfCurrent: TNotifyEvent;
     OnIsRunning: TIsRunningEvent;
 
     function RenamePossible: Boolean;
@@ -546,8 +548,7 @@ type
     procedure ViewportViewAll;
     procedure ViewportViewSelected;
     procedure ViewportSetup2D;
-    procedure ViewportSort2D;
-    procedure ViewportSort3D;
+    procedure ViewportSort(const BlendingSort: TBlendingSort);
     procedure ViewportToggleProjection;
     procedure ViewportAlignViewToCamera;
     procedure ViewportAlignCameraToView;
@@ -1688,6 +1689,13 @@ begin
         so e.g. Stop of physics will keep showing colliders. }
     end;
   end;
+
+  { After restoring design, reliably focus the CastleControl,
+    not the edit box of some property
+    (which is optionally done by ActiveInspector.SetItemIndexAndFocus above).
+    This allows using our general shortcuts, like Ctrl+Z, reliably after RestoreSavedSelection,
+    in particular you can use Ctrl+Z after Ctrl+Z. }
+  FocusDesign;
 end;
 
 procedure TDesignFrame.PerformRedo;
@@ -2149,6 +2157,28 @@ end;
 
 procedure TDesignFrame.DeleteComponent;
 
+  { Explain to user why C cannot be deleted.
+    We know that Deletable(C) = false at this point. }
+  function ReasonWhyNotDeletable(const C: TComponent): String;
+  var
+    ReasonStart: String;
+  begin
+    ReasonStart := 'Cannot remove "' + C.Name + '":' + NL + NL;
+
+    // This analyzes some conditions of Deletable and Selectable
+    if C is TCastleToolTransform then
+      Exit(ReasonStart + 'This is a temporary (tool) component, helpful to edit something, but it is not part of the final design. Use "Hide Joint Tools" to hide it.');
+    if csTransient in C.ComponentStyle then
+      Exit(ReasonStart + 'This is an internal component, you should not be able to even select it.');
+    if csSubComponent in C.ComponentStyle then
+      Exit(ReasonStart + 'This is a subcomponent, and subcomponents cannot be removed because owner depends that they always exist.');
+    if C = DesignRoot then
+      Exit(ReasonStart + 'This is the root component of the design. Design must always have a root component. You can only change it to something else using "Change Class".');
+
+    // Shorter error message, if we don't know any specific reason
+    Result := 'Cannot remove "' + C.Name + '".';
+  end;
+
   function FirstDeletableComponent(const List: TComponentList): TComponent;
   var
     I: Integer;
@@ -2173,6 +2203,14 @@ begin
         UndoSummary := Selected[0].Name
       else
         UndoSummary := SelectedCount.ToString + ' components';
+
+      if (SelectedCount = 1) and not Deletable(Selected[0]) then
+      begin
+        { In this case we will not remove anything.
+          Be vocal to user to explain "why", e.g. why root components cannot be removed. }
+        ErrorBox(ReasonWhyNotDeletable(Selected[0]));
+        Exit;
+      end;
 
       { We depend on the fact TComponentList observes freed items,
         and removes them automatically.
@@ -2726,10 +2764,12 @@ begin
 end;
 
 procedure TDesignFrame.CastleControlResize(Sender: TObject);
-var
-  CalculatedUIScale: Single;
-  H, CalculatedUIScaleStr: String;
+//var
+//  CalculatedUIScale: Single;
+//  H, CalculatedUIScaleStr: String;
 begin
+  // TODO: where to display UI scaling effect nicely?
+  {
   // trick to get private TCastleContainer.FCalculatedUIScale
   CalculatedUIScale :=  (1 / CastleControl.Container.UnscaledWidth) *
     CastleControl.Container.Width;
@@ -2762,6 +2802,7 @@ begin
        CastleControl.Container.UnscaledHeight]);
   end;
   LabelUIScaling.Hint := H;
+  }
 end;
 
 procedure TDesignFrame.CastleControlOpen(Sender: TObject);
@@ -3652,15 +3693,28 @@ end;
 
 class function TDesignFrame.Selectable(const Child: TComponent): Boolean;
 begin
-  { Do not show in hierarchy the TCastleDesign loaded hierarchy,
+  { Note: When changing conditions here, consider also updating ReasonWhyNotDeletable,
+    that explains to user *why* something is not deletable (not being selectable
+    also makes it not deletable). }
+
+  { csTransient reason:
+
+    Do not show in hierarchy the TCastleDesign loaded hierarchy,
     as it will not be saved.
     Same for TCastleCheckbox children.
-    Consequently, do not allow to select stuff inside. }
+    Consequently, do not allow to select stuff inside.
+
+    However, show TCastleToolTransform, even though it is csTransient.
+    We want to allow selecting joint tools.
+  }
   Result := (not (csTransient in Child.ComponentStyle)) or (Child is TCastleToolTransform);
 end;
 
 function TDesignFrame.Deletable(const Child: TComponent): Boolean;
 begin
+  { Note: When changing conditions here, consider also updating ReasonWhyNotDeletable,
+    that explains to user *why* something is not deletable. }
+
   Result := Selectable(Child) and
     (not (csSubComponent in Child.ComponentStyle)) and
     (Child <> DesignRoot) and (not (Child is TCastleToolTransform));
@@ -4451,13 +4505,13 @@ procedure TDesignFrame.ControlsTreeDragOver(Sender, Source: TObject; X,
     R: TRect;
   begin
     R := Node.DisplayRect(false);
-    if X > R.SplitRect(srRight, 0.33).Left then
-      Result := tnsRight
+    if Y < Lerp(0.75, R.Bottom, R.Top) then
+      Result := tnsTop
     else
-    if Y > R.CenterPoint.Y then
+    if Y > Lerp(0.25, R.Bottom, R.Top) then
       Result := tnsBottom
     else
-      Result := tnsTop;
+      Result := tnsInside;
   end;
 
 var
@@ -4647,6 +4701,12 @@ end;
 procedure TDesignFrame.ControlsTreeDragDrop(Sender, Source: TObject; X,
   Y: Integer);
 
+  { Preserve UI or TCastleTransform transformation when changing parent. }
+  function PreserveTransformation: Boolean;
+  begin
+    Result := not (ssCtrl in GetKeyShiftState);
+  end;
+
   procedure MoveOnlyTreeNodes; forward;
 
   { Does Parent contains PotentialChild, searching recursively.
@@ -4686,14 +4746,15 @@ procedure TDesignFrame.ControlsTreeDragDrop(Sender, Source: TObject; X,
     OldRect := Src.RenderRectWithBorder;
 
     case ControlsTreeNodeUnderMouseSide of
-      tnsRight:
+      tnsInside:
         begin
           if not ContainsRecursive(Src, Dst) then
           begin
             if Src.Parent <> nil then
               Src.Parent.RemoveControl(Src);
             Dst.InsertFront(Src);
-            AdjustUserInterfaceAnchorsToKeepRect(Src, OldRect);
+            if PreserveTransformation then
+              AdjustUserInterfaceAnchorsToKeepRect(Src, OldRect);
             MoveOnlyTreeNodes;
           end;
         end;
@@ -4709,7 +4770,8 @@ procedure TDesignFrame.ControlsTreeDragDrop(Sender, Source: TObject; X,
             if ControlsTreeNodeUnderMouseSide = tnsBottom then
               Inc(Index);
             Dst.Parent.InsertControl(Index, Src);
-            AdjustUserInterfaceAnchorsToKeepRect(Src, OldRect);
+            if PreserveTransformation then
+              AdjustUserInterfaceAnchorsToKeepRect(Src, OldRect);
             MoveOnlyTreeNodes;
           end;
         end;
@@ -4720,23 +4782,28 @@ procedure TDesignFrame.ControlsTreeDragDrop(Sender, Source: TObject; X,
   procedure MoveTransform(const Src, Dst: TCastleTransform);
   var
     Index: Integer;
-    SrcHasWorld: Boolean;
+    FinalPreserveTransformation: Boolean;
     WorldPos, WorldDir, WorldUp: TVector3;
   begin
-    // TODO: Available only with Ctrl, to test this feature
-    SrcHasWorld := (ssCtrl in GetKeyShiftState) and Src.HasWorldTransform;
-    if SrcHasWorld then
+    FinalPreserveTransformation := PreserveTransformation and
+      Src.HasWorldTransform and
+      { Do it only when scale is identity, otherwise GetWorldView/SetWorldView would
+        not preserve scale. }
+      TVector3.Equals(ScaleFromMatrix(Src.WorldTransform), NoScale) and
+      Dst.HasWorldTransform and
+      TVector3.Equals(ScaleFromMatrix(Dst.WorldTransform), NoScale);
+    if FinalPreserveTransformation then
       Src.GetWorldView(WorldPos, WorldDir, WorldUp);
 
     case ControlsTreeNodeUnderMouseSide of
-      tnsRight:
+      tnsInside:
         begin
           if not ContainsRecursive(Src, Dst) then
           begin
             if Src.Parent <> nil then
               Src.Parent.Remove(Src);
             Dst.Add(Src);
-            if SrcHasWorld then
+            if FinalPreserveTransformation then
               Src.SetWorldView(WorldPos, WorldDir, WorldUp);
             MoveOnlyTreeNodes;
           end;
@@ -4753,7 +4820,7 @@ procedure TDesignFrame.ControlsTreeDragDrop(Sender, Source: TObject; X,
             if ControlsTreeNodeUnderMouseSide = tnsBottom then
               Inc(Index);
             Dst.Parent.Insert(Index, Src);
-            if SrcHasWorld then
+            if FinalPreserveTransformation then
               Src.SetWorldView(WorldPos, WorldDir, WorldUp);
             MoveOnlyTreeNodes;
           end;
@@ -4765,7 +4832,7 @@ procedure TDesignFrame.ControlsTreeDragDrop(Sender, Source: TObject; X,
   procedure MoveBehavior(const Src: TCastleBehavior; const Dst: TCastleTransform);
   begin
     case ControlsTreeNodeUnderMouseSide of
-      tnsRight:
+      tnsInside:
         begin
           Src.Parent.RemoveBehavior(Src);
           Dst.AddBehavior(Src);
@@ -4782,7 +4849,7 @@ procedure TDesignFrame.ControlsTreeDragDrop(Sender, Source: TObject; X,
     const Dst: TCastleComponent);
   begin
     case ControlsTreeNodeUnderMouseSide of
-      tnsRight:
+      tnsInside:
         begin
           SrcParentComponent.RemoveNonVisualComponent(Src);
           Dst.AddNonVisualComponent(Src);
@@ -4824,10 +4891,10 @@ var
     DestinationName: String;
   begin
     case ControlsTreeNodeUnderMouseSide of
-      tnsRight:
+      tnsInside:
         begin
           { Special treatment when inserting UI into TCastleViewport,
-            testcase: try to drag some UI into TCastleViewport (with tnsRight),
+            testcase: try to drag some UI into TCastleViewport (with tnsInside),
             it should be added right before "Items" node. }
           if (DstComponent is TCastleViewport) and
              (SrcComponent is TCastleUserInterface) then
@@ -4956,7 +5023,7 @@ var
     C.Brush.Style := bsClear;
     C.Rectangle(NodeRect);
 
-    if ControlsTreeNodeUnderMouseSide = tnsRight then
+    if ControlsTreeNodeUnderMouseSide = tnsInside then
     begin
       R := NodeRect.SplitRect(srRight, NodeRect.Height);
       R.Inflate(-5, -5);
@@ -5169,6 +5236,11 @@ end;
 procedure TDesignFrame.ActionPlayStopExecute(Sender: TObject);
 begin
   OnRunningToggle(Self);
+end;
+
+procedure TDesignFrame.ActionApiReferenceOfCurrentExecute(Sender: TObject);
+begin
+  OnApiReferenceOfCurrent(Self);
 end;
 
 procedure TDesignFrame.ActionPlayStopUpdate(Sender: TObject);
@@ -5401,28 +5473,16 @@ begin
   ModifiedOutsideObjectInspector('2D Camera And Projection At Runtime: ' + V.Name, ucHigh);
 end;
 
-procedure TDesignFrame.ViewportSort2D;
+procedure TDesignFrame.ViewportSort(const BlendingSort: TBlendingSort);
 var
   V: TCastleViewport;
 begin
   V := CurrentViewport;
   if V = nil then Exit;
 
-  V.Items.SortBackToFront2D;
+  V.Items.SortBackToFront(BlendingSort, V.InternalCamera.WorldTranslation);
   UpdateDesign; // make the tree reflect new order
-  ModifiedOutsideObjectInspector('Sort Items for Correct 2D Blending: ' + V.Name, ucHigh);
-end;
-
-procedure TDesignFrame.ViewportSort3D;
-var
-  V: TCastleViewport;
-begin
-  V := CurrentViewport;
-  if V = nil then Exit;
-
-  V.Items.SortBackToFront(bs3D, V.InternalCamera.WorldTranslation);
-  UpdateDesign; // make the tree reflect new order
-  ModifiedOutsideObjectInspector('Sort Items for Correct 2D Blending: ' + V.Name, ucHigh);
+  ModifiedOutsideObjectInspector('Sort Items for Correct Blending: ' + V.Name, ucHigh);
 end;
 
 procedure TDesignFrame.ViewportToggleProjection;

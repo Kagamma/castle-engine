@@ -1,5 +1,5 @@
 {
-  Copyright 2022-2022 Michalis Kamburelis.
+  Copyright 2022-2023 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -26,9 +26,26 @@ uses Classes, CastleCameras,
 
 type
   TViewPlay = class(TCastleView)
+  published
+    { Components designed using CGE editor.
+      These fields will be automatically initialized at Start. }
+    WalkNavigation: TCastleWalkNavigation;
+    MainViewport: TCastleViewport;
+    SceneGun: TCastleScene;
+    SoundSourceFootsteps: TCastleSoundSource;
+    SoundShoot: TCastleSound;
+    BoxDieDetect, BoxWinDetect: TCastleTransform;
+    DesignHud: TCastleDesign;
+    MapCamera: TCastleCamera;
   private
     PersistentMouseLook: Boolean;
     Enemies: TEnemyList;
+
+    { components in DesignHud }
+    LabelFps: TCastleLabel;
+    MainNotifications: TCastleNotifications;
+    MapViewport: TCastleViewport;
+
     procedure UpdateMouseLook;
     procedure WeaponShootAnimationStop(const Scene: TCastleSceneCore;
       const Animation: TTimeSensorNode);
@@ -38,17 +55,6 @@ type
     procedure Stop; override;
     procedure Update(const SecondsPassed: Single; var HandleInput: Boolean); override;
     function Press(const Event: TInputPressRelease): Boolean; override;
-  published
-    { Components designed using CGE editor.
-      These fields will be automatically initialized at Start. }
-    WalkNavigation: TCastleWalkNavigation;
-    LabelFps: TCastleLabel;
-    MainViewport, MapViewport: TCastleViewport;
-    SceneGun: TCastleScene;
-    SoundSourceFootsteps: TCastleSoundSource;
-    SoundShoot: TCastleSound;
-    MainNotifications: TCastleNotifications;
-    BoxDieDetect, BoxWinDetect: TCastleTransform;
   end;
 
 var
@@ -75,6 +81,11 @@ var
 begin
   inherited;
 
+  { initialize components in DesignHud }
+  LabelFps := DesignHud.DesignedComponent('LabelFps') as TCastleLabel;
+  MainNotifications := DesignHud.DesignedComponent('MainNotifications') as TCastleNotifications;
+  MapViewport := DesignHud.DesignedComponent('MapViewport') as TCastleViewport;
+
   Enemies := TEnemyList.Create(true);
 
   for I := 1 to 7 do
@@ -91,6 +102,9 @@ begin
   end;
 
   MapViewport.Items := MainViewport.Items;
+  MapViewport.Camera := MapCamera;
+
+  PersistentMouseLook := true;
 end;
 
 procedure TViewPlay.Stop;

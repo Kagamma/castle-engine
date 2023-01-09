@@ -20,7 +20,7 @@ unit Vcl.CastleControl;
 
 interface
 
-uses SysUtils, Classes, Vcl.Controls, Vcl.ExtCtrls, Types,
+uses SysUtils, Classes, Vcl.Controls, Vcl.ExtCtrls, Types,  WinApi.Messages,
   CastleGLVersion, CastleGLUtils, CastleInternalContextWgl, CastleInternalContainer,
   CastleVectors, CastleKeysMouse;
 
@@ -67,6 +67,8 @@ type
       To counteract this, call this method when Shift state is known,
       to update Pressed when needed. }
     procedure UpdateShiftState(const Shift: TShiftState);
+  private
+      procedure WMEraseBkgnd(var Message: TWMEraseBkgnd); message WM_ERASEBKGND;
   protected
     procedure CreateHandle; override;
     procedure DestroyHandle; override;
@@ -83,12 +85,16 @@ type
     function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer;
       MousePos: TPoint): Boolean; override;
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
-    procedure KeyUp(var Key: Word; Shift: TShiftState); override;
     procedure KeyPress(var Key: Char); override;
+    procedure KeyUp(var Key: Word; Shift: TShiftState); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure Paint; override;
+    { To handle some special keys, set on form KeyPreview
+      and call these methods from VCL form's OnKeyDown / OnKeyUp. }
+    procedure PreviewFormKeyDown(var Key: Word; Shift: TShiftState);
+    procedure PreviewFormKeyUp(var Key: Word; Shift: TShiftState);
   published
     { Access Castle Game Engine container properties and events,
       not specific for FMX. }
@@ -98,6 +104,10 @@ type
     property Anchors;
     property OnClick;
     property OnDblClick;
+    property OnMouseDown;
+    property OnMouseUp;
+    property OnMouseMove;
+    property OnMouseWheel;
   end;
 
 procedure Register;
@@ -169,6 +179,11 @@ begin
   Result := Parent.Width;
 end;
 
+procedure TCastleControl.WMEraseBkgnd(var Message: TWMEraseBkgnd);
+begin
+  Message.Result := 1;
+end;
+
 function TCastleControl.TContainer.Height: Integer;
 begin
   Result := Parent.Height;
@@ -193,7 +208,8 @@ begin
   FContainer.SetSubComponent(true);
   FContainer.Name := 'Container';
 
-  TabStop := true;
+  // commented out, as this doesn't help us get focus
+  // TabStop := true;
 end;
 
 destructor TCastleControl.Destroy;
@@ -230,8 +246,8 @@ procedure TCastleControl.MouseDown(Button: TMouseButton; Shift: TShiftState; X,
 var
   MyButton: TCastleMouseButton;
 begin
-  if not Focused then // TODO: doesn't seem to help with focus
-    SetFocus;
+  //if not Focused then // TODO: doesn't seem to help with focus
+  //  SetFocus;
 
   inherited; { VCL OnMouseDown before our callbacks }
 
@@ -282,6 +298,38 @@ procedure TCastleControl.Paint;
 begin
   //inherited; // inherited not needed, and possibly causes something unnecessary
   FContainer.DoRender;
+end;
+
+procedure TCastleControl.PreviewFormKeyDown(var Key: Word; Shift: TShiftState);
+begin
+  if //Focused and // TODO: It seems we are never Focused
+     (
+       (Key = VK_Down) or
+       (Key = VK_Up) or
+       (Key = VK_Left) or
+       (Key = VK_Right) or
+       (Key = VK_Space)
+     ) then
+  begin
+    KeyDown(Key, Shift);
+    Key := 0;
+  end;
+end;
+
+procedure TCastleControl.PreviewFormKeyUp(var Key: Word; Shift: TShiftState);
+begin
+  if //Focused and // TODO: It seems we are never Focused
+     (
+       (Key = VK_Down) or
+       (Key = VK_Up) or
+       (Key = VK_Left) or
+       (Key = VK_Right) or
+       (Key = VK_Space)
+     ) then
+  begin
+    KeyUp(Key, Shift);
+    Key := 0;
+  end;
 end;
 
 procedure TCastleControl.UpdateShiftState(const Shift: TShiftState);
