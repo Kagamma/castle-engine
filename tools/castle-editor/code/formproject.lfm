@@ -396,6 +396,9 @@ object ProjectForm: TProjectForm
       object MenuItem19: TMenuItem
         Action = ActionViewportSort2D
       end
+      object MenuItem33: TMenuItem
+        Action = ActionViewportSort3D
+      end
     end
     object MenuItemPhysics: TMenuItem
       Caption = 'Physics'
@@ -413,6 +416,15 @@ object ProjectForm: TProjectForm
       object MenuItemShowColliders: TMenuItem
         Action = ActionShowColliders
         ShowAlwaysCheckable = True
+      end
+      object Separator888888: TMenuItem
+        Caption = '-'
+      end
+      object MenuShowJointTools28: TMenuItem
+        Action = ActionPhysicsShowAllJointsTools
+      end
+      object MenuItem2888888: TMenuItem
+        Action = ActionPhysicsHideAllJointsTools
       end
     end
     object MenuItemCode: TMenuItem
@@ -437,8 +449,8 @@ object ProjectForm: TProjectForm
         object MenuItemNewUnitClass: TMenuItem
           Action = ActionNewUnitClass
         end
-        object MenuItemNewUnitState: TMenuItem
-          Action = ActionNewUnitState
+        object MenuItemNewUnitView: TMenuItem
+          Action = ActionNewUnitView
         end
       end
       object MenuItemSeparator123123345: TMenuItem
@@ -479,6 +491,7 @@ object ProjectForm: TProjectForm
         Caption = 'Release Mode'
         GroupIndex = 1
         RadioItem = True
+        ShowAlwaysCheckable = True
         OnClick = MenuItemModeReleaseClick
       end
       object MenuItemSeparator12312131: TMenuItem
@@ -703,8 +716,8 @@ object ProjectForm: TProjectForm
       object MenuItemPopupNewUnitClass: TMenuItem
         Action = ActionNewUnitHereClass
       end
-      object MenuItemPopupNewUnitState: TMenuItem
-        Action = ActionNewUnitHereState
+      object MenuItemPopupNewUnitView: TMenuItem
+        Action = ActionNewUnitHereView
       end
     end
   end
@@ -771,10 +784,10 @@ object ProjectForm: TProjectForm
       Caption = 'Unit With Class...'
       OnExecute = ActionNewUnitClassExecute
     end
-    object ActionNewUnitState: TAction
+    object ActionNewUnitView: TAction
       Category = 'Code'
-      Caption = 'Unit With State...'
-      OnExecute = ActionNewUnitStateExecute
+      Caption = 'Unit With View...'
+      OnExecute = ActionNewUnitViewExecute
     end
     object ActionNewUnitHereEmpty: TAction
       Category = 'PopupFiles'
@@ -786,10 +799,10 @@ object ProjectForm: TProjectForm
       Caption = 'Unit With Class...'
       OnExecute = ActionNewUnitHereClassExecute
     end
-    object ActionNewUnitHereState: TAction
+    object ActionNewUnitHereView: TAction
       Category = 'PopupFiles'
-      Caption = 'Unit With State...'
-      OnExecute = ActionNewUnitHereStateExecute
+      Caption = 'Unit With View...'
+      OnExecute = ActionNewUnitHereViewExecute
     end
     object ActionEditAssociatedUnit: TAction
       Category = 'Code'
@@ -1086,6 +1099,18 @@ object ProjectForm: TProjectForm
       OnExecute = ActionViewportRenderNextExecute
       ShortCut = 32858
     end
+    object ActionPhysicsShowAllJointsTools: TAction
+      Category = 'Viewport'
+      Caption = 'Show All Joint Tools'
+      OnExecute = ActionPhysicsShowAllJointsToolsExecute
+      OnUpdate = ActionViewportUpdate
+    end
+    object ActionPhysicsHideAllJointsTools: TAction
+      Category = 'Viewport'
+      Caption = 'Hide All Joint Tools'
+      OnExecute = ActionPhysicsHideAllJointsToolsExecute
+      OnUpdate = ActionViewportUpdate
+    end
     object ActionShowColliders: TAction
       Category = 'Physics'
       Caption = 'Show Colliders'
@@ -1107,15 +1132,21 @@ object ProjectForm: TProjectForm
       OnExecute = ActionSimulationPauseUnpauseExecute
       OnUpdate = ActionSimulationPauseUnpauseUpdate
     end
+    object ActionViewportSort3D: TAction
+      Category = 'Viewport'
+      Caption = 'Sort Items For Correct 3D Blending (from current view)'
+      OnExecute = ActionViewportSort3DExecute
+      OnUpdate = ActionViewportUpdate
+    end
   end
   object OpenPascalUnitDialog: TCastleOpenPascalUnitDialog
-    Left = 272
-    Top = 121
+    Left = 284
+    Top = 126
   end
   object OutputPopup: TPopupMenu
     OnPopup = ShellListPopupMenuPopup
-    Left = 279
-    Top = 279
+    Left = 291
+    Top = 291
     object MenuItemOutputClean: TMenuItem
       Action = ActionOutputClean
     end

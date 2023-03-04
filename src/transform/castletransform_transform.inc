@@ -130,6 +130,9 @@
       FLastParentWorldTransformation: TTransformation;
       FLastParentWorldTransformationId: Cardinal;
 
+      FOnAddedBehaviorNotification: TCastleComponentNotification;
+      FBeforeRemoveBehaviorNotification: TCastleComponentNotification;
+
     procedure SerializeChildrenAdd(const C: TComponent);
     procedure SerializeChildrenClear;
     procedure SerializeChildrenEnumerate(const Proc: TGetChildProc);
@@ -220,6 +223,44 @@
 
     procedure NotifyWorldAfterAttach;
     procedure NotifyWorldBeforeDetach;
+
+    // TODO: Do we need so much new API?
+
+    { Ability to add a callback (object of procedure have to be TComponent)
+      to be informed when a behavior is added to this CastleTransform. }
+    procedure AddNotificationOnBehaviorAdded(const AEvent: TComponentEvent); overload;
+    { Ability to add a callback (object of procedure have to be TComponent)
+      to be informed when a behavior is added to this CastleTransform with
+      object class filtering. }
+    procedure AddNotificationOnBehaviorAdded(const AEvent: TComponentEvent;
+      const ClassFilter: TComponentClass); overload;
+    { Calls all behavior add callbacks with ABehavior as parameter value. }
+    procedure NotifyBehaviorAdded(const ABehavior: TCastleBehavior);
+    { Remove all occurrences of callback (object of procedure have to be TComponent)
+      from "OnBehaviorAdded" list. }
+    procedure RemoveNotificationOnBehaviorAdded(const AEvent: TComponentEvent); overload;
+    { Remove a callback (object of procedure have to be TComponent)
+      from "OnBehaviorAdded" calbacks list with object class filtering. }
+    procedure RemoveNotificationOnBehaviorAdded(const AEvent: TComponentEvent;
+      const ClassFilter: TComponentClass); overload;
+
+    { Ability to add a callback (object of procedure have to be TComponent)
+      to be informed when a behavior is added to this CastleTransform }
+    procedure AddNotificationBeforeBehaviorRemove(const AEvent: TComponentEvent); overload;
+    { Ability to add a callback (object of procedure have to be TComponent)
+      to be informed when a behevior is added to this CastleTransform with
+      object class filtering. }
+    procedure AddNotificationBeforeBehaviorRemove(const AEvent: TComponentEvent;
+      const ClassFilter: TComponentClass); overload;
+    { Calls all behavior remove callbacks with ABehavior as parameter value. }
+    procedure NotifyBeforeBehaviorRemove(const ABehavior: TCastleBehavior);
+    { Remove all occurrences of callback (object of procedure have to be TComponent)
+      from "BeforeBehaviorRemove" list. }
+    procedure RemoveNotificationBeforeBehaviorRemove(const AEvent: TComponentEvent); overload;
+    { Remove a callback (object of procedure have to be TComponent)
+      from "BeforeBehaviorRemove" calbacks list with object class filtering. }
+    procedure RemoveNotificationBeforeBehaviorRemove(const AEvent: TComponentEvent;
+      const ClassFilter: TComponentClass); overload;
 
     { Call ParentBeforeDetach and WorldBeforeDetach on a behavior that will soon be freed. }
     procedure BeforeBehaviorDestroy(const Behavior: TCastleBehavior);
@@ -627,7 +668,7 @@
 
       This allows to use this method safely even in the middle of iteration
       over TCastleTransform children. For example you can use it from @link(Update) method,
-      from any TCastleTransform.Update or TCastleUserInterface.Update (including TUIState.Update).
+      from any TCastleTransform.Update or TCastleUserInterface.Update (including TCastleView.Update).
 
       Note: It is not a problem if the child scheduled to be removed
       will also be removed (or even freed) directly e.g. by just calling @code(Free) on it.
@@ -1949,7 +1990,6 @@ begin
   {$I auto_generated_persistent_vectors/tcastletransform_persistent_vectors.inc}
   {$undef read_implementation_destructor}
 
-  PendingRemovals;
   FreeAndNil(FPendingToRemove);
   FreeAndNil(FPendingToRemoveAndFree);
 
@@ -1963,8 +2003,6 @@ begin
   FreeAndNil(FList);
   FreeAndNil(FBehaviors);
   FreeAndNil(FBehaviorsWorldChangeNotificationList);
-  { set to nil, to detach free notification }
-  ChangeWorld(nil);
   inherited;
 end;
 
@@ -1972,6 +2010,11 @@ procedure TCastleTransform.BeforeDestruction;
 var
   I: Integer;
 begin
+  { set to nil, to detach free notification }
+  ChangeWorld(nil);
+
+  PendingRemovals;
+
   { Before we start destroying the transform we need to remove all behaviors from
     it, because destroying behavior calls on it events like BeforeParentDetach,
     ParentChanged.
@@ -2771,10 +2814,94 @@ begin
   end;
 end;
 
+procedure TCastleTransform.AddNotificationOnBehaviorAdded(const AEvent: TComponentEvent);
+begin
+  AddNotificationOnBehaviorAdded(AEvent, TCastleComponent);
+end;
+
+procedure TCastleTransform.AddNotificationOnBehaviorAdded(
+  const AEvent: TComponentEvent; const ClassFilter: TComponentClass);
+begin
+  if FOnAddedBehaviorNotification = nil then
+    FOnAddedBehaviorNotification := TCastleComponentNotification.Create(Self);
+
+  FOnAddedBehaviorNotification.AddNotification(AEvent, ClassFilter);
+end;
+
+procedure TCastleTransform.NotifyBehaviorAdded(const ABehavior: TCastleBehavior);
+begin
+  if FOnAddedBehaviorNotification = nil then
+    Exit;
+
+  FOnAddedBehaviorNotification.Notify(ABehavior);
+end;
+
+procedure TCastleTransform.RemoveNotificationOnBehaviorAdded(
+  const AEvent: TComponentEvent);
+begin
+  if FOnAddedBehaviorNotification = nil then
+    Exit;
+
+  FOnAddedBehaviorNotification.RemoveNotification(AEvent);
+end;
+
+procedure TCastleTransform.RemoveNotificationOnBehaviorAdded(
+  const AEvent: TComponentEvent; const ClassFilter: TComponentClass);
+begin
+  if FOnAddedBehaviorNotification = nil then
+    Exit;
+
+  FOnAddedBehaviorNotification.RemoveNotification(AEvent, ClassFilter);
+end;
+
+procedure TCastleTransform.AddNotificationBeforeBehaviorRemove(
+  const AEvent: TComponentEvent);
+begin
+  AddNotificationBeforeBehaviorRemove(AEvent, TCastleComponent);
+end;
+
+procedure TCastleTransform.AddNotificationBeforeBehaviorRemove(
+  const AEvent: TComponentEvent; const ClassFilter: TComponentClass);
+begin
+  if FBeforeRemoveBehaviorNotification = nil then
+    FBeforeRemoveBehaviorNotification := TCastleComponentNotification.Create(Self);
+
+  FBeforeRemoveBehaviorNotification.AddNotification(AEvent, ClassFilter);
+end;
+
+procedure TCastleTransform.NotifyBeforeBehaviorRemove(
+  const ABehavior: TCastleBehavior);
+begin
+  if FBeforeRemoveBehaviorNotification = nil then
+    Exit;
+
+  FBeforeRemoveBehaviorNotification.Notify(ABehavior);
+end;
+
+procedure TCastleTransform.RemoveNotificationBeforeBehaviorRemove(
+  const AEvent: TComponentEvent);
+begin
+  if FBeforeRemoveBehaviorNotification = nil then
+    Exit;
+
+  FBeforeRemoveBehaviorNotification.RemoveNotification(AEvent);
+end;
+
+procedure TCastleTransform.RemoveNotificationBeforeBehaviorRemove(
+  const AEvent: TComponentEvent; const ClassFilter: TComponentClass);
+begin
+  if FBeforeRemoveBehaviorNotification = nil then
+    Exit;
+
+  FBeforeRemoveBehaviorNotification.RemoveNotification(AEvent, ClassFilter);
+end;
+
 procedure TCastleTransform.BeforeBehaviorDestroy(const Behavior: TCastleBehavior);
 begin
   if Behavior.Parent <> nil then
   begin
+    NotifyBeforeBehaviorRemove(Behavior);
+
     if Behavior.ListenWorldChange and (FWorld <> nil) then
       Behavior.WorldBeforeDetach;
 
@@ -3002,16 +3129,18 @@ end;
 procedure TCastleTransform.WarningMatrixNan(const NewParamsInverseTransformValue: TMatrix4);
 begin
   WritelnWarning('Transform', Format(
-    'Inverse transform matrix has NaN value inside:' + NL +
+    'Inverse transform of "%s" (%s) matrix has NaN value inside:' + NL +
     '%s' + NL +
-    '  Matrix source: Center %s, Rotation %s, Scale %s, ScaleOrientation %s, Translation %s',
-    [NewParamsInverseTransformValue.ToString('  '),
-     FCenter.ToString,
-     FRotation.ToString,
-     FScale.ToString,
-     FScaleOrientation.ToString,
-     FTranslation.ToString
-    ]));
+    '  Matrix source: Center %s, Rotation %s, Scale %s, ScaleOrientation %s, Translation %s', [
+    Name,
+    ClassName,
+    NewParamsInverseTransformValue.ToString('  '),
+    FCenter.ToString,
+    FRotation.ToString,
+    FScale.ToString,
+    FScaleOrientation.ToString,
+    FTranslation.ToString
+  ]));
 end;
 
 procedure TCastleTransform.Render(const Params: TRenderParams);
@@ -3804,6 +3933,13 @@ end;
 
 function TCastleTransform.BehaviorsCount: Integer;
 begin
+  { This can be called when TCastleTransform is in the middle of being
+    destroyed, and TDesignFrame.SetTransformForGizmos tries to iterate
+    over behaviors. So prepare to handle FBehaviors = nil case,
+    which should not be possible during normal lifetime. }
+  if FBehaviors = nil then
+    Exit(0);
+
   Result := FBehaviors.Count;
 end;
 
@@ -3850,6 +3986,7 @@ begin
       if FWorld <> nil then
         Behavior.WorldAfterAttach;
     end;
+    NotifyBehaviorAdded(Behavior);
   end;
 end;
 
@@ -3858,6 +3995,8 @@ var
   Beh: TCastleBehavior;
 begin
   Beh := FBehaviors[BehaviorIndex] as TCastleBehavior;
+
+  NotifyBeforeBehaviorRemove(Beh);
 
   { Call WorldBeforeDetach }
   if Beh.ListenWorldChange and (FWorld <> nil) then
@@ -3985,7 +4124,9 @@ begin
     if (RBody <> nil) and RBody.Exists then
     begin
       if FLastExistsChangeFrameId = TFramesPerSecond.FrameId then
-        WritelnWarning('%s:%s: The existence of this TCastleTransform changed multiple times in a single frame and it uses physics (has TCastleRigidBody and TCastleCollider behaviors). This is not good for performance and right now can even cause physics simulation crashes, esp. when TCastleCollider.AutoSize=true and animation may change LocalBoundingBox. Avoid changing the Exists of physical objects multiple times in a single Update.', [
+        WritelnWarning('%s:%s: The existence of this TCastleTransform changed multiple times in a single frame and it uses physics (has TCastleRigidBody and TCastleCollider behaviors). ' +
+          'This is not good for performance and right now can even cause physics simulation crashes, esp. when TCastleCollider.AutoSize=true and animation may change LocalBoundingBox. ' +
+          'Avoid changing the Exists of physical objects multiple times in a single Update.', [
           Name,
           ClassName
         ]);

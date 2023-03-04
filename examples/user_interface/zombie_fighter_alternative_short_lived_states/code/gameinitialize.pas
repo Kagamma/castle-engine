@@ -1,5 +1,5 @@
 {
-  Copyright 2016-2021 Michalis Kamburelis.
+  Copyright 2016-2022 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -23,9 +23,9 @@ interface
 implementation
 
 uses SysUtils, Classes, CastleControls, CastleUtils, CastleFilesUtils,
-  CastleColors, CastleUIControls, CastleUIState, CastleWindow,
+  CastleColors, CastleUIControls, CastleWindow,
   CastleApplicationProperties, CastleLog,
-  GameStateMainMenu, GameStateLoading, GameStatePlay, GameStateAskDialog;
+  GameViewMainMenu, GameViewLoading, GameViewPlay, GameViewAskDialog;
 
 var
   Window: TCastleWindow;
@@ -35,8 +35,8 @@ begin
   { Adjust container settings for a scalable UI (adjusts to any window size in a smart way). }
   Window.Container.LoadSettings('castle-data:/CastleSettings.xml');
 
-  { initialize first state }
-  TUIState.Current := TStateMainMenu.CreateUntilStopped;
+  { initialize first view }
+  Window.Container.View := TViewMainMenu.CreateUntilStopped;
 end;
 
 initialization
@@ -45,5 +45,5 @@ initialization
   Window := TCastleWindow.Create(Application);
   Application.MainWindow := Window;
 finalization
-  TUIState.Current := nil;
+  Window.Container.View := nil;
 end.

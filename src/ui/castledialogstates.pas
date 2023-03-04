@@ -14,9 +14,9 @@
 }
 
 (*Dialog windows (to display some information, or ask user for confirmation,
-  or ask user to input a simple value) as a user-interface state (@link(TUIState)).
+  or ask user to input a simple value) as a user-interface state (@link(TCastleView)).
   This unit defines the user-interface state classes
-  (@link(TUIState) descendants) to display given dialog.
+  (@link(TCastleView) descendants) to display given dialog.
 
   If you use @link(TCastleWindow) with most platforms (but not iOS),
   then it's usually more comfortable to use the unit @link(CastleMessages)
@@ -42,12 +42,12 @@
 
   In this case you should use this unit and instantiate the
   user-interface classes yourself, and you need to
-  @italic(organize your whole game using TUIState classes).
-  See https://castle-engine.io/states about how to use @link(TUIState). Like this:
+  @italic(organize your whole game using TCastleView classes).
+  See https://castle-engine.io/states about how to use @link(TCastleView). Like this:
 
   @longCode(#
   type
-    TMyGameState = class(TUIState)
+    TMyGameState = class(TCastleView)
     private
       DialogAskDeleteFile: TStateDialogYesNo;
     public
@@ -55,7 +55,7 @@
       procedure Resume; override;
     end;
 
-  function Press(const Event: TInputPressRelease): boolean; override;
+  function TMyGameState.Press(const Event: TInputPressRelease): boolean; override;
   begin
     Result := inherited;
     if Result then Exit;
@@ -64,11 +64,11 @@
     begin
       DialogAskDeleteFile := TStateDialogYesNo.Create(Self);
       DialogAskDeleteFile.Caption := 'Are you sure you want to delete this file?';
-      TUIState.Push(DialogAskDeleteFile);
+      Container.PushView(DialogAskDeleteFile);
     end;
   end;
 
-  procedure TStatePlay.Resume;
+  procedure TMyGameState.Resume;
   begin
     inherited;
     if DialogAskDeleteFile <> nil then // returning from DialogAskDeleteFile
@@ -88,15 +88,15 @@ unit CastleDialogStates;
 interface
 
 uses Classes, Math,
-  CastleGLUtils, CastleUtils,
+  CastleGLUtils, CastleUtils, CastleImages,
   CastleStringUtils, CastleVectors, CastleKeysMouse, CastleControls,
-  CastleRectangles, CastleUIState, CastleColors, CastleUIControls,
+  CastleRectangles, CastleColors, CastleUIControls,
   CastleFonts, CastleInternalRichText, CastleTimeUtils;
 
 type
   { Abstract class for a modal dialog user-interface state.
     See unit @link(CastleDialogStates) documentation for example usage. }
-  TStateDialog = class abstract(TUIState)
+  TStateDialog = class abstract(TCastleView)
   strict private
     type
       {$define read_interface}
@@ -112,7 +112,7 @@ type
       FBackgroundScreenshot: boolean;
       FPopOnAnswered: boolean;
       FDialog: TDialog; // non-nil only between Start and Stop
-      FOverrrideContainer: TCastleContainer;
+      FUnusedSaveScreen: TCastleImage;
     function GetCaption: string;
     procedure SetCaption(const Value: string);
     function GetInputText: string;
@@ -120,7 +120,6 @@ type
   protected
     type
       TButtonArray = array of TCastleButton;
-    function StateContainer: TCastleContainer; override;
     procedure InitializeButtons(var Buttons: TButtonArray); virtual;
     function DrawInputText: boolean; virtual;
     procedure DoAnswered;
@@ -134,8 +133,14 @@ type
     procedure Stop; override;
     property InterceptInput default true;
 
+    { Save screen @italic(now) to be used by subsequent @link(Start).
+      Does a screenshot only if our current properties (@link(Background),
+      @link(BackgroundScreenshot), @link(BackgroundColor)) indicate screenshot is needed.
+      It allows to make a screenshot earlier than at @link(Start) call. }
+    procedure SaveScreenIfNecessary(const AContainer: TCastleContainer);
+
     { When user answers the dialog, this is set to @true.
-      The state also normally does TUIState.Pop, so there's no need to check
+      The state also normally does TCastleContainer.PopView, so there's no need to check
       this property, unless you set @link(PopOnAnswered) to @false. }
     property Answered: boolean read FAnswered;
 
@@ -199,18 +204,10 @@ type
     property BackgroundScreenshot: boolean
       read FBackgroundScreenshot write FBackgroundScreenshot default false;
 
-    { Should the state do @link(TUIState.Pop) when answered.
+    { Should the state do @link(TCastleContainer.PopView) when answered.
       This is usually most natural. }
     property PopOnAnswered: boolean
       read FPopOnAnswered write FPopOnAnswered default true;
-
-    { Force state to use indicated TCastleContainer to insert itself and get screenshot.
-      By default it uses
-      @link(TCastleApplication.MainWindow Application.MainWindow)
-      if you use CastleWindow or
-      @link(TCastleControl.MainControl) if you use CastleControl. }
-    property OverrrideContainer: TCastleContainer
-      read FOverrrideContainer write FOverrrideContainer;
 
   {$define read_interface_class}
   {$I auto_generated_persistent_vectors/tstatedialog_persistent_vectors.inc}
@@ -330,8 +327,7 @@ type
 
 implementation
 
-uses SysUtils,
-  CastleImages;
+uses SysUtils;
 
 {$define read_implementation}
 {$I castledialogstates_dialog.inc}
@@ -359,6 +355,7 @@ end;
 destructor TStateDialog.Destroy;
 begin
   FreeAndNil(FText);
+  FreeAndNil(FUnusedSaveScreen);
 
   {$define read_implementation_destructor}
   {$I auto_generated_persistent_vectors/tstatedialog_persistent_vectors.inc}
@@ -386,6 +383,14 @@ begin
   FDialog.InputText := Value;
 end;
 
+procedure TStateDialog.SaveScreenIfNecessary(const AContainer: TCastleContainer);
+begin
+  if Background and BackgroundScreenshot and (BackgroundColor[3] <> 1) then
+  begin
+    FUnusedSaveScreen := AContainer.SaveScreen;
+  end;
+end;
+
 procedure TStateDialog.Start;
 const
   MinButtonWidth = 100; //< OK button looks too small without this
@@ -406,7 +411,12 @@ begin
       BackgroundImage := TCastleImageControl.Create(FreeAtStop);
       BackgroundImage.Stretch := true;
       BackgroundImage.FullSize := true;
-      BackgroundImage.Image := StateContainer.SaveScreen;
+      if FUnusedSaveScreen <> nil then
+      begin
+        BackgroundImage.Image := FUnusedSaveScreen;
+        FUnusedSaveScreen := nil;
+      end else
+        BackgroundImage.Image := Container.SaveScreen;
       InsertFront(BackgroundImage);
     end;
 
@@ -437,14 +447,6 @@ begin
   inherited;
 end;
 
-function TStateDialog.StateContainer: TCastleContainer;
-begin
-  if OverrrideContainer <> nil then
-    Result := OverrrideContainer
-  else
-    Result := inherited;
-end;
-
 procedure TStateDialog.InitializeButtons(var Buttons: TButtonArray);
 begin
 end;
@@ -458,7 +460,7 @@ procedure TStateDialog.DoAnswered;
 begin
   FAnswered := true;
   if PopOnAnswered then
-    TUIState.Pop(Self);
+    Container.PopView(Self);
 end;
 
 { TStateDialogOK ------------------------------------------------------------- }

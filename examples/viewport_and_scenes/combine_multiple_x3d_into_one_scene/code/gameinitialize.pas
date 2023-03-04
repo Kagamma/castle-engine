@@ -1,10 +1,21 @@
+{
+  Copyright 2020-2022 Michalis Kamburelis.
+
+  This file is part of "Castle Game Engine".
+
+  "Castle Game Engine" is free software; see the file COPYING.txt,
+  included in this distribution, for details about the copyright.
+
+  "Castle Game Engine" is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+  ----------------------------------------------------------------------------
+}
+
 { Game initialization.
   This unit is cross-platform.
-  It will be used by the platform-specific program or library file.
-
-  Feel free to use this code as a starting point for your own projects.
-  (This code is in public domain, unlike most other CGE code which
-  is covered by the LGPL license variant, see the COPYING.txt file.) }
+  It will be used by the platform-specific program or library file. }
 unit GameInitialize;
 
 interface
@@ -12,10 +23,10 @@ interface
 implementation
 
 uses SysUtils,
-  CastleWindow, CastleLog, CastleUIState
+  CastleWindow, CastleLog
   {$region 'Castle Initialization Uses'}
   // The content here may be automatically updated by CGE editor.
-  , GameStateMain
+  , GameViewMain
   {$endregion 'Castle Initialization Uses'};
 
 var
@@ -27,17 +38,17 @@ begin
   { Adjust container settings for a scalable UI (adjusts to any window size in a smart way). }
   Window.Container.LoadSettings('castle-data:/CastleSettings.xml');
 
-  { Create TStateMain that will handle "main" state of the game.
-    Larger games may use multiple states,
-    e.g. TStateMainMenu ("main menu state"),
-    TStatePlay ("playing the game state"),
-    TStateCredits ("showing the credits state") etc. }
-  {$region 'Castle State Creation'}
+  { Create TViewMain that will handle "main" view of the game.
+    Larger games may use multiple views,
+    e.g. TViewMainMenu ("main menu view"),
+    TViewPlay ("playing the game view"),
+    TViewCredits ("showing the credits view") etc. }
+  {$region 'Castle View Creation'}
   // The content here may be automatically updated by CGE editor.
-  StateMain := TStateMain.Create(Application);
-  {$endregion 'Castle State Creation'}
+  ViewMain := TViewMain.Create(Application);
+  {$endregion 'Castle View Creation'}
 
-  TUIState.Current := StateMain;
+  Window.Container.View := ViewMain;
 end;
 
 initialization

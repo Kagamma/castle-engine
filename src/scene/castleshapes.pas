@@ -728,7 +728,7 @@ type
   strict private
     FChildren: TShapeTreeList;
     procedure ChildrenChanged(Sender: TObject;
-      {$ifdef FPC}constref{$else}const{$endif} Item: TShapeTree;
+      {$ifdef GENERICS_CONSTREF}constref{$else}const{$endif} Item: TShapeTree;
       Action: TCollectionNotification);
   private
     function MaxShapesCountCore: Integer; override;
@@ -948,11 +948,11 @@ type
   strict private
     SortPosition: TVector3;
     function IsSmallerFrontToBack(
-      {$ifdef FPC}constref{$else}const{$endif} A, B: TShape): Integer;
+      {$ifdef GENERICS_CONSTREF}constref{$else}const{$endif} A, B: TShape): Integer;
     function IsSmallerBackToFront3D(
-      {$ifdef FPC}constref{$else}const{$endif} A, B: TShape): Integer;
+      {$ifdef GENERICS_CONSTREF}constref{$else}const{$endif} A, B: TShape): Integer;
     function IsSmallerBackToFront2D(
-      {$ifdef FPC}constref{$else}const{$endif} A, B: TShape): Integer;
+      {$ifdef GENERICS_CONSTREF}constref{$else}const{$endif} A, B: TShape): Integer;
   private
     { Like regular Add, but parameter is "const" to satisfy TShapeTraverseFunc signature. }
     procedure AddConst(const S: TShape);
@@ -1043,7 +1043,7 @@ var
 implementation
 
 uses Generics.Defaults,
-  CastleSceneCore, CastleInternalNormals, CastleLog,
+  CastleSceneCore, CastleInternalNormals, CastleLog, CastleTimeUtils,
   CastleStringUtils, CastleInternalArraysGenerator, CastleURIUtils;
 
 const
@@ -1575,13 +1575,21 @@ begin
 end;
 
 function TShape.InternalOctreeTriangles: TTriangleOctree;
+var
+  TimeStart: TCastleProfilerTime;
+  S: String;
 begin
   if (ssTriangles in InternalSpatial) and (FOctreeTriangles = nil) then
   begin
-    FOctreeTriangles := CreateTriangleOctree(FTriangleOctreeLimits);
+    S := 'Creating octree for shape ' + NiceName;
     if LogChanges then
-      WritelnLog('X3D changes (octree)', Format(
-        'Shape(%s).OctreeTriangles updated', [PointerToStr(Self)]));
+      WritelnLog('X3D changes (octree)', S);
+    TimeStart := Profiler.Start(S);
+    try
+      FOctreeTriangles := CreateTriangleOctree(FTriangleOctreeLimits);
+    finally
+      Profiler.Stop(TimeStart);
+    end;
   end;
 
   Result := FOctreeTriangles;
@@ -2100,17 +2108,40 @@ procedure TShape.SetSpatial(const Value: TShapeSpatialStructures);
 var
   Old, New: boolean;
 begin
-  if Value <> InternalSpatial then
+  if FSpatial <> Value then
   begin
-    { Handle OctreeTriangles }
-
     Old := ssTriangles in InternalSpatial;
     New := ssTriangles in Value;
 
+    FSpatial := Value;
+
+    { Handle OctreeTriangles }
+
     if Old and not New then
       FreeOctreeTriangles;
+    if New and not Old then
+      { We do not strictly need to create FOctreeTriangles now,
+        we could let it be created on-demand.
+        But experience shows that it is better to create it now.
+        Otherwise moving around the scene would create sudden stutters
+        as we load octrees, for each shape separately, when needed.
 
-    FSpatial := Value;
+        Note: we were loading not-on-demand before 2010, and switched
+        to only on-demand in
+        https://github.com/castle-engine/castle-engine/commit/d5030af3a3372fccaeb2472e9d0bd390190b5f2a .
+        But it was wrong.
+        "Lynch" demo https://github.com/michaliskambi/lynch
+        clearly shows that on-demand causes bad delays at playing.
+        Moreover, TCastleSceneCore.SetSpatial was actually workarounding
+        it (calling "Shape.InternalOctreeTriangles" right after setting
+        "Shape.InternalSpatial := Value") for some time,
+        but it just wasn't perfect,
+        because if we did "Scene.Spatial := [ssDynamicCollisions]"
+        but later "Scene.URL := ..." then didn't create octree for new shapes.
+
+        Note: InternalOctreeTriangles only does the job if FSpatial is already set to non-empty.
+      }
+      InternalOctreeTriangles;
   end;
 end;
 
@@ -2990,8 +3021,15 @@ end;
 function TShape.NiceName: string;
 begin
   Result := OriginalGeometry.NiceName;
-  if (Node <> nil) and (Node.X3DName <> '') then
-    Result := Node.X3DName + ':' + Result;
+
+  if FGeometryParentNode <> nil then
+    Result := FGeometryParentNode.X3DName + ':' + Result;
+
+  if FGeometryGrandParentNode <> nil then
+    Result := FGeometryGrandParentNode.X3DName + ':' + Result;
+
+  if FGeometryGrandGrandParentNode <> nil then
+    Result := FGeometryGrandGrandParentNode.X3DName + ':' + Result;
 end;
 
 function TShape.Node: TAbstractShapeNode;
@@ -3059,8 +3097,9 @@ begin
   inherited;
 end;
 
-procedure TShapeTreeGroup.ChildrenChanged(Sender: TObject; {$ifdef FPC}
-  constref{$else}const{$endif} Item: TShapeTree; Action: TCollectionNotification);
+procedure TShapeTreeGroup.ChildrenChanged(Sender: TObject;
+  {$ifdef GENERICS_CONSTREF}constref{$else}const{$endif} Item: TShapeTree;
+  Action: TCollectionNotification);
 begin
   if Action = cnAdded then
     Item.FParent := Self;
@@ -3611,20 +3650,20 @@ type
   TShapeComparer = {$ifdef FPC}specialize{$endif} TComparer<TShape>;
 
 function TShapeList.IsSmallerFrontToBack(
-  {$ifdef FPC}constref{$else}const{$endif} A, B: TShape): Integer;
+  {$ifdef GENERICS_CONSTREF}constref{$else}const{$endif} A, B: TShape): Integer;
 begin
   { To revert the order, we revert the order of A and B as passed to CompareBackToFront3D. }
   Result := TBox3D.CompareBackToFront3D(B.BoundingBox, A.BoundingBox, SortPosition);
 end;
 
 function TShapeList.IsSmallerBackToFront3D(
-  {$ifdef FPC}constref{$else}const{$endif} A, B: TShape): Integer;
+  {$ifdef GENERICS_CONSTREF}constref{$else}const{$endif} A, B: TShape): Integer;
 begin
   Result := TBox3D.CompareBackToFront3D(A.BoundingBox, B.BoundingBox, SortPosition);
 end;
 
 function TShapeList.IsSmallerBackToFront2D(
-  {$ifdef FPC}constref{$else}const{$endif} A, B: TShape): Integer;
+  {$ifdef GENERICS_CONSTREF}constref{$else}const{$endif} A, B: TShape): Integer;
 begin
   Result := TBox3D.CompareBackToFront2D(A.BoundingBox, B.BoundingBox);
 end;
