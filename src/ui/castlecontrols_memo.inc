@@ -1200,7 +1200,7 @@ begin
   Result:=inherited Motion(Event);
   if BolSelect then
   begin
-    if mbLeft in Event.Pressed then
+    if TCastleMouseButton.buttonLeft in Event.Pressed then
     begin
       if Text.Count>1 then
       begin
@@ -1262,7 +1262,7 @@ begin
       LastIndex:= -1;
       BolSelect:= False;
      end;
-  if Event.IsMouseButton(mbLeft) then
+  if Event.IsMouseButton(TCastleMouseButton.buttonLeft) then
   begin
     if Text.Count = 0 then Text.Add('');
     if NOT(mkShift in Event.ModifiersDown) then
