@@ -41,7 +41,7 @@ implementation
 
 uses SysUtils, Math,
   CastleSoundEngine, CastleLog, CastleStringUtils, CastleFilesUtils,
-  GameViewMenu;
+  GameViewMenu, GameSound;
 
 { TViewPlay ----------------------------------------------------------------- }
 
@@ -84,7 +84,7 @@ end;
 procedure TViewPlay.Update(const SecondsPassed: Single; var HandleInput: Boolean);
 begin
   inherited;
-  { This virtual method is executed every frame.}
+  { This virtual method is executed every frame (many times per second). }
   Assert(LabelFps <> nil, 'If you remove LabelFps from the design, remember to remove also the assignment "LabelFps.Caption := ..." from code');
   LabelFps.Caption := 'FPS: ' + Container.Fps.ToString;
 end;
@@ -108,7 +108,7 @@ begin
 
   if Event.IsMouseButton(buttonLeft) then
   begin
-    SoundEngine.Play(SoundEngine.SoundFromName('shoot_sound'));
+    SoundEngine.Play(NamedSound('Shoot'));
 
     { We clicked on enemy if
       - TransformUnderMouse indicates we hit something
@@ -123,7 +123,7 @@ begin
     Exit(true);
   end;
 
-  if Event.IsKey(CtrlM) then
+  if Event.IsMouseButton(buttonRight) then
   begin
     WalkNavigation.MouseLook := not WalkNavigation.MouseLook;
     Exit(true);

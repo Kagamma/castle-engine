@@ -1,6 +1,6 @@
 {%MainUnit castleuicontrols.pas}
 {
-  Copyright 2010-2022 Michalis Kamburelis.
+  Copyright 2010-2023 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -717,7 +717,7 @@
     { Current view. Simply assign to this property to change the current view.
 
       In case multiple views are active (only possible
-      if you used the @link(Push) method), this property returns the @italic(bottom) view
+      if you used the @link(PushView) method), this property returns the @italic(bottom) view
       (use @link(FrontView) to get @italic(top) view).
       Setting this property resets whole view stack.
 
@@ -883,9 +883,8 @@ var
 begin
   if C = FTooltipParent then
   begin
-    if (FTooltipParent <> nil) and
-       (FTooltipParent.TooltipControl <> nil) then
-      FTooltipParent.TooltipControl.Exists := false;
+    if FTooltipParent <> nil then
+      FTooltipParent.InternalSetTooltipExists(false);
     FTooltipParent := nil;
   end;
 
@@ -1090,7 +1089,7 @@ begin
       for I := 0 to FFocus.Count - 1 do
         if FNewFocus.IndexOf(FFocus[I]) = -1 then
           FFocus[I].Focused := false;
-    end;
+    end
   end;
 
   { swap FFocus and FNewFocus, so that FFocus changes to new value,
@@ -1283,12 +1282,9 @@ procedure TCastleContainer.EventUpdate;
 
     if FTooltipParent <> NewTooltipParent then
     begin
+      { hide tooltip }
       if FTooltipParent <> nil then
-      begin
-        { hide TooltipControl }
-        if FTooltipParent.TooltipControl <> nil then
-          FTooltipParent.TooltipControl.Exists := false;
-      end;
+        FTooltipParent.InternalSetTooltipExists(false);
 
       FTooltipParent := NewTooltipParent;
 
@@ -1298,9 +1294,8 @@ procedure TCastleContainer.EventUpdate;
         LastPositionForTooltip := MousePosition;
         { also update TooltipPosition }
         FTooltipPosition := MousePosition;
-        { show TooltipControl }
-        if FTooltipParent.TooltipControl <> nil then
-          FTooltipParent.TooltipControl.Exists := true;
+        { show tooltip }
+        FTooltipParent.InternalSetTooltipExists(true);
       end;
 
       Invalidate;
@@ -1845,29 +1840,31 @@ class procedure TCastleContainer.RenderControlPrepare(const ViewportRect: TRecta
 begin
   if GLFeatures.EnableFixedFunction then
   begin
-    { Set state that is guaranteed for Render2D calls,
+    { Set OpenGL state that is guaranteed for TCastleUserInterface.Render calls,
       but TCastleUserInterface.Render cannot change it carelessly. }
     {$ifndef OpenGLES}
-    glDisable(GL_LIGHTING);
+    RenderContext.FixedFunctionLighting := false;
     glDisable(GL_FOG);
     {$endif}
-    GLEnableTexture(CastleGLUtils.etNone);
+    GLEnableTexture(etNone);
   end;
 
-  glDisable(GL_DEPTH_TEST);
+  RenderContext.DepthTest := false;
 
   RenderContext.Viewport := ViewportRect;
   OrthoProjection(FloatRectangle(0, 0, ViewportRect.Width, ViewportRect.Height));
 
+  {$ifndef OpenGLES}
   if GLFeatures.EnableFixedFunction then
   begin
     { Set OpenGL state that may be changed carelessly, and has some
-      guaranteed value, for Render2d calls. }
-    {$ifndef OpenGLES} glLoadIdentity; {$endif}
+      guaranteed value, for TCastleUserInterface.Render calls. }
+    glLoadIdentity;
     {$warnings off}
-    CastleGLUtils.WindowPos := Vector2Integer(0, 0);
+    CastleInternalGLUtils.WindowPos := Vector2Integer(0, 0);
     {$warnings on}
   end;
+  {$endif}
 end;
 
 procedure TCastleContainer.EventRender;

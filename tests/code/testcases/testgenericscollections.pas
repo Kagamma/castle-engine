@@ -17,6 +17,9 @@
 { Test Generics.Collections unit. These tests are independent from CGE. }
 unit TestGenericsCollections;
 
+{ Needed to define GENERICS_CONSTREF on some platforms/compilers. }
+{$I ../../../src/common_includes/castleconf.inc}
+
 interface
 
 uses
@@ -367,6 +370,14 @@ begin
     AssertEquals(33, List[1][0]);
     AssertEquals(44, List[1][1]);
 
+    { This test fails on FPC 3.3.1 from 2022-12-27.
+      It worked for FPC 3.3.1 from 2022-07-28.
+      It also worked in FPC 3.2.0.
+
+      Submitted as https://gitlab.com/freepascal.org/fpc/source/-/issues/40074 .
+    }
+    {$ifndef VER3_3}
+
     AssertEquals(0, List.IndexOf(R1));
     AssertEquals(1, List.IndexOf(R2));
 
@@ -399,6 +410,7 @@ begin
     AssertEquals(1, List.Count);
     AssertEquals(33, List[0][0]);
     AssertEquals(44, List[0][1]);
+    {$endif}
   finally FreeAndNil(List) end;
 end;
 

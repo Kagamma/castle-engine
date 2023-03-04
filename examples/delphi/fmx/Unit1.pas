@@ -21,7 +21,6 @@ interface
 uses
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs,
-  FMX.Platform.Win,
   FMX.Controls.Presentation, FMX.StdCtrls, FMX.Memo.Types, FMX.ScrollBox,
   FMX.Memo,
   Fmx.CastleControl,
@@ -30,7 +29,7 @@ uses
 type
   TTestCgeControl = class(TForm)
     Timer1: TTimer;
-    Panel1: TPanel;
+    PanelSideBar: TPanel;
     Memo1: TMemo;
     Button2D: TButton;
     ButtonUI: TButton;
@@ -53,25 +52,33 @@ implementation
 
 {$R *.fmx}
 
-uses Windows, FMX.Presentation.Win,
+uses
   CastleRenderOptions, CastleRectangles, CastleColors, CastleRenderContext,
   CastleVectors;
 
-{ TMyRenderTest -------------------------------------------------------------- }
+{ TUiTest -------------------------------------------------------------- }
 
 type
-  TMyRenderTest = class(TCastleUserInterface)
+  TUiTest = class(TCastleUserInterface)
+    constructor Create(Owner: TComponent); override;
     procedure Render; override;
     procedure GLContextOpen; override;
   end;
 
-procedure TMyRenderTest.GLContextOpen;
+constructor TUiTest.Create(Owner: TComponent);
+begin
+  inherited;
+  // keep in front, to not be obscured by designs we load using CastleControl.Container.DesignUrl
+  KeepInFront := true;
+end;
+
+procedure TUiTest.GLContextOpen;
 begin
   inherited;
   TestCgeControl.Memo1.Lines.Add(GLInformationString);
 end;
 
-procedure TMyRenderTest.Render;
+procedure TUiTest.Render;
 begin
   inherited;
   DrawRectangle(FloatRectangle(5, 5, 10, 10), Yellow);
@@ -100,10 +107,10 @@ begin
   // Call this to have UI scaling, same as in editor
   CastleControl.Container.LoadSettings('castle-data:/CastleSettings.xml');
 
-  CastleControl.Container.DesignUrl := 'castle-data:/test_ui.castle-user-interface';
+  CastleControl.Container.DesignUrl := 'castle-data:/test_3d.castle-user-interface';
 
-  // adding a component created by code, doing manual rendering in TMyRenderTest.Render
-  CastleControl.Container.Controls.InsertFront(TMyRenderTest.Create(Self));
+  // adding a component created by code, doing manual rendering in TUiTest.Render
+  CastleControl.Container.Controls.InsertFront(TUiTest.Create(Self));
 end;
 
 procedure TTestCgeControl.Timer1Timer(Sender: TObject);

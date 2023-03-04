@@ -1,5 +1,5 @@
 {
-  Copyright 2003-2022 Michalis Kamburelis.
+  Copyright 2003-2023 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -29,7 +29,7 @@ uses SysUtils, Classes, Generics.Collections,
   CastleUtils, CastleInternalTriangleOctree, CastleFrustum, CastleInternalOctree,
   CastleInternalBaseTriangleOctree, X3DFields, CastleInternalGeometryArrays,
   CastleTriangles, CastleImages, CastleInternalMaterialProperties,
-  CastleShapeInternalShadowVolumes;
+  CastleShapeInternalShadowVolumes, CastleRenderOptions;
 
 const
   { }
@@ -949,9 +949,13 @@ type
     SortPosition: TVector3;
     function IsSmallerFrontToBack(
       {$ifdef GENERICS_CONSTREF}constref{$else}const{$endif} A, B: TShape): Integer;
-    function IsSmallerBackToFront3D(
-      {$ifdef GENERICS_CONSTREF}constref{$else}const{$endif} A, B: TShape): Integer;
     function IsSmallerBackToFront2D(
+      {$ifdef GENERICS_CONSTREF}constref{$else}const{$endif} A, B: TShape): Integer;
+    function IsSmallerBackToFront3DBox(
+      {$ifdef GENERICS_CONSTREF}constref{$else}const{$endif} A, B: TShape): Integer;
+    function IsSmallerBackToFront3DOrigin(
+      {$ifdef GENERICS_CONSTREF}constref{$else}const{$endif} A, B: TShape): Integer;
+    function IsSmallerBackToFront3DGround(
       {$ifdef GENERICS_CONSTREF}constref{$else}const{$endif} A, B: TShape): Integer;
   private
     { Like regular Add, but parameter is "const" to satisfy TShapeTraverseFunc signature. }
@@ -969,15 +973,10 @@ type
 
     { Sort shapes by distance to given Position point, farthest first.
 
-      If Distance3D is @true: we use real distance in 3D to sort.
-      See the @link(bs3D) at @link(TBlendingSort) documentation.
-
-      If Distance3D is @false: we use only the distance in the Z coordinate
-      to sort. This is suitable for
-      rendering things that pretend to be 2D, like Spine slots.
-      See the @link(bs2D) at @link(TBlendingSort) documentation. }
+      BlendingSort determines the sorting algorithm.
+      See @link(TBlendingSort) documentation. }
     procedure SortBackToFront(const Position: TVector3;
-      const Distance3D: boolean);
+      const BlendingSort: TBlendingSort);
   end;
 
 var
@@ -1042,7 +1041,7 @@ var
 
 implementation
 
-uses Generics.Defaults,
+uses Generics.Defaults, Math,
   CastleSceneCore, CastleInternalNormals, CastleLog, CastleTimeUtils,
   CastleStringUtils, CastleInternalArraysGenerator, CastleURIUtils;
 
@@ -1776,7 +1775,7 @@ var
     Result := TGeometryArrays.Create;
     if not Box.IsEmpty then
     begin
-      Result.Primitive := gpTriangleFan; // gpQuads; - use triangle fan instead, to work with OpenGLES
+      Result.Primitive := gpTriangleFan;
       Result.Count := 4;
 
       Result.Position(0)^ := Vector3(Box.Data[0][0], Box.Data[0][1], Box.Data[0][2]);
@@ -2173,12 +2172,10 @@ function TShape.AlphaChannel: TAlphaChannel;
       if Node.FdTransparency.Items.Count = 0 then
         result := TMaterialInfo.DefaultTransparency > SingleEpsilon else
       begin
-        {$ifndef FPC}{$POINTERMATH ON}{$endif}
         for i := 0 to Node.FdTransparency.Items.Count-1 do
-          if Node.FdTransparency.Items.L[i] <= SingleEpsilon then
+          if Node.FdTransparency.Items.List^[i] <= SingleEpsilon then
             Exit(false);
         result := true;
-        {$ifndef FPC}{$POINTERMATH OFF}{$endif}
       end;
     end;
 
@@ -2722,21 +2719,19 @@ begin
     end;
   end;
 
-  {$ifndef FPC}{$POINTERMATH ON}{$endif}
   Lights := State.Lights;
   if Lights <> nil then
     for I := 0 to Lights.Count - 1 do
     begin
-      if Lights.L[I].Node is TEnvironmentLightNode then
+      if Lights.List^[I].Node is TEnvironmentLightNode then
       begin
-        HandleEnvironmentLight(TEnvironmentLightNode(Lights.L[I].Node));
+        HandleEnvironmentLight(TEnvironmentLightNode(Lights.List^[I].Node));
         if Result <> nil then Exit;
       end;
 
-      Result := HandleIDecls(Lights.L[I].Node.FdEffects);
+      Result := HandleIDecls(Lights.List^[I].Node.FdEffects);
       if Result <> nil then Exit;
     end;
-  {$ifndef FPC}{$POINTERMATH OFF}{$endif}
 
   if State.Effects <> nil then
     HandleIDecls(State.Effects);
@@ -2899,12 +2894,10 @@ var
     end else
       TexCoord := UnknownTexCoord;
 
-    {$ifndef FPC}{$POINTERMATH ON}{$endif}
     if Arrays.Faces <> nil then
-      Face := Arrays.Faces.L[RangeBeginIndex + I1]
+      Face := Arrays.Faces.List^[RangeBeginIndex + I1]
     else
       Face := UnknownFaceIndex;
-    {$ifndef FPC}{$POINTERMATH OFF}{$endif}
 
     TriangleEvent(Self, Position, Normal, TexCoord, Face);
   end;
@@ -2925,18 +2918,6 @@ var
             Inc(I, 3);
           end;
         end;
-      {$ifndef OpenGLES}
-      gpQuads:
-        begin
-          I := 0;
-          while I + 3 < Count do
-          begin
-            Triangle(I, I + 1, I + 2);
-            Triangle(I, I + 2, I + 3);
-            Inc(I, 4);
-          end;
-        end;
-      {$endif}
       gpTriangleFan:
         begin
           I := 0;
@@ -3022,14 +3003,16 @@ function TShape.NiceName: string;
 begin
   Result := OriginalGeometry.NiceName;
 
+  { Slash / seems like a nice way to show it, since it is like a path, just in X3D tree. }
+
   if FGeometryParentNode <> nil then
-    Result := FGeometryParentNode.X3DName + ':' + Result;
+    Result := FGeometryParentNode.X3DName + '/' + Result;
 
   if FGeometryGrandParentNode <> nil then
-    Result := FGeometryGrandParentNode.X3DName + ':' + Result;
+    Result := FGeometryGrandParentNode.X3DName + '/' + Result;
 
   if FGeometryGrandGrandParentNode <> nil then
-    Result := FGeometryGrandGrandParentNode.X3DName + ':' + Result;
+    Result := FGeometryGrandGrandParentNode.X3DName + '/' + Result;
 end;
 
 function TShape.Node: TAbstractShapeNode;
@@ -3656,16 +3639,42 @@ begin
   Result := TBox3D.CompareBackToFront3D(B.BoundingBox, A.BoundingBox, SortPosition);
 end;
 
-function TShapeList.IsSmallerBackToFront3D(
+function TShapeList.IsSmallerBackToFront2D(
+  {$ifdef GENERICS_CONSTREF}constref{$else}const{$endif} A, B: TShape): Integer;
+begin
+  Result := TBox3D.CompareBackToFront2D(A.BoundingBox, B.BoundingBox);
+end;
+
+function TShapeList.IsSmallerBackToFront3DBox(
   {$ifdef GENERICS_CONSTREF}constref{$else}const{$endif} A, B: TShape): Integer;
 begin
   Result := TBox3D.CompareBackToFront3D(A.BoundingBox, B.BoundingBox, SortPosition);
 end;
 
-function TShapeList.IsSmallerBackToFront2D(
+function TShapeList.IsSmallerBackToFront3DOrigin(
   {$ifdef GENERICS_CONSTREF}constref{$else}const{$endif} A, B: TShape): Integer;
+var
+  PointA, PointB: TVector3;
 begin
-  Result := TBox3D.CompareBackToFront2D(A.BoundingBox, B.BoundingBox);
+  PointA := A.OriginalState.Transformation.Transform.MultPoint(TVector3.Zero);
+  PointB := B.OriginalState.Transformation.Transform.MultPoint(TVector3.Zero);
+  Result := Sign(
+    PointsDistanceSqr(PointB, SortPosition) -
+    PointsDistanceSqr(PointA, SortPosition));
+end;
+
+function TShapeList.IsSmallerBackToFront3DGround(
+  {$ifdef GENERICS_CONSTREF}constref{$else}const{$endif} A, B: TShape): Integer;
+var
+  PointA, PointB: TVector3;
+begin
+  PointA := A.OriginalState.Transformation.Transform.MultPoint(TVector3.Zero);
+  PointB := B.OriginalState.Transformation.Transform.MultPoint(TVector3.Zero);
+  PointA.Y := 0;
+  PointB.Y := 0;
+  Result := Sign(
+    PointsDistanceSqr(PointB, SortPosition) -
+    PointsDistanceSqr(PointA, SortPosition));
 end;
 
 procedure TShapeList.SortFrontToBack(const Position: TVector3);
@@ -3675,13 +3684,16 @@ begin
 end;
 
 procedure TShapeList.SortBackToFront(const Position: TVector3;
-  const Distance3D: boolean);
+  const BlendingSort: TBlendingSort);
 begin
   SortPosition := Position;
-  if Distance3D then
-    Sort(TShapeComparer.Construct({$ifdef FPC}@{$endif}IsSmallerBackToFront3D))
-  else
-    Sort(TShapeComparer.Construct({$ifdef FPC}@{$endif}IsSmallerBackToFront2D));
+  case BlendingSort of
+    bs2D      : Sort(TShapeComparer.Construct({$ifdef FPC}@{$endif}IsSmallerBackToFront2D));
+    bs3D      : Sort(TShapeComparer.Construct({$ifdef FPC}@{$endif}IsSmallerBackToFront3DBox));
+    bs3DOrigin: Sort(TShapeComparer.Construct({$ifdef FPC}@{$endif}IsSmallerBackToFront3DOrigin));
+    bs3DGround: Sort(TShapeComparer.Construct({$ifdef FPC}@{$endif}IsSmallerBackToFront3DGround));
+    else ;
+  end;
 end;
 
 { TPlaceholderNames ------------------------------------------------------- }
@@ -3700,19 +3712,22 @@ function X3DShapePlaceholder(const Shape: TShape): string;
 begin
   { Shape.Node may be nil for old VRML 1.0 or Inventor. }
   if Shape.Node <> nil then
-    Result := Shape.Node.X3DName else
+    Result := Shape.Node.X3DName
+  else
     Result := '';
 end;
 
 function BlenderPlaceholder(const Shape: TShape): string;
 begin
+  Result := '';
   if Shape.OriginalGeometry is TAbstractGeometryNode_1 then
   begin
     { Geometry node generated by Blender VRML 1.0 exporter has one parent,
       its mesh. The mesh node may have many parents representing its objects
       (unfortunately, the object names are not recorded in exported file,
       so we use mesh name for BlenderPlaceholder. }
-    Result := Shape.GeometryParentNode.X3DName;
+    if Shape.GeometryParentNode <> nil then
+      Result := Shape.GeometryParentNode.X3DName;
   end else
   begin
     { For VRML 2.0 and X3D exporter, the situation is quite similar.
@@ -3738,10 +3753,12 @@ begin
     }
 
     // not needed:
-    // BlenderMeshName := PrefixRemove('ME_', GeometryGrandParentNode.X3DName, false);
+    // if Shape.GeometryGrandParentNode <> nil then
+    //   BlenderMeshName := PrefixRemove('ME_', GeometryGrandParentNode.X3DName, false);
 
-    Result := SuffixRemove('_ifs_TRANSFORM', PrefixRemove('OB_',
-      Shape.GeometryGrandGrandParentNode.X3DName, false), false);
+    if Shape.GeometryGrandGrandParentNode <> nil then
+      Result := SuffixRemove('_ifs_TRANSFORM', PrefixRemove('OB_',
+        Shape.GeometryGrandGrandParentNode.X3DName, false), false);
   end;
 end;
 

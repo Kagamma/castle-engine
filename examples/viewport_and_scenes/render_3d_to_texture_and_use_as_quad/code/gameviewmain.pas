@@ -1,5 +1,5 @@
 {
-  Copyright 2016-2022 Michalis Kamburelis.
+  Copyright 2016-2023 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -25,8 +25,9 @@ uses Classes,
 type
   { Main view, where most of the application logic takes place. }
   TViewMain = class(TCastleView)
-  private
-    { Components designed using CGE editor, loaded from gameviewmain.castle-user-interface. }
+  published
+    { Components designed using CGE editor.
+      These fields will be automatically initialized at Start. }
     LabelFps: TCastleLabel;
     SourceViewport: TCastleViewport;
     DisplayedScene: TCastleScene;
@@ -92,11 +93,6 @@ var
 begin
   inherited;
 
-  { Find components, by name, that we need to access from code }
-  LabelFps := DesignedComponent('LabelFps') as TCastleLabel;
-  SourceViewport := DesignedComponent('SourceViewport') as TCastleViewport;
-  DisplayedScene := DesignedComponent('DisplayedScene') as TCastleScene;
-
   { render to texture }
   SpriteTexture := CreateSpriteTexture;
   // You could save the image to disk at this point.
@@ -122,7 +118,7 @@ end;
 procedure TViewMain.Update(const SecondsPassed: Single; var HandleInput: Boolean);
 begin
   inherited;
-  { This virtual method is executed every frame.}
+  { This virtual method is executed every frame (many times per second). }
   LabelFps.Caption := 'FPS: ' + Container.Fps.ToString;
 end;
 

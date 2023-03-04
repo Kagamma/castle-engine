@@ -12,7 +12,7 @@ interface
 implementation
 
 uses SysUtils,
-  CastleWindow, CastleLog, CastleUIControls, CastleSoundEngine
+  CastleWindow, CastleLog, CastleUIControls, CastleSoundEngine, GameSound
   {$region 'Castle Initialization Uses'}
   // The content here may be automatically updated by CGE editor.
   , GameViewMenu
@@ -28,7 +28,7 @@ begin
   { Adjust container settings for a scalable UI (adjusts to any window size in a smart way). }
   Window.Container.LoadSettings('castle-data:/CastleSettings.xml');
 
-  { Create game views and set initial view }
+  { Create views (see https://castle-engine.io/views ). }
   {$region 'Castle View Creation'}
   // The content here may be automatically updated by CGE editor.
   ViewPlay := TViewPlay.Create(Application);
@@ -37,41 +37,48 @@ begin
 
   Window.Container.View := ViewMenu;
 
-  SoundEngine.RepositoryURL := 'castle-data:/audio/index.xml';
-  SoundEngine.LoopingChannel[0].Sound := SoundEngine.SoundFromName('dark_music');
+  InitializeSounds;
+  SoundEngine.LoopingChannel[0].Sound := NamedSound('MainMusic');
 end;
 
 initialization
-  { Initialize Application.OnInitialize. }
+  { This initialization section configures:
+    - Application.OnInitialize
+    - Application.MainWindow
+    - determines initial window size
+
+    You should not need to do anything more in this initialization section.
+    Most of your actual application initialization (in particular, any file reading)
+    should happen inside ApplicationInitialize. }
+
   Application.OnInitialize := @ApplicationInitialize;
 
-  { Create and assign Application.MainWindow. }
   Window := TCastleWindow.Create(Application);
-  Window.ParseParameters; // allows to control window size / fullscreen on the command-line
   Application.MainWindow := Window;
 
-  { Adjust window fullscreen state and size.
-    Note that some platforms (like mobile) may ignore it.
-    Examples how to set window fullscreen state and size:
+  { Optionally, adjust window fullscreen state and size at this point.
+    Examples:
+
+    Run fullscreen:
 
       Window.FullScreen := true;
 
-    or
+    Run in a 600x400 window:
 
       Window.FullScreen := false; // default
       Window.Width := 600;
       Window.Height := 400;
 
-    or
+    Run in a window taking 2/3 of screen (width and height):
 
       Window.FullScreen := false; // default
       Window.Width := Application.ScreenWidth * 2 div 3;
       Window.Height := Application.ScreenHeight * 2 div 3;
+
+    Note that some platforms (like mobile) ignore these window sizes.
   }
 
-  { You should not need to do *anything* more in the unit "initialization" section.
-    Most of your game initialization should happen inside ApplicationInitialize.
-    In particular, it is not allowed to read files before ApplicationInitialize
-    (because in case of non-desktop platforms,
-    some necessary resources may not be prepared yet). }
+  { Handle command-line parameters like --fullscreen and --window.
+    By doing this last, you let user to override your fullscreen / mode setup. }
+  Window.ParseParameters;
 end.
