@@ -1,5 +1,5 @@
 {
-  Copyright 2010-2022 Michalis Kamburelis.
+  Copyright 2010-2023 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -20,14 +20,12 @@ unit CastleControls;
 
 interface
 
-{$warnings off} // TODO: temporarily, this uses deprecated CastleProgress
 uses Classes, Generics.Collections,
   CastleVectors, CastleUIControls, CastleFonts, CastleTextureFontData,
   CastleKeysMouse, CastleImages, CastleUtils, CastleGLImages, CastleRectangles,
-  CastleColors, CastleProgress, CastleTimeUtils, CastleInternalRichText, CastleGLUtils,
+  CastleColors, CastleTimeUtils, CastleInternalRichText, CastleGLUtils,
   CastleURIUtils, CastleLog, CastleStringUtils, CastleGLShaders, CastleClassUtils,
   CastleRenderContext;
-{$warnings on}
 
 type
   {$define read_interface}
@@ -43,7 +41,6 @@ type
   {$I castlecontrols_simplebackground.inc}
   {$I castlecontrols_label.inc}
   {$I castlecontrols_crosshair.inc}
-  {$I castlecontrols_progressbar.inc}
   {$I castlecontrols_sliders.inc}
   {$I castlecontrols_scrollview.inc}
   {$I castlecontrols_switchcontrol.inc}
@@ -82,7 +79,6 @@ uses SysUtils, Math, CastleTextureFont_DjvSans_20,
 {$I castlecontrols_simplebackground.inc}
 {$I castlecontrols_label.inc}
 {$I castlecontrols_crosshair.inc}
-{$I castlecontrols_progressbar.inc}
 {$I castlecontrols_sliders.inc}
 {$I castlecontrols_scrollview.inc}
 {$I castlecontrols_switchcontrol.inc}
@@ -97,6 +93,8 @@ uses SysUtils, Math, CastleTextureFont_DjvSans_20,
 {$I castlecontrols_memo.inc}
 {$undef read_implementation}
 
+var
+  R: TRegisteredComponent;
 initialization
   RegisterSerializableComponent(TCastleButton, 'Button');
   RegisterSerializableComponent(TCastleImageControl, 'Image');
@@ -121,6 +119,14 @@ initialization
     'Design (Reference Another castle-user-interface File)');
 
   RegisterSerializableComponent(TCastleDesign, 'Design (Use Another castle-user-interface File)');
+
+  R := TRegisteredComponent.Create;
+  {$warnings off} // using deprecated, to keep reading it from castle-user-interface working
+  R.ComponentClass := TCastleSwitchControl;
+  {$warnings on}
+  R.Caption := ['Switch'];
+  R.IsDeprecated := true;
+  RegisterSerializableComponent(R);
 finalization
   FinalizationUIFonts;
   FinalizationClipboard;

@@ -1,5 +1,5 @@
 {
-  Copyright 2001-2022 Michalis Kamburelis.
+  Copyright 2001-2023 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -870,7 +870,6 @@ type
 
     { Append code to embed this image inside Pascal source code. }
     procedure SaveToPascalCode(const ImageName: string;
-      const ShowProgress: boolean;
       var CodeInterface, CodeImplementation, CodeInitialization, CodeFinalization: string);
 
     { Set the RGB colors for transparent pixels to the nearest non-transparent
@@ -1037,8 +1036,9 @@ type
 
     { Decompress the image.
 
-      This uses DecompressTexture variable, so you have to initialialize it
-      first (for example to CastleGLImages.GLDecompressTexture) before using this.
+      This uses DecompressTexture routine.
+      By default, it is assigned only when OpenGL(ES) context is available
+      and can decompress textures with the help of OpenGL(ES).
 
       @raises(ECannotDecompressTexture If we cannot decompress the texture,
         because decompressor is not set or there was some other error
@@ -1061,7 +1061,7 @@ type
 
   ECannotDecompressTexture = class(Exception);
 
-  TDecompressTextureFunction = function (Image: TGPUCompressedImage): TCastleImage;
+  TDecompressTextureFunction = function (const Image: TGPUCompressedImage): TCastleImage;
 
 var
   { Assign here texture decompression function that is available.
@@ -1468,22 +1468,28 @@ type
     { Should we treat grayscale image as pure alpha channel (without any color
       information) when using this as a texture.
 
-      This property is meaningful only for a small subset of operations.
+      This property is meaningful for some operations:
 
       @orderedList(
         @item(
           When creating OpenGL texture from this image.
-          If @true, then the grayscale pixel data will be loaded as alpha channel
-          contents (GL_ALPHA texture for OpenGL,
-          it modifies only the fragments alpha value,
-          it doesn't have any "color" in the normal sense).
-          It is also the only way for TGrayscaleImage to return AlphaChannel <> acNone.)
+          If @true, then the grayscale pixel data will be loaded as alpha channel contents.
+          When the texture is read by shaders, the RGB is (1,1,1) and alpha comes from the image.
+
+          Note the we don't pass ColorWhenTreatedAsAlpha to OpenGL,
+          as we don't have this functionality (e.g. https://www.khronos.org/opengl/wiki/Texture#Swizzle_mask
+          cannot express an arbitrary but constant color on some channels.)
+        )
 
         @item(
           When using @link(DrawFrom) / @link(DrawTo) methods or being assigned to something using @link(Assign).
           If @true, this image is drawn like an RGBA image,
           with constant RGB color ColorWhenTreatedAsAlpha, and alpha channel
           taken from contents of this image.)
+
+        @item(
+          It is also the only way for TGrayscaleImage to return AlphaChannel <> acNone.)
+
       )
     }
     property TreatAsAlpha: boolean
@@ -2009,7 +2015,6 @@ function InternalDetectClassPNG(const Stream: TStream): TEncodedImageClass;
 
 implementation
 
-{$warnings off} // TODO: temporarily, this uses deprecated CastleProgress
 uses {$ifdef FPC} ExtInterpolation, FPCanvas, FPImgCanv, {$endif}
   {$ifdef USE_VAMPYRE_IMAGING} Imaging, ImagingClasses, ImagingTypes,
     { Using ImagingExtFileFormats explicitly is necessary to include extra formats when
@@ -2020,10 +2025,9 @@ uses {$ifdef FPC} ExtInterpolation, FPCanvas, FPImgCanv, {$endif}
       VampyreImagingPackage.lpk and VampyreImagingPackageExt.lpk). }
     ImagingExtFileFormats,
   {$endif}
-  CastleProgress, CastleStringUtils, CastleFilesUtils, CastleLog,
+  CastleInternalZLib, CastleStringUtils, CastleFilesUtils, CastleLog,
   CastleInternalCompositeImage, CastleDownload, CastleURIUtils, CastleTimeUtils,
   CastleStreamUtils;
-{$warnings on}
 
 { parts ---------------------------------------------------------------------- }
 
@@ -2744,7 +2748,6 @@ begin
 end;
 
 procedure TCastleImage.SaveToPascalCode(const ImageName: string;
-  const ShowProgress: boolean;
   var CodeInterface, CodeImplementation, CodeInitialization, CodeFinalization: string);
 var
   NameWidth, NameHeight, NameDepth, NamePixels: string;
@@ -2774,11 +2777,6 @@ begin
       +IntToStr(PixelSize) + ' - 1] of Byte = (' + NL +
     '    ';
 
-  if ShowProgress then
-    Progress.Init((Size - 1) div 12,
-      Format('Generating %s (%s, alpha: %s)',
-        [ImageName, ClassName, AlphaToString[AlphaChannel]]));
-
   pb := PByte(RawPixels);
   for I := 1 to Size - 1 do
   begin
@@ -2786,7 +2784,6 @@ begin
     if (i mod 12) = 0 then
     begin
       CodeImplementation := CodeImplementation + NL + '    ';
-      if ShowProgress then Progress.Step;
     end else
       CodeImplementation := CodeImplementation + ' ';
     Inc(pb);
@@ -2806,8 +2803,6 @@ begin
     'end;' + NL +
     NL +
     '';
-
-  if ShowProgress then Progress.Fini;
 
   CodeFinalization := CodeFinalization +
     '  FreeAndNil(F' +ImageName+ ');' +nl;
@@ -3046,6 +3041,9 @@ end;
 
 function TGPUCompressedImage.Decompress: TCastleImage;
 begin
+  WritelnLog('Decompressing GPU-compressed "%s", this is usually a waste of time for normal games that should load textures in format (compressed or not) suitable for current GPU', [
+    URL
+  ]);
   if Assigned(DecompressTexture) then
     Result := DecompressTexture(Self)
   else
@@ -3656,27 +3654,18 @@ var
   X, Y, Z: Integer;
 begin
   Result := MakeCopy;
-  if ProgressTitle <> '' then
-    Progress.Init(Width * Height * Depth, ProgressTitle);
-  try
-    for X := 0 to Width - 1 do
-      for Y := 0 to Height - 1 do
-        for Z := 0 to Depth - 1 do
+  for X := 0 to Width - 1 do
+    for Y := 0 to Height - 1 do
+      for Z := 0 to Depth - 1 do
+      begin
+        P := Result.PixelPtr(X, Y, Z);
+        if P^.W <> High(Byte) then
         begin
-          P := Result.PixelPtr(X, Y, Z);
-          if P^.W <> High(Byte) then
-          begin
-            NewP := FindNearestNonTransparentPixel(X, Y, Z);
-            if NewP <> nil then
-              Move(NewP^, P^, SizeOf(TVector3Byte));
-          end;
-          if ProgressTitle <> '' then
-            Progress.Step;
+          NewP := FindNearestNonTransparentPixel(X, Y, Z);
+          if NewP <> nil then
+            Move(NewP^, P^, SizeOf(TVector3Byte));
         end;
-  finally
-    if ProgressTitle <> '' then
-      Progress.Fini;
-  end;
+      end;
 end;
 
 { TRGBFloatImage ------------------------------------------------------------ }

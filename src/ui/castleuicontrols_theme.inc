@@ -1,6 +1,6 @@
 {%MainUnit castleuicontrols.pas}
 {
-  Copyright 2010-2022 Michalis Kamburelis.
+  Copyright 2010-2023 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -21,7 +21,7 @@
     tiPanel, tiPanelSeparator, tiProgressBar, tiProgressFill,
     tiButtonPressed, tiButtonDisabled, tiButtonFocused, tiButtonNormal,
     tiWindow, tiScrollbarFrame, tiScrollbarSlider,
-    tiSlider, tiSliderPosition, tiLabel, tiGroup, tiActiveFrame, tiTooltip,
+    tiSliderBackground, tiSliderThumb, tiLabel, tiGroup, tiActiveFrame, tiTooltip,
     tiTouchCtlInner, tiTouchCtlOuter, tiTouchCtlFlyInner, tiTouchCtlFlyOuter,
     tiCrosshair1, tiCrosshair2, tiCheckmark,
     tiSquareEmpty, tiSquareChecked, tiSquarePressedBackground,
@@ -93,8 +93,8 @@
     BarEmptyColor: TVector3Byte;
     BarFilledColor: TVector3Byte;
 
-    { Color layer displayed between modal dialogs (CastleMessages, CastleDialogStates, TGLModeFrozenScreen)
-      and their background (state underneath or a screenshot).
+    { Color layer displayed between modal dialogs (CastleMessages, CastleDialogViews, TGLModeFrozenScreen)
+      and their background (view underneath or a screenshot).
       Default is (0, 0, 0, 0.25), making things underneath darker,
       which helps dialog to stand out. }
     BackgroundColor: TCastleColor;
@@ -271,6 +271,10 @@ function Theme: TCastleTheme;
 { Fallback (do not change this, ever) theme. Default state of @link(Theme). }
 function FallbackTheme: TCastleTheme;
 
+const
+  tiSlider = tiSliderBackground deprecated 'use tiSliderBackground';
+  tiSliderPosition = tiSliderThumb deprecated 'use tiSliderThumb';
+
 {$endif read_interface}
 
 {$ifdef read_implementation}
@@ -302,6 +306,9 @@ begin
   for T := Low(TThemeImage) to High(TThemeImage) do
   begin
     FImagesPersistent[T] := TCastleImagePersistent.Create;
+    { Hide 9-slices visualization in editor, as user likely didn't set the corners of theme,
+      and could be surprised by all extra drawing (e.g. on every default button). }
+    FImagesPersistent[T].InternalVisualizeProtectedSides := false;
     FImagesPersistent[T].OwnsImage := false;
   end;
 
@@ -329,13 +336,10 @@ begin
   FImagesPersistent[tiScrollbarFrame].ProtectedSides.AllSides := 1;
   FImagesPersistent[tiScrollbarSlider].Image := ScrollbarSlider;
   FImagesPersistent[tiScrollbarSlider].ProtectedSides.AllSides := 3;
-  FImagesPersistent[tiSlider].Image := Slider;
-  FImagesPersistent[tiSlider].ProtectedSides.Top := 4;
-  FImagesPersistent[tiSlider].ProtectedSides.Bottom := 4;
-  FImagesPersistent[tiSlider].ProtectedSides.Left := 7;
-  FImagesPersistent[tiSlider].ProtectedSides.Right := 7;
-  FImagesPersistent[tiSliderPosition].Image := SliderPosition;
-  FImagesPersistent[tiSliderPosition].ProtectedSides.AllSides := 1;
+  FImagesPersistent[tiSliderBackground].Image := SliderBackground;
+  FImagesPersistent[tiSliderBackground].ProtectedSides.AllSides := 31;
+  FImagesPersistent[tiSliderBackground].ProtectedSidesScaling := pssMatchHeight;
+  FImagesPersistent[tiSliderThumb].Image := SliderThumb;
   FImagesPersistent[tiLabel].Image := FrameWhiteBlack;
   FImagesPersistent[tiLabel].ProtectedSides.AllSides := 2;
   FImagesPersistent[tiGroup].Image := FrameWhiteBlack;

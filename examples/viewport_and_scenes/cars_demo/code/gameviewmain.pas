@@ -1,5 +1,5 @@
 {
-  Copyright 2010-2022 Michalis Kamburelis.
+  Copyright 2010-2023 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -25,12 +25,13 @@ uses Classes,
 type
   { Main view, where most of the application logic takes place. }
   TViewMain = class(TCastleView)
-  private
-    { Components designed using CGE editor, loaded from gameviewmain.castle-user-interface. }
+  published
+    { Components designed using CGE editor.
+      These fields will be automatically initialized at Start. }
     LabelFps: TCastleLabel;
     RoadScene: TCastleScene;
     MainViewport: TCastleViewport;
-
+  private
     CarScene: TCastleScene;
     CarTransforms: array [1..20] of TCastleTransform;
   public
@@ -158,11 +159,6 @@ var
 begin
   inherited;
 
-  { Find components, by name, that we need to access from code }
-  LabelFps := DesignedComponent('LabelFps') as TCastleLabel;
-  RoadScene := DesignedComponent('RoadScene') as TCastleScene;
-  MainViewport := DesignedComponent('MainViewport') as TCastleViewport;
-
   MainViewport.Items.Add(CreateAdditionalMesh);
 
   CarScene := TCastleScene.Create(FreeAtStop);
@@ -184,7 +180,7 @@ end;
 procedure TViewMain.Update(const SecondsPassed: Single; var HandleInput: Boolean);
 begin
   inherited;
-  { This virtual method is executed every frame.}
+  { This virtual method is executed every frame (many times per second). }
   LabelFps.Caption := 'FPS: ' + Container.Fps.ToString;
 end;
 

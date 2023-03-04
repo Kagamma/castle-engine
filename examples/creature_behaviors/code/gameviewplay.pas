@@ -1,5 +1,5 @@
 {
-  Copyright 2020-2022 Michalis Kamburelis.
+  Copyright 2020-2023 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -26,12 +26,13 @@ uses Classes,
 type
   { Main "playing game" view, where most of the game logic takes place. }
   TViewPlay = class(TCastleView)
-  private
-    { Components designed using CGE editor, loaded from gameviewplay.castle-user-interface. }
+  published
+    { Components designed using CGE editor.
+      These fields will be automatically initialized at Start. }
     LabelFps: TCastleLabel;
     MainViewport: TCastleViewport;
     WalkNavigation: TCastleWalkNavigation;
-
+  private
     Enemies: TCastleTransformList;
     PlayerAlive: TCastleAliveBehavior;
   public
@@ -67,11 +68,6 @@ var
 begin
   inherited;
 
-  { Find components, by name, that we need to access from code }
-  LabelFps := DesignedComponent('LabelFps') as TCastleLabel;
-  MainViewport := DesignedComponent('MainViewport') as TCastleViewport;
-  WalkNavigation := DesignedComponent('WalkNavigation') as TCastleWalkNavigation;
-
   PlayerAlive := TCastleAliveBehavior.Create(FreeAtStop);
   MainViewport.Camera.AddBehavior(PlayerAlive);
 
@@ -103,7 +99,7 @@ end;
 procedure TViewPlay.Update(const SecondsPassed: Single; var HandleInput: Boolean);
 begin
   inherited;
-  { This virtual method is executed every frame.}
+  { This virtual method is executed every frame (many times per second). }
   LabelFps.Caption := 'FPS: ' + Container.Fps.ToString;
 end;
 

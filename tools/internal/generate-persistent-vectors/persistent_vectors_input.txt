@@ -4,7 +4,7 @@
 ../../../src/ui/ TCastleUserInterface Translation TVector2
 
 ../../../src/ui/ TCastleRectangleControl Color TCastleColor
-../../../src/ui/ TStateDialog BackgroundColor TCastleColor
+../../../src/ui/ TViewDialog BackgroundColor TCastleColor
 ../../../src/ui/ TCastleScrollViewCustom TintScrollBarInactive TCastleColor
 
 ../../../src/deprecated_units/ TCastleOnScreenMenu CurrentItemBorderColor1 TCastleColor
@@ -50,9 +50,9 @@
 ../../../src/ui/ TCastleCheckbox TextColor TCastleColor
 ../../../src/ui/ TCastleCheckbox CheckboxColor TCastleColor
 
-../../../src/ui/ TCastleTiledMapControl Origin TVector2
-
 ../../../src/ui/ TCastleCrosshair Color TCastleColor
+
+../../../src/ui/ TCastleAbstractSlider TextColor TCastleColor
 
 ../../../src/transform/ TCastleTransform Center TVector3
 ../../../src/transform/ TCastleTransform Rotation TVector4 rotation
@@ -131,3 +131,5 @@
 
 ../../../src/scene/ TCastleTerrain Size TVector2
 ../../../src/scene/ TCastleTerrain Subdivisions TVector2
+
+../../../src/scene/ TCastleTiledMapControl Origin TVector2

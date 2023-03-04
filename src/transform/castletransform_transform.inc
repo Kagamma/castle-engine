@@ -1,6 +1,6 @@
 {%MainUnit castletransform.pas}
 {
-  Copyright 2017-2022 Michalis Kamburelis.
+  Copyright 2017-2023 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -268,6 +268,9 @@
     { Call UpdateWorldScale on all colliders here and in children. }
     procedure UpdateCollidersWorldScale;
   protected
+    { Returns list of TCastleTransform to render. By default, it just returns @link(List). }
+    function GetRenderList(const Params: TRenderParams): TCastleTransformList; virtual;
+
     { Call this when doing anything that allocates GL resources.
       This will make sure GLContextClose will get called. }
     procedure RegisterGLContextClose;
@@ -546,7 +549,7 @@
 
     class var
       { Default value of @link(TCastleTransform.Orientation) for new TCastleTransform instances,
-        but not for cameras (cameras use special DefaultCameraOrientation).
+        except for cameras (cameras use special DefaultCameraOrientation).
 
         This is @link(otUpYDirectionZ) by default.
         This matches glTF orientation (as exported from Blender and other software). }
@@ -743,8 +746,9 @@
           In 3D, it may make sense to call this method even every frame
           (like in every @link(TCastleWindow.OnUpdate)).
           Call it if you move or otherwise change the objects (changing their bounding boxes),
-          or if the CameraPosition may change (note that CameraPosition is only
-          relevant if BlendingSort = bs3D).
+          or if the CameraPosition may change. Note that CameraPosition is only
+          relevant if BlendingSort is one of the bs3D* options,
+          like bs3D, bs3DOrigin, bs3DGround.
         )
         @item(
           In 2D, it is a bit simpler.
@@ -759,8 +763,9 @@
       Note that this doesn't take care of sorting the shapes
       within the scenes. For this, you should set
       @link(TCastleRenderOptions.BlendingSort Scene.RenderOptions.BlendingSort)
-      to a value like bs3D, to keep it sorted.
-      It is the default now, so you typically don't need to worry about it.
+      to a value like bs3D or bs3DOrigin or bs3DGround, to keep it sorted.
+      The bs3D is the default now (see @link(TCastleRenderOptions.DefaultBlendingSort)),
+      so you typically don't need to worry about it.
 
       See the TBlendingSort documentation for the exact specification
       of sorting algorithms. Using BlendingSort = bsNone does nothing.
@@ -1641,21 +1646,68 @@
     property Position: TVector3 read FTranslation write SetTranslation;
       {$ifdef FPC}deprecated 'use Translation';{$endif}
 
-    { Direction the transformation (like creature or camera) is facing, and up vector.
-      These properties provide an alternative way to get and set the @link(Rotation)
-      of the transformation.
-      Thinking in terms of "direction" and "up" is often more natural
-      when transforming creatures and player.
+    { Direction that this transformation (like creature, space ship, missile, a camera...) is facing.
+      The property @link(Up) contains an associated up vector.
+      Together, the @link(Direction) and @link(Up) properties provide an alternative way
+      to get and set the @link(Rotation) of the transformation.
 
-      The @link(Orientation) determines what is your default direction and up
-      (when the @link(Rotation) is zero).
+      Thinking in terms of "direction" and "up" is more natural than thinking
+      about @link(Rotation) for various game objects.
+      For example, you can move a missile forward by this simple operation:
+
+      @longCode(#
+        MyMissile.Translation := MyMissile.Translation +
+          MyMissile.Direction * SecondsPassed * MissileMoveSpeed;
+      #)
+
+      The @link(Orientation) determines what is the direction and up you get
+      when the @link(Rotation) is zero.
+      For example @link(Orientation) = otUpYDirectionZ (default now) means that:
+
+      @orderedList(
+        @item(When @link(Rotation) is zero,
+          then @link(Up) will be +Y axis @code((0,1,0)) and
+          @link(Direction) will be +Z axis @code((0,0,1)).)
+
+        @item(Setting the @link(Direction) and @link(Up) to other values will be properly converted.)
+
+        @item(So when @link(Orientation) = otUpYDirectionZ, and you set
+
+          @longCode(#
+          MyMissile.Direction := Vector3(0, 0, 1);
+          MyMissile.Up := Vector3(0, 1, 0);
+          #)
+
+          then you effectively have set @link(Rotation MyMissile.Rotation) to zero (no rotation).
+          That is, you could have as well done just this:
+
+          @longCode(#
+          MyMissile.Rotation := TVector4.Zero;
+          #)
+
+          Note that you can also set direction and up more efficiently by one @link(SetView) call.
+          So this is one more way to do it, also equivalent:
+
+          @longCode(#
+          MyMissile.SetView(Vector3(0, 0, 1), Vector3(0, 1, 0));
+          #)
+        )
+      )
+
+      Note that changing @link(Orientation) property does not perform @italic(any) transformation
+      of the model, it will look the same as it was, no matter what @link(Orientation) you set.
+      Only changing the @link(Direction) or @link(Up) actually change the @link(Rotation),
+      which in turn actually change how the model looks. This also implies that
+      @link(Orientation) value completely doesn't matter if you never get or set
+      @link(Direction) or @link(Up). All engine rendering and processing just looks at @link(Rotation).
+
       See @link(Orientation) for documentation of its default value.
 
       The @link(Direction) and @link(Up) vectors should always be normalized
-      (have length 1). When setting them by these properties, we will normalize
-      them automatically.
+      (have length 1). But when setting them by these properties, we will normalize
+      them automatically, so you don't need to worry about that.
 
-      They must also always be orthogonal.
+      The direction and up vectors must always be orthogonal.
       When setting @link(Direction), @link(Up) will always be automatically
       adjusted to be orthogonal to @link(Direction). And vice versa ---
       when setting @link(Up), @link(Direction) will be adjusted.
@@ -2009,7 +2061,31 @@ end;
 procedure TCastleTransform.BeforeDestruction;
 var
   I: Integer;
+  PreviousCount: SizeInt;
 begin
+  { Remove Self from children, so that in each child we
+
+    - decrease FWorldReferences
+    - set FParent to nil (if it matched Self)
+    - set FWorld to nil (if it matched Self.FWorld)
+
+    Note that this has to be done before "ChangeWorld(nil)",
+    as RemoveParent in child compares "World = OldParent.World".
+    That is also why we don't depend on TCastleTransformList.Notify
+    to call RemoveParent on all children when parent is freed,
+    as it would be too late, when our World is already nil. }
+  while FList.Count <> 0 do
+  begin
+    PreviousCount := FList.Count;
+    Remove(FList[0]);
+    if FList.Count >= PreviousCount then
+    begin
+      WritelnWarning('During TCastleTransform.BeforeDestruction, the number of children does not decrease -- this means that some TCastleTransform destructor adds new TCastleTransform instances. ' +
+        'We break infinite loop by aborting normal destruction, but expect further problems. To avoid this warning, make sure your TCastleTransform destructor does not create new TCastleTransform instances.');
+      Break;
+    end;
+  end;
+
   { set to nil, to detach free notification }
   ChangeWorld(nil);
 
@@ -2462,34 +2538,10 @@ begin
   List.Exchange(Index1, Index2);
 end;
 
-function CompareBackToFront2D(A, B: Pointer): Integer;
-begin
-  Result := TBox3D.CompareBackToFront2D(TCastleTransform(A).BoundingBox, TCastleTransform(B).BoundingBox);
-end;
-
-var
-  { Has to be global, since TObjectList.Sort
-    requires normal function (not "of object"). }
-  SortCameraPosition: TVector3;
-
-function CompareBackToFront3D(A, B: Pointer): Integer;
-begin
-  Result := TBox3D.CompareBackToFront3D(TCastleTransform(A).BoundingBox, TCastleTransform(B).BoundingBox,
-    SortCameraPosition);
-end;
-
 procedure TCastleTransform.SortBackToFront(const BlendingSort: TBlendingSort;
   const CameraPosition: TVector3);
 begin
-  case BlendingSort of
-    bs2D: List.Sort(@CompareBackToFront2D);
-    bs3D:
-      begin
-        SortCameraPosition := CameraPosition;
-        List.Sort(@CompareBackToFront3D);
-      end;
-    else ;
-  end;
+  List.SortBackToFront(BlendingSort, CameraPosition);
 end;
 
 procedure TCastleTransform.SortBackToFront2D;
@@ -2524,15 +2576,22 @@ begin
   end;
 end;
 
+function TCastleTransform.GetRenderList(const Params: TRenderParams): TCastleTransformList;
+begin
+  Result := List;
+end;
+
 procedure TCastleTransform.LocalRender(const Params: TRenderParams);
 var
   I: Integer;
+  RenderList: TCastleTransformList;
 begin
   if CheckVisible then
   begin
     PendingRemovals;
-    for I := 0 to List.Count - 1 do
-      List[I].Render(Params);
+    RenderList := GetRenderList(Params);
+    for I := 0 to RenderList.Count - 1 do
+      RenderList[I].Render(Params);
   end;
 end;
 
