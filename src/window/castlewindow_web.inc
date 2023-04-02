@@ -30,7 +30,7 @@ type
     Value1, Value2: Integer;
     MouseButton: TCastleMouseButton;
   end;
-  TQueuedEventList = specialize TList<TQueuedEvent>;
+  TQueuedEventList = specialize TQueue<TQueuedEvent>;
 
 var
   QEvents: TQueuedEventList;
@@ -184,8 +184,7 @@ begin
   repeat
     while QEvents.Count > 0 do
     begin
-      QEvent := QEvents.First;
-      QEvents.Delete(0);
+      QEvent := QEvents.Dequeue;
       case QEvent.EventType of
         aeResize:
           begin
@@ -277,7 +276,7 @@ begin
   QEvent.EventType := aeResize;
   QEvent.Value1 := Width;
   QEvent.Value2 := Height;
-  QEvents.Add(QEvent);
+  QEvents.Enqueue(QEvent);
 end;
 
 procedure EventKeyDown(KeyCode: Integer);
@@ -286,7 +285,7 @@ var
 begin
   QEvent.EventType := aeKeyDown;
   QEvent.Key := TKey(KeyCode);
-  QEvents.Add(QEvent);
+  QEvents.Enqueue(QEvent);
 end;
 
 procedure EventKeyUp(KeyCode: Integer);
@@ -295,7 +294,7 @@ var
 begin
   QEvent.EventType := aeKeyUp;
   QEvent.Key := TKey(KeyCode);
-  QEvents.Add(QEvent);
+  QEvents.Enqueue(QEvent);
 end;
 
 procedure EventMouseMove(X, Y: Integer);
@@ -305,7 +304,7 @@ begin
   QEvent.EventType := aeMouseMove;
   QEvent.Value1 := X;
   QEvent.Value2 := Y;
-  QEvents.Add(QEvent);
+  QEvents.Enqueue(QEvent);
 end;
 
 procedure EventMouseDown(Button, X, Y: Integer);
@@ -320,7 +319,7 @@ begin
     1: QEvent.MouseButton := buttonMiddle;
     2: QEvent.MouseButton := buttonRight;
   end;
-  QEvents.Add(QEvent);
+  QEvents.Enqueue(QEvent);
 end;
 
 procedure EventMouseUp(Button, X, Y: Integer);
@@ -335,7 +334,7 @@ begin
     1: QEvent.MouseButton := buttonMiddle;
     2: QEvent.MouseButton := buttonRight;
   end;
-  QEvents.Add(QEvent);
+  QEvents.Enqueue(QEvent);
 end;
 
 procedure EventMouseWheel(Y: Integer);
@@ -344,7 +343,7 @@ var
 begin
   QEvent.EventType := aeMouseWheel;
   QEvent.Value1 := Y;
-  QEvents.Add(QEvent);
+  QEvents.Enqueue(QEvent);
 end;
 
 { Web browser will call this event for main loop }
