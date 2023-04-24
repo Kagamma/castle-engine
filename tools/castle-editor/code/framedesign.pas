@@ -34,7 +34,7 @@ uses
   CastleSceneCore, CastleKeysMouse, CastleVectors, CastleRectangles,
   CastleViewport, CastleClassUtils, CastleControls, CastleTiledMap,
   CastleCameras, CastleBoxes, CastleTransform, CastleDebugTransform,
-  CastleColors, CastleScene, CastleRenderOptions,
+  CastleColors, CastleScene, CastleRenderOptions, CastleEditorPropEdits,
   // editor units
   FrameAnchors, CastleShellCtrls, EditorUtils,
   DesignVisualizeTransform, DesignUndoSystem, DesignCameraPreview,
@@ -232,7 +232,7 @@ type
     var
       Inspector: array [TInspectorType] of TCastleObjectInspector;
       FUndoSystem: TUndoSystem;
-      PropertyEditorHook: TPropertyEditorHook;
+      PropertyEditorHook: TCastlePropertyEditorHook;
       FDesignUrl: String;
       FDesignRoot: TComponent;
       { Viewport created for editing design with FDesignRoot being TCastleTransform. }
@@ -383,6 +383,7 @@ type
     procedure PropertyGridCollectionItemDelete(Sender: TObject);
     procedure PropertyGridCollectionItemMoveUp(Sender: TObject);
     procedure PropertyGridCollectionItemMoveDown(Sender: TObject);
+
     { Is Child selectable and visible in hierarchy. }
     class function Selectable(const Child: TComponent): Boolean; static;
     { Is Child deletable by user (this implies it is also selectable). }
@@ -476,6 +477,12 @@ type
       If T = nil, updates everywhere (TODO: for now,
       only in CurrentViewport). Otherwise updates only in T. }
     procedure UpdateColliders(T: TCastleTransform = nil);
+
+    { Get parent of non-visual component.
+      Since there's no TCastleComponent.NonVisualParent or such, so we find parent using
+      ControlsTree knowledge.
+      Returns nil if no parent. }
+    function NonVisualComponentParent(const C: TCastleComponent): TCastleComponent;
   protected
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
@@ -577,6 +584,10 @@ type
     procedure ChangeMode(const NewMode: TMode);
     procedure ShowAllJointsTools;
     procedure HideAllJointsTools;
+
+    { Saves some editor data in subcomponent of Application for property
+      editors }
+    procedure UpdateEditorDataForPropertyEditors;
   end;
 
 implementation
@@ -746,8 +757,7 @@ function TDesignFrame.TDesignerLayer.HoverUserInterface(
       { Eventually return yourself, C. }
       //if C.CapturesEventsAtPosition(MousePos) then
       if SimpleCapturesEventsAtPosition(C, MousePos, TestWithBorder) and
-         { Do not select TCastleNavigation, they would always obscure TCastleViewport. }
-         (not (C is TCastleNavigation)) then
+         C.EditorSelectOnHover then
         Result := C;
     end;
   end;
@@ -1468,13 +1478,12 @@ constructor TDesignFrame.Create(TheOwner: TComponent);
       Result.ReferencesColor := $9EFFFF;
     end;
   end;
-
 begin
   inherited;
 
   LastSelected := TComponentList.Create(false);
 
-  PropertyEditorHook := TPropertyEditorHook.Create(Self);
+  PropertyEditorHook := TCastlePropertyEditorHook.Create(Self);
 
   FComponentEditorDesigner := TConcreteEditorDesigner.Create(Self, PropertyEditorHook);
 
@@ -1561,6 +1570,7 @@ begin
   FTransformDesigningObserver := TFreeNotificationObserver.Create(Self);
   FTransformDesigningObserver.OnFreeNotification := {$ifdef FPC}@{$endif} TransformDesigningFreeNotification;
   *)
+  UpdateEditorDataForPropertyEditors;
 end;
 
 destructor TDesignFrame.Destroy;
@@ -2399,6 +2409,30 @@ begin
   end;
 end;
 
+function TDesignFrame.NonVisualComponentParent(const C: TCastleComponent): TCastleComponent;
+var
+  CNode: TTreeNode;
+  ParentComp: TComponent;
+begin
+  if not TreeNodeMap.TryGetValue(C, CNode) then
+    raise EInternalError.Create('Cannot duplicate non-visual component: we cannot find the node in ControlsTree');
+
+  // This can happen if C is root component in design
+  if CNode.Parent = nil then
+    Exit(nil);
+
+  { Note: SelectedFromNode will automatically lookup higher parent,
+    in case parent is special "Non-visual component" text node. }
+  ParentComp := SelectedFromNode(CNode.Parent);
+  if ParentComp = nil then
+    raise EInternalError.Create('Cannot duplicate non-visual component: parent node not a regular component');
+
+  if not (ParentComp is TCastleComponent) then
+    raise EInternalError.Create('Cannot duplicate non-visual component: parent is TComponent but not TCastleComponent');
+
+  Result := ParentComp as TCastleComponent;
+end;
+
 procedure TDesignFrame.DuplicateComponent;
 
   procedure FinishAddingComponent(const NewComponent: TComponent);
@@ -2449,6 +2483,25 @@ procedure TDesignFrame.DuplicateComponent;
     FinishAddingComponent(NewComp);
   end;
 
+  procedure DuplicateNonVisualComponent(const Selected: TCastleComponent);
+  var
+    ParentComp, NewComp: TCastleComponent;
+    ComponentString: String;
+    InsertIndex: Integer;
+  begin
+    ParentComp := NonVisualComponentParent(Selected);
+    if ParentComp = nil then
+    begin
+      ErrorBox('To duplicate, select component with exactly one parent');
+      Exit;
+    end;
+    ComponentString := ComponentToString(Selected);
+    NewComp := StringToComponent(ComponentString, DesignOwner) as TCastleComponent;
+    InsertIndex := ParentComp.NonVisualComponentsIndexOf(Selected);
+    ParentComp.InsertNonVisualComponent(InsertIndex + 1, NewComp);
+    FinishAddingComponent(NewComp);
+  end;
+
 var
   Sel: TComponent;
 begin
@@ -2463,7 +2516,10 @@ begin
     if Sel is TCastleTransform then
       DuplicateTransform(Sel as TCastleTransform)
     else
-      ErrorBox('To duplicate, select TCastleUserInterface or TCastleTransform component');
+    if Sel is TCastleComponent then
+      DuplicateNonVisualComponent(Sel as TCastleComponent)
+    else
+      ErrorBox('To duplicate, select TCastleUserInterface, TCastleTransform or TCastleComponent component');
   end else
     ErrorBox('To duplicate, select exactly one component that is not a subcomponent');
 end;
@@ -3722,6 +3778,19 @@ begin
     RecordUndo('Move item down', ucLow);
   finally
     FreeAndNil(FakeSender);
+  end;
+end;
+
+procedure TDesignFrame.UpdateEditorDataForPropertyEditors;
+begin
+  if PropertyEditorHook <> nil then
+  begin
+    PropertyEditorHook.InspectorAreaOnScreen.Left := ProjectForm.Left +
+      Left + PanelRight.Left;
+    PropertyEditorHook.InspectorAreaOnScreen.Top := ProjectForm.Top +
+      Top + PanelRight.Top + ControlProperties.Top  + 10;
+    PropertyEditorHook.InspectorAreaOnScreen.Width := ControlProperties.Width;
+    PropertyEditorHook.InspectorAreaOnScreen.Height := ControlProperties.Height;
   end;
 end;
 
@@ -5395,6 +5464,8 @@ procedure TDesignFrame.FrameResize(Sender: TObject);
   end;
 
 begin
+  UpdateEditorDataForPropertyEditors;
+
   FixButtonSquare(ButtonInteractMode);
   FixButtonSquare(ButtonSelectMode);
   FixButtonSquare(ButtonTranslateMode);
@@ -5874,6 +5945,7 @@ end;
 initialization
   { Enable using our property edits e.g. for TCastleScene.URL }
   CastlePropEdits.Register;
+  CastleEditorPropEdits.Register;
   { Inside CGE editor, CastleApplicationMode is never appRunning. }
   InternalCastleApplicationMode := appDesign;
 end.

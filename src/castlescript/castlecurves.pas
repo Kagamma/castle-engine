@@ -72,16 +72,20 @@ type
   end;
 
   TCurveList = class({$ifdef FPC}specialize{$endif} TObjectList<TCurve>)
+  protected
+    { Override this function to add other classes inherited from
+      @link(TCurve) to a list. }
+    function GetCurveByType(const CurveTypeStr: string): TCurve; virtual;
   public
     { Load curves definitions from a simple XML file.
       Hint: use https://castle-engine.io/curves_tool to design curves
       visually. }
-    procedure LoadFromFile(const URL: string);
+    procedure LoadFromFile(const URL: string); virtual;
 
     { Save curve definitions to a simple XML file.
       Hint: use https://castle-engine.io/curves_tool to design curves
       visually. }
-    procedure SaveToFile(const URL: string);
+    procedure SaveToFile(const URL: string); virtual;
   end;
 
   { Curve defined by explicitly giving functions for
@@ -368,11 +372,7 @@ begin
       while I.GetNext do
       begin
         CurveTypeStr := I.Current.AttributeString('type');
-        if SameText(CurveTypeStr, TPiecewiseCubicBezier.ClassName) then
-          Curve := TPiecewiseCubicBezier.Create else
-        if SameText(CurveTypeStr, TCasScriptCurve.ClassName) then
-          Curve := TCasScriptCurve.Create else
-          raise ECurveFileInvalid.CreateFmt('Curve type "%s" unknown', [CurveTypeStr]);
+        Curve:=GetCurveByType(CurveTypeStr);
         Curve.LoadFromElement(I.Current);
         if Curve is TControlPointsCurve then
           TControlPointsCurve(Curve).UpdateControlPoints;
@@ -380,6 +380,17 @@ begin
       end;
     finally FreeAndNil(I); end;
   finally FreeAndNil(Document) end;
+end;
+
+function TCurveList.GetCurveByType(const CurveTypeStr: string): TCurve;
+begin
+ if SameText(CurveTypeStr, TPiecewiseCubicBezier.ClassName) then
+   Result := TPiecewiseCubicBezier.Create
+ else
+ if SameText(CurveTypeStr, TCasScriptCurve.ClassName) then
+   Result := TCasScriptCurve.Create
+ else
+   raise ECurveFileInvalid.CreateFmt('Curve type "%s" unknown', [CurveTypeStr]);
 end;
 
 procedure TCurveList.SaveToFile(const URL: string);
@@ -454,8 +465,8 @@ begin
       P := PointOfSegment(i, SegmentsForBoundingBox);
       for k := 0 to 2 do
       begin
-        FBoundingBox.Data[0].InternalData[k] := Min(FBoundingBox.Data[0].InternalData[k], P[k]);
-        FBoundingBox.Data[1].InternalData[k] := Max(FBoundingBox.Data[1].InternalData[k], P[k]);
+        FBoundingBox.Data[0].Data[k] := Min(FBoundingBox.Data[0].Data[k], P[k]);
+        FBoundingBox.Data[1].Data[k] := Max(FBoundingBox.Data[1].Data[k], P[k]);
       end;
     end;
   end;
@@ -467,7 +478,7 @@ var
 begin
   TVariable.Value := T;
   for I := 0 to 2 do
-    Result.InternalData[I] := (FFunction[I].Execute as TCasScriptFloat).Value;
+    Result.Data[I] := (FFunction[I].Execute as TCasScriptFloat).Value;
 
   {test: Writeln('Point at t = ',FloatToNiceStr(Single(t)), ' is (',
     Result.ToString, ')');}

@@ -456,9 +456,8 @@ type
       The created scene has exactly the same class as this one
       (we use ClassType.Create to call a virtual constructor).
 
-      Note that this @bold(does not copy other scene attributes),
-      like @link(ProcessEvents) or @link(Spatial) or rendering attributes
-      in @link(RenderOptions). }
+      Note that this @bold(does not copy other scene properties),
+      like @link(ProcessEvents) or @link(Spatial) or @link(RenderOptions) contents. }
     function Clone(const AOwner: TComponent): TCastleScene;
 
     {$ifdef FPC}
@@ -627,7 +626,7 @@ implementation
 
 uses Math,
   CastleGLVersion, CastleLog, CastleStringUtils, CastleApplicationProperties,
-  CastleShapeInternalRenderShadowVolumes,
+  CastleShapeInternalRenderShadowVolumes, CastleURIUtils,
   CastleComponentSerialize, CastleRenderContext, CastleFilesUtils, CastleInternalGLUtils;
 
 {$define read_implementation}
@@ -1403,7 +1402,9 @@ begin
 
   if not ApplicationProperties.IsGLContextOpen then
   begin
-    WritelnLog('PrepareResources', 'OpenGL context not available, skipping preparing TCastleScene OpenGL resources');
+    WritelnLog('PrepareResources', 'Rendering context not available, skipping preparing TCastleScene rendering resources for "%s"', [
+      URIDisplay(URL)
+    ]);
     Exit;
   end;
 
@@ -2220,7 +2221,8 @@ begin
 
   if ReallyOcclusionQuery(RenderOptions) then
   begin
-    WritelnLog('Occlusion query', 'View changed suddenly');
+    // too spammy log, esp. during editor operations, that reload view
+    //WritelnLog('Occlusion query', 'View changed suddenly');
 
     { Set OcclusionQueryAsked := false for all shapes. }
     ShapeList := Shapes.TraverseList(false, false, false);

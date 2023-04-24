@@ -20,7 +20,7 @@ unit CastleRenderContext;
 
 interface
 
-uses SysUtils, Generics.Collections,
+uses SysUtils, Generics.Collections, Classes,
   {$ifdef FPC} CastleGL, {$else} OpenGL, OpenGLext, {$endif}
   CastleUtils, CastleVectors, CastleRectangles, CastleGLShaders, CastleColors,
   CastleRenderOptions, CastleGLUtils;
@@ -96,7 +96,7 @@ type
     anything you rely on being stored. Instead, use your own variables for this,
     and only synchronize @link(RenderContext) with your variables.
   }
-  TRenderContext = class
+  TRenderContext = class(TComponent)
   strict private
     type
       TScissorList = class({$ifdef FPC}specialize{$endif} TObjectList<TScissor>)
@@ -156,13 +156,18 @@ type
   private
     FEnabledScissors: TScissorList;
   public
-    constructor Create;
+    { If @true, @link(Clear) will clear color buffer by DrawRectangle instead
+      of OpenGL glClear call.
+      This is a bit slower, but makes it honor the stencil test. }
+    InternalClearColorsByDraw: Boolean;
+
+    constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
     { Clear the whole buffer contents.
 
       Never call OpenGL glClear or glClearColor, always use this method. }
-    procedure Clear(const Buffers: TClearBuffers; const ClearColor: TCastleColor);
+    procedure Clear(Buffers: TClearBuffers; const ClearColor: TCastleColor);
 
     { The rendered line width.
       Never call OpenGL glLineWidth directly.
@@ -352,7 +357,7 @@ implementation
 
 uses CastleLog, CastleProjection, CastleInternalGLUtils;
 
-constructor TRenderContext.Create;
+constructor TRenderContext.Create(AOwner: TComponent);
 begin
   inherited;
   FLineWidth := 1;
@@ -389,7 +394,7 @@ begin
   WritelnWarning('RenderContext', 'Do not access TRenderContext properties and methods when this context is not the "current" one. Always access the properties and methods through the RenderContext singleton to avoid this warning.');
 end;
 
-procedure TRenderContext.Clear(const Buffers: TClearBuffers;
+procedure TRenderContext.Clear(Buffers: TClearBuffers;
   const ClearColor: TCastleColor);
 const
   ClearBufferMask: array [TClearBuffer] of TGLbitfield =
@@ -402,6 +407,16 @@ var
 begin
   if Self <> RenderContext then
     WarnContextNotCurrent;
+
+  if InternalClearColorsByDraw and (cbColor in Buffers) then
+  begin
+    DrawRectangle(Viewport, ClearColor,
+      { Using these blending factors means that ClearColor overrides screen,
+        just like glClear does. So we don't do blending, in case ClearColor.W is <> 1,
+        which is consistent with our behavior when InternalClearColorsByDraw = false. }
+      bsOne, bdZero, false);
+    Exclude(Buffers, cbColor);
+  end;
 
   if (cbColor in Buffers) and
      not TVector4.PerfectlyEquals(FClearColor, ClearColor) then
@@ -700,7 +715,7 @@ begin
     if GLFeatures.VertexArrayObject then
     begin
       if Value <> nil then
-        glBindVertexArray(Value.InternalHandle)
+        glBindVertexArray(Value.InternalHandle(Self))
       else
         glBindVertexArray(0);
     end;
