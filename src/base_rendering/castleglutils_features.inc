@@ -472,6 +472,26 @@ type
 
     { Request specific OpenGL(ES) capabilities at context creation.
 
+      @unorderedList(
+        @item(By default we work in automatic mode: @link(rcAutomatic).
+          We will use only modern (core, >= 3.3) OpenGL features, if your OpenGL version is sufficiently high.
+          But we will fallback sensibly on OpenGL 2.0 or even OpenGL 1.1 if necessary.)
+
+        @item(You can force using only modern OpenGL 3.3 (on desktops) by setting this to @link(rcForceModern).
+
+          You can alternatively select @italic("Run -> Run Parameters -> Force Modern Rendering Context") menu item
+          before running any application from CGE editor to test it.
+          Or you can pass command-line option @code(--capabilities=force-modern).
+        )
+
+        @item(You can force using ancient OpenGL 1.1 (on desktops), only for testing, by setting this to @link(rcForceFixedFunction).
+
+          You can alternatively select @italic("Run -> Run Parameters -> Force Ancient Rendering Context") menu item
+          before running any application to test it.
+          Or you can pass command-line option @code(--capabilities=force-fixed-function).
+        )
+      )
+
       This is a class property and it can only change before OpenGL(ES)
       context is initialized, which means before TCastleWindow.Open
       occurs, which means before @link(GLFeatures) instance is initialized.
@@ -563,8 +583,10 @@ function StrToCapabilities(const S: String): TGLRequestCapabilities;
 procedure GLInformationInitialize;
 begin
   FreeAndNil(GLVersion);
-  GLVersion := TGLVersion.Create( PGLChar(glGetString(GL_VERSION)),
-    PGLChar(glGetString(GL_VENDOR)), PGLChar(glGetString(GL_RENDERER)));
+  GLVersion := TGLVersion.Create(
+    PGLChar(glGetString(GL_VERSION)),
+    PGLChar(glGetString(GL_VENDOR)),
+    PGLChar(glGetString(GL_RENDERER)));
 
   FreeAndNil(GLFeatures);
   GLFeatures := TGLFeatures.Create;
@@ -784,6 +806,7 @@ constructor TGLFeatures.Create;
 {$ifndef OpenGLES}
 var
   LoadExtensions: Boolean;
+  ErrorCode: TGLenum;
 {$endif}
 begin
   inherited;
@@ -1017,6 +1040,9 @@ begin
   {$ifndef OpenGLES}
   if Version_3_2 then
   begin
+    // check for errors now, as we'll check glGetError later
+    CheckGLErrors('before glGetFramebufferAttachmentParameteriv');
+
     { Read buffer sizes with new OpenGL core
       https://registry.khronos.org/OpenGL-Refpages/gl4/html/glGetFramebufferAttachmentParameter.xhtml
       https://stackoverflow.com/questions/27371067/how-to-query-the-depth-of-the-opengl-stencil-buffer }
@@ -1032,6 +1058,34 @@ begin
       GL_STENCIL, GL_FRAMEBUFFER_ATTACHMENT_STENCIL_SIZE, @FStencilBits);
     glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER,
       GL_DEPTH, GL_FRAMEBUFFER_ATTACHMENT_DEPTH_SIZE, @FDepthBits);
+
+    ErrorCode := glGetError();
+    if ErrorCode = GL_INVALID_ENUM then
+    begin
+      WritelnWarning('Detected buggy glGetFramebufferAttachmentParameteriv, possible on older ATI Radeon GPUs; assuming reasonable context properties');
+
+      { Workaround buggy ATI (Michalis codename: hpek):
+
+          Version string: 3.3.11672 Compatibility Profile Context
+          Vendor string: ATI Technologies Inc.
+          Renderer: ATI Mobility Radeon HD 4300 Series
+
+        with 32-bit Windows 7. Using
+
+          glGetFramebufferAttachmentParameteriv(GL_DRAW_FRAMEBUFFER,
+            GL_FRONT_LEFT, GL_FRAMEBUFFER_ATTACHMENT_RED_SIZE, @FRedBits);
+
+        fails there with GL_INVALID_ENUM. }
+      FRedBits := 8;
+      FGreenBits := 8;
+      FBlueBits := 8;
+      FAlphaBits := 8;
+      FStencilBits := 8;
+      FDepthBits := 24;
+    end else
+    if ErrorCode <> GL_NO_ERROR then
+      raise EOpenGLError.Create(ErrorCode, 'after glGetFramebufferAttachmentParameteriv');
+
     FDoubleBuffer := true; // TODO: any way to query it?
   end else
   {$endif}
@@ -1192,8 +1246,7 @@ begin
     (not UseMultiTexturing) or
     (not Shaders) or
     // checking for VertexBufferObject also makes sure that BuggyVBO = false
-    (not VertexBufferObject) or
-    GLVersion.BuggyPureShaderPipeline
+    (not VertexBufferObject)
     {$endif};
 
   { Right now, EnableFixedFunction is actually synchronized with Shaders and VertexBufferObject.
@@ -1254,7 +1307,9 @@ begin
   FMaxViewportDimensions := GetVector2Integer(GL_MAX_VIEWPORT_DIMS);
 
   FTextureModernFormatsAndSwizzle :=
-    (RequestCapabilities <> rcForceFixedFunction) and
+    { when EnableFixedFunction, so we don't use shaders, don't rely
+      on "texture swizzle" that only affects texture reading from GLSL. }
+    (not EnableFixedFunction) and
     (
       {$ifndef OpenGLES} Version_3_3 or {$endif}
       HasExtension('GL_ARB_texture_swizzle') or

@@ -40,6 +40,7 @@ type
     procedure TestStateSize;
     procedure TestStateSize2;
     procedure TestViewportWithoutCamera;
+    procedure TestPrepareResourcesWithoutContextOpen;
   end;
 
 implementation
@@ -49,7 +50,7 @@ uses SysUtils, Classes, Math,
   CastleUIControls, CastleRectangles, CastleOnScreenMenu, CastleComponentSerialize,
   CastleCameras, {$ifdef FPC}CastleSceneManager,{$endif} CastleVectors,
   CastleTransform, CastleScene, CastleApplicationProperties,
-  CastleViewport;
+  CastleViewport, CastleInternalRenderer, CastleInternalShapesRenderer;
 
 procedure TTestCastleWindow.Test1;
 var
@@ -280,6 +281,8 @@ end;
 procedure TTestCastleWindow.TestEventLoop;
 var
   Window: TCastleWindow;
+  Renderer: TRenderer;
+  ShapesCollector: TShapesCollector;
 
   procedure SimulateEventLoop(const T: TCastleTransform);
   var
@@ -294,6 +297,8 @@ var
           TMatrix4.Identity, TMatrix4.Identity, TMatrix4.Identity);
         RenderParams.RenderingCamera.Target := rtScreen;
         RenderParams.Frustum := @RenderParams.RenderingCamera.Frustum;
+        RenderParams.Collector := ShapesCollector;
+        RenderParams.RendererToPrepareShapes := Renderer;
         T.Render(RenderParams);
       finally FreeAndNil(RenderParams.RenderingCamera) end;
     finally FreeAndNil(RenderParams) end;
@@ -322,16 +327,23 @@ begin
         Viewport.AutoCamera := true;
         Window.Controls.InsertFront(Viewport);
 
-        Box := TCastleBox.Create(nil);
+        // in real applications, Viewport has its internal renderer
+        Renderer := TRenderer.Create(nil);
         try
-          Viewport.Items.Add(Box);
+          ShapesCollector := TShapesCollector.Create;
+          try
+            Box := TCastleBox.Create(nil);
+            try
+              Viewport.Items.Add(Box);
 
-          SimulateEventLoop(Box);
-          Box.Material := pmUnlit;
-          SimulateEventLoop(Box);
-          Box.Material := pmPhysical;
-          SimulateEventLoop(Box);
-        finally FreeAndNil(Box) end;
+              SimulateEventLoop(Box);
+              Box.Material := pmUnlit;
+              SimulateEventLoop(Box);
+              Box.Material := pmPhysical;
+              SimulateEventLoop(Box);
+            finally FreeAndNil(Box) end;
+          finally FreeAndNil(ShapesCollector) end;
+        finally FreeAndNil(Renderer) end;
       finally FreeAndNil(Viewport) end;
     finally FreeAndNil(Window) end;
   finally
@@ -643,7 +655,6 @@ begin
   {$endif}
 end;
 
-
 procedure TTestCastleWindow.TestViewportWithoutCamera;
 var
   Window: TCastleWindow;
@@ -676,6 +687,55 @@ begin
     V.BeforeRender;
     V.Render;
     V.RenderOverChildren;
+
+    FreeAndNil(V);
+  finally
+    {$ifndef CASTLE_TESTER}
+    FreeAndNil(Window);
+    {$else}
+    DestroyWindowForTest;
+    {$endif}
+  end;
+end;
+
+procedure TTestCastleWindow.TestPrepareResourcesWithoutContextOpen;
+var
+  Window: TCastleWindow;
+  V: TCastleViewport;
+  DummyHandleInput: Boolean;
+  Scene, Scene2: TCastleScene;
+begin
+  {$ifndef CASTLE_TESTER}
+  Window := TCastleWindow.Create(nil);
+  {$else}
+  Window := CreateWindowForTest;
+  {$endif}
+  try
+    V := TCastleViewport.Create(Window);
+
+    { test V.PrepareResources has no problem called before context open }
+    V.PrepareResources;
+
+    Scene := TCastleScene.Create(Window);
+    Scene.Load('castle-data:/game/scene.x3d');
+    V.Items.Add(Scene);
+
+    { test V.PrepareResources has no problem called before context open,
+      when it has some scene }
+    V.PrepareResources;
+
+    Scene2 := TCastleScene.Create(Window);
+    Scene2.Load('castle-data:/knight_resource/knight.gltf');
+    V.Items.Add(Scene2);
+
+    { test V.PrepareResources has no problem called before context open,
+      when it has 2 scenes }
+    V.PrepareResources;
+
+    Window.Visible := false;
+    Window.Open;
+
+    V.PrepareResources;
 
     FreeAndNil(V);
   finally

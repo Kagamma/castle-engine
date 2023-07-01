@@ -13,6 +13,7 @@ animations
 appearance
 append
 application
+applied
 area
 areas
 args
@@ -21,6 +22,8 @@ attenuation
 attribute
 attributes
 background
+behavior
+behaviors
 barycentric
 between
 bind
@@ -69,6 +72,7 @@ contents
 contribution
 controls
 convex
+corners
 coordinates
 count
 create
@@ -215,6 +219,7 @@ long
 loop
 looping
 major
+mask
 map
 material
 materials
@@ -242,6 +247,7 @@ normal
 normalize
 normalized
 normals
+notification
 notifications
 number
 nurbs
@@ -305,6 +311,7 @@ rects
 red
 reference
 references
+region
 register
 registered
 release
@@ -337,6 +344,8 @@ send
 sending
 shader
 shaders
+shadow
+shadows
 shape
 shapes
 shininess

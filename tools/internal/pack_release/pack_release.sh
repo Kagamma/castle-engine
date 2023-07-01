@@ -177,12 +177,18 @@ add_external_tool ()
   local OUTPUT_BIN="$3"
   shift 2
 
+  TOOL_BRANCH_NAME='master'
+  # Temporary, may be useful again in future: use view3dscene from another branch, to compile with this CGE branch
+  # if [ "${GITHUB_NAME}" = 'view3dscene' ]; then
+  #   TOOL_BRANCH_NAME='shapes-rendering-2'
+  # fi
+
   local TEMP_PATH_TOOL="/tmp/castle-engine-release-$$/${GITHUB_NAME}/"
   mkdir -p "${TEMP_PATH_TOOL}"
   cd "${TEMP_PATH_TOOL}"
-  download https://codeload.github.com/castle-engine/"${GITHUB_NAME}"/zip/master "${GITHUB_NAME}".zip
+  download "https://codeload.github.com/castle-engine/${GITHUB_NAME}/zip/${TOOL_BRANCH_NAME}" "${GITHUB_NAME}".zip
   unzip "${GITHUB_NAME}".zip
-  cd "${GITHUB_NAME}"-master
+  cd "${GITHUB_NAME}-${TOOL_BRANCH_NAME}"
 
   # special exceptional addition for pascal-language-server, that has jsonstream as a submodule
   if [ "${GITHUB_NAME}" = 'pascal-language-server' ]; then
@@ -277,11 +283,10 @@ pack_platform_dir ()
   # update environment to use CGE in temporary location
   export CASTLE_ENGINE_PATH="${TEMP_PATH_CGE}"
 
-  lazbuild_twice $CASTLE_LAZBUILD_OPTIONS src/vampyre_imaginglib/src/Packages/VampyreImagingPackage.lpk
-  lazbuild_twice $CASTLE_LAZBUILD_OPTIONS src/vampyre_imaginglib/src/Packages/VampyreImagingPackageExt.lpk
   lazbuild_twice $CASTLE_LAZBUILD_OPTIONS packages/castle_base.lpk
   lazbuild_twice $CASTLE_LAZBUILD_OPTIONS packages/castle_window.lpk
   lazbuild_twice $CASTLE_LAZBUILD_OPTIONS packages/castle_components.lpk
+  lazbuild_twice $CASTLE_LAZBUILD_OPTIONS packages/castle_editor_components.lpk
 
   # Make sure no leftovers from previous compilations remain, to not affect tools, to not pack them in release
   "${MAKE}" cleanmore ${MAKE_OPTIONS}

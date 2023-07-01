@@ -31,6 +31,7 @@ uses PropEdits;
   to enable using them for your own properties in custom components too.
   See examples/advanced_editor/custom_component/code/gamecontrols.pas . }
 {$define read_interface}
+{$I castlepropedits_any_subproperties.inc}
 {$I castlepropedits_url.inc}
 {$undef read_interface}
 
@@ -46,9 +47,11 @@ uses // FPC and LCL units
   // CGE units
   CastleSceneCore, CastleScene, CastleLCLUtils, X3DLoad, X3DNodes, CastleCameras,
   CastleUIControls, CastleControl, CastleControls, CastleImages, CastleTransform,
-  CastleVectors, CastleUtils, CastleColors, CastleViewport, CastleDialogs,
+  CastleVectors, CastleRectangles, CastleUtils, CastleColors, CastleViewport,
+  CastleDialogs,
   CastleTiledMap, CastleGLImages, CastleStringUtils, CastleFilesUtils,
   CastleInternalExposeTransformsDialog, CastleInternalTiledLayersDialog,
+  CastleInternalRegionDialog,
   CastleSoundEngine, CastleFonts,
   CastleScriptParser, CastleInternalLclDesign, CastleTerrain, CastleLog,
   CastleEditorAccess, CastleRenderOptions, CastleThirdPersonNavigation;
@@ -61,14 +64,15 @@ uses // FPC and LCL units
 {$I castlepropedits_any_subproperties.inc}
 {$I castlepropedits_autoanimation.inc}
 {$I castlepropedits_meshcolliderscene.inc}
-{$I castlepropedits_color.inc}
 {$I castlepropedits_vector.inc}
 {$I castlepropedits_image.inc}
-{$I castlepropedits_protectedsides.inc}
+{$I castlepropedits_region.inc}
 {$I castlepropedits_number.inc}
 {$I castlepropedits_exposetransforms.inc}
 {$I castlepropedits_tiledlayers.inc}
 {$I castlepropedits_rangeset.inc}
+{$I castlepropedits_3dcoords.inc}
+{$I castlepropedits_colorchannels.inc}
 {$I castlepropedits_component_transform.inc}
 {$I castlepropedits_component_scene.inc}
 {$I castlepropedits_component_imagetransform.inc}
@@ -140,6 +144,15 @@ begin
   RegisterPropertyEditor(TypeInfo(Single), TCastleVector4RotationPersistent, 'W',
     TCastleFloatRotationPropertyEditor);
 
+  { Handle using TCastleRegionEditor.
+    Note: TBorder rule with 'ProtectedSides' name is registered
+    before registering for TBorder with any name below.
+    (Not tested if it's really necessary, but seems safer). }
+  RegisterPropertyEditor(TypeInfo(TBorder), nil, 'ProtectedSides',
+    TCastleRegionEditor);
+  RegisterPropertyEditor(TypeInfo(TFloatRectanglePersistent), nil, 'RegionPersistent',
+    TCastleRegionEditor);
+
   { Properties that simply use TSubPropertiesEditor.
     Registering properties that use TSubPropertiesEditor
     (not any descendant of it) is still necessary to expand them
@@ -147,15 +160,11 @@ begin
   RegisterPropertyEditor(TypeInfo(TCastleRootTransform), TCastleViewport, 'Items',
     TSubPropertiesEditor);
   RegisterPropertyEditor(TypeInfo(TBorder), nil, '',
-    TCastleProtectedSidesEditor);
+    TSubPropertiesEditor);
 
   { Other properties }
   RegisterPropertyEditor(TypeInfo(TCastleImagePersistent), nil, '',
     TCastleImagePersistentEditor);
-  RegisterPropertyEditor(TypeInfo(TCastleColorPersistent), nil, '',
-    TCastleColorPropertyEditor);
-  RegisterPropertyEditor(TypeInfo(TCastleColorRGBPersistent), nil, '',
-    TCastleColorRGBPropertyEditor);
   RegisterPropertyEditor(TypeInfo(TCastleVector2Persistent), nil, '',
     TCastleVector2PropertyEditor);
   RegisterPropertyEditor(TypeInfo(TCastleVector3Persistent), TCastleTransform, 'ScalePersistent',
@@ -183,9 +192,11 @@ begin
   RegisterPropertyEditor(TypeInfo(TCastleTransform), TCastleAbstractTwoBodiesJoint, 'Connected',
     TConnectedPropertyEditor);
 
-  { used by LockRotation, LockTranslation }
+  { sets }
   RegisterPropertyEditor(TypeInfo(T3DCoords), nil, '',
     T3DCoordsRangeSetPropertyEditor);
+  RegisterPropertyEditor(TypeInfo(TColorChannels), nil, '',
+    TColorChannelsRangeSetPropertyEditor);
 
   { animations on TCastleThirdPersonNavigation }
   RegisterPropertyEditor(TypeInfo(AnsiString), TCastleThirdPersonNavigation, 'AnimationIdle',

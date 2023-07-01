@@ -82,8 +82,6 @@ type
       FGlyphsByte: TGlyphCharDictionary;
       FGlyphsExtra: TGlyphDictionary;
       FImage: TGrayscaleImage;
-      MeasureDone: boolean;
-      FRowHeight, FRowHeightBase, FDescend: Integer;
       FFirstExistingGlyph: TGlyph;
       FFirstExistingGlyphChar: TUnicodeChar;
       { If the requested glyph doesn't exit, @link(Glyph) will use this one
@@ -93,7 +91,6 @@ type
       FUseFallbackGlyph: Boolean;
       FallbackGlyphWarnings: Integer;
 
-    procedure Measure(out ARowHeight, ARowHeightBase, ADescend: Integer);
     procedure CalculateFallbackGlyph;
     procedure MakeFallbackWarning(const C: TUnicodeChar);
   public
@@ -158,33 +155,78 @@ type
       (for example letter "y" has the tail below the baseline in most fonts). }
     function TextHeightBase(const S: string): Integer;
     function TextMove(const S: string): TVector2Integer;
-
-    { Height of a row of text in this font.
-      This may be calculated as simply @code(TextHeight('Wy')) for most
-      normal fonts. }
-    function RowHeight: Integer;
-
-    { Height (above the baseline) of a row of text in this font.
-      Similar to TextHeightBase and TextHeight,
-      note that RowHeightBase is generally smaller than RowHeight,
-      because RowHeightBase doesn't care how low the letter may go below
-      the baseline. }
-    function RowHeightBase: Integer;
-
-    { How low the text may go below the baseline. }
-    function Descend: Integer;
   end;
 
 implementation
 
-uses Classes, SysUtils, Character,
+uses Classes, SysUtils, Character, Generics.Defaults,
   CastleLog, CastleUtils, CastleURIUtils, CastleFilesUtils, CastleDownload;
+
+{ TUnicodeCharEqualityComparer ----------------------------------------------- }
+
+{$ifndef FPC}
+
+type
+  TUnicodeCharEqualityComparer = class(TCustomComparer<TUnicodeChar>)
+    function Compare(const Left, Right: TUnicodeChar): Integer; override;
+    function Equals(const Left, Right: TUnicodeChar): Boolean; override;
+    function GetHashCode(const Value: TUnicodeChar): Integer; override;
+  end;
+
+function TUnicodeCharEqualityComparer.Compare(const Left, Right: TUnicodeChar): Integer;
+begin
+  Result := Left - Right;
+end;
+
+function TUnicodeCharEqualityComparer.Equals(const Left, Right: TUnicodeChar): Boolean;
+begin
+  Result := Left = Right;
+end;
+
+function TUnicodeCharEqualityComparer.GetHashCode(const Value: TUnicodeChar): Integer;
+begin
+  Result := Value;
+end;
+
+{$endif}
 
 { TTextureFontData.TGlyphDictionary ------------------------------------------ }
 
 constructor TTextureFontData.TGlyphDictionary.Create;
 begin
+  {$ifndef FPC}
+  { Pass TUnicodeCharEqualityComparer to avoid Delphi 10.2.3
+    (and likely ealier versions too) bug (fixed for sure since Delphi 10.4.2).
+
+    In these older Delphi versions,
+    using "inherited", "inherited Create" or "inherited Create(nil)"
+    leaves the created instance in state when internal FComparer is nil
+    (as if TDictionary<TKey,TValue>.Create constructor wasn't called).
+    Looks like having own constructor TGlyphDictionary.Create confuses
+    these early Delphi versions.
+
+    This isn't related to whether this constructor has "reintroduce" or not,
+    tested.
+
+    In effect,
+    - Hash method causes Access Violation,
+    - and in effect all other routines (Add, AddOrSetValue, our SetItems)
+      cause Access Violation.
+
+    We apply this change to any Delphi version, because
+    - The TUnicodeCharEqualityComparer makes sense anyway, the default
+      comparer from Generics.Collections for Cardinal wouldn't do anything
+      substantially different or more optimal.
+    - This way TUnicodeCharEqualityComparer will be tested even when we run
+      through latest Delphi, like 11.
+    - This way we don't care about carefully testing at which Delphi version
+      (10.3.x, 10.4.x?) the bug is fixed.
+  }
+  inherited Create(TUnicodeCharEqualityComparer.Create);
+  {$else}
   inherited;
+  {$endif}
+
   FOwnsGlyphs := true;
 end;
 
@@ -562,7 +604,7 @@ begin
     {$ifdef FPC}
     Inc(TextPtr, CharLen);
     {$else}
-    C := GetUTF32Char(S, TextIndex, NextTextIndex);
+    C := UnicodeStringNextChar(S, TextIndex, NextTextIndex);
     TextIndex := NextTextIndex;
     {$endif}
 
@@ -606,7 +648,7 @@ begin
     {$ifdef FPC}
     Inc(TextPtr, CharLen);
     {$else}
-    C := GetUTF32Char(S, TextIndex, NextTextIndex);
+    C := UnicodeStringNextChar(S, TextIndex, NextTextIndex);
     TextIndex := NextTextIndex;
     {$endif}
 
@@ -653,7 +695,7 @@ begin
     {$ifdef FPC}
     Inc(TextPtr, CharLen);
     {$else}
-    C := GetUTF32Char(S, TextIndex, NextTextIndex);
+    C := UnicodeStringNextChar(S, TextIndex, NextTextIndex);
     TextIndex := NextTextIndex;
     {$endif}
 
@@ -700,7 +742,7 @@ begin
     {$ifdef FPC}
     Inc(TextPtr, CharLen);
     {$else}
-    C := GetUTF32Char(S, TextIndex, NextTextIndex);
+    C := UnicodeStringNextChar(S, TextIndex, NextTextIndex);
     TextIndex := NextTextIndex;
     {$endif}
 
@@ -712,43 +754,6 @@ begin
     C := UTF8CharacterToUnicode(TextPtr, CharLen);
     {$endif}
   end;
-end;
-
-procedure TTextureFontData.Measure(out ARowHeight, ARowHeightBase, ADescend: Integer);
-begin
-  ARowHeight := TextHeight('Wy');
-  ARowHeightBase := TextHeightBase('W');
-  ADescend := TextHeight('y') - TextHeight('a');
-end;
-
-function TTextureFontData.RowHeight: Integer;
-begin
-  if not MeasureDone then
-  begin
-    Measure(FRowHeight, FRowHeightBase, FDescend);
-    MeasureDone := true;
-  end;
-  Result := FRowHeight;
-end;
-
-function TTextureFontData.RowHeightBase: Integer;
-begin
-  if not MeasureDone then
-  begin
-    Measure(FRowHeight, FRowHeightBase, FDescend);
-    MeasureDone := true;
-  end;
-  Result := FRowHeightBase;
-end;
-
-function TTextureFontData.Descend: Integer;
-begin
-  if not MeasureDone then
-  begin
-    Measure(FRowHeight, FRowHeightBase, FDescend);
-    MeasureDone := true;
-  end;
-  Result := FDescend;
 end;
 
 end.

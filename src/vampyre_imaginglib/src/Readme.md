@@ -8,6 +8,9 @@ Object Pascal image loading, saving, and manipulation library.
 <https://github.com/galfar/imaginglib>  
 
 Homepage: <https://imaginglib.sourceforge.io>  
+<https://github.com/galfar/imaginglib>
+
+Homepage: <https://imaginglib.sourceforge.io>
 Issues: <https://github.com/galfar/imaginglib/issues>
 Discuss: <https://github.com/galfar/imaginglib/discussions>
 

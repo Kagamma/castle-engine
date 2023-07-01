@@ -1,5 +1,5 @@
 {
-  Copyright 2022-2022 Andrzej Kilijański, Dean Zobec, Michael Van Canneyt, Michalis Kamburelis.
+  Copyright 2022-2023 Andrzej Kilijański, Dean Zobec, Michael Van Canneyt, Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -81,9 +81,8 @@ uses SysUtils,
   //TestToolFpcVersion,
 
 { Testing CGE units }
-  {$ifdef FPC}TestCastleUtils,{$endif}
+  TestCastleUtils,
   TestCastleRectangles,
-  {$ifdef FPC}TestCastleGenericLists,{$endif}
   TestCastleFindFiles,
   TestCastleFilesUtils,
   TestCastleUtilsLists,
@@ -92,11 +91,13 @@ uses SysUtils,
   TestCastleTriangles,
   TestCastleColors,
   TestCastleQuaternions,
+  TestCastleRenderOptions,
   TestCastleKeysMouse,
   TestCastleImages,
   TestCastleImagesDraw,
   TestCastleBoxes,
   TestCastleFrustum,
+  TestCastleInternalGLShadowVolumes,
   TestCastleFonts,
   TestCastleTransform,
   TestCastleParameters,

@@ -83,17 +83,16 @@ EXE_EXTENSION :=
 # See https://stackoverflow.com/questions/7656425/makefile-ifeq-logical-or#9802777
 # to how this trick to detect an alternative works.
 ifneq (,$(filter $(OS),Windows_NT win64))
-  $(info Detected Windows, OS is $(OS))
+  $(info Detected OS: Windows)
 
   # On Windows avoid using Windows built-in "find" program. Use the Cygwin "find".
   FIND := `cygpath --mixed /bin/find`
   EXE_EXTENSION := .exe
 else
-  $(info Detected non-Windows, OS is $(OS))
-
   # Only on Unix, you can use "uname" to further detect Unix variants,
   # see https://stackoverflow.com/questions/714100/os-detecting-makefile
   UNAME_S := $(shell uname -s)
+  $(info Detected OS: $(UNAME_S))
 
   # On macOS, use gsed and ginstall (e.g. from Homebrew, use "brew install gnu-sed coreutils").
   # See https://www.topbug.net/blog/2013/04/14/install-and-use-gnu-command-line-tools-in-mac-os-x/
@@ -126,11 +125,10 @@ BUILD_TOOL = ./tools/build-tool/castle-engine$(EXE_EXTENSION)
 
 .PHONY: default
 default: tools
-	lazbuild $(CASTLE_LAZBUILD_OPTIONS) --add-package-link src/vampyre_imaginglib/src/Packages/VampyreImagingPackage.lpk
-	lazbuild $(CASTLE_LAZBUILD_OPTIONS) --add-package-link src/vampyre_imaginglib/src/Packages/VampyreImagingPackageExt.lpk
 	lazbuild $(CASTLE_LAZBUILD_OPTIONS) --add-package-link packages/castle_base.lpk
 	lazbuild $(CASTLE_LAZBUILD_OPTIONS) --add-package-link packages/castle_window.lpk
 	lazbuild $(CASTLE_LAZBUILD_OPTIONS) --add-package-link packages/castle_components.lpk
+	lazbuild $(CASTLE_LAZBUILD_OPTIONS) --add-package-link packages/castle_editor_components.lpk
 	lazbuild $(CASTLE_LAZBUILD_OPTIONS) tools/castle-editor/castle_editor.lpi
 # move binaries to bin/
 	$(INSTALL) -d bin/
@@ -365,11 +363,10 @@ examples-delphi:
 
 .PHONY: examples-laz
 examples-laz:
-	lazbuild $(CASTLE_LAZBUILD_OPTIONS) src/vampyre_imaginglib/src/Packages/VampyreImagingPackage.lpk
-	lazbuild $(CASTLE_LAZBUILD_OPTIONS) src/vampyre_imaginglib/src/Packages/VampyreImagingPackageExt.lpk
 	lazbuild $(CASTLE_LAZBUILD_OPTIONS) packages/castle_base.lpk
 	lazbuild $(CASTLE_LAZBUILD_OPTIONS) packages/castle_window.lpk
 	lazbuild $(CASTLE_LAZBUILD_OPTIONS) packages/castle_components.lpk
+	lazbuild $(CASTLE_LAZBUILD_OPTIONS) packages/castle_editor_components.lpk
 	set -e && for PROJECT_LPI in $(EXAMPLES_BASE_NAMES) $(EXAMPLES_LAZARUS_BASE_NAMES); do \
 	  ./tools/internal/lazbuild_retry $${PROJECT_LPI}.lpi; \
 	done
@@ -380,6 +377,7 @@ examples-laz:
 	  '(' -path ./tools/build-tool/tests/data -prune ')' -o \
 	  '(' -path ./tools/build-tool/data -prune ')' -o \
 	  '(' -path ./examples/deprecated_library -prune ')' -o \
+	  '(' -path ./tools/castle-editor/components/mbColorLib/examples -prune ')' -o \
 	  '(' -iname '*.lpi' -print ')'  > \
 	  /tmp/cge-laz-projects.txt
 	echo 'Found projects: '`wc -l < /tmp/cge-laz-projects.txt`
@@ -417,6 +415,7 @@ clean: cleanexamples
 			   '(' -iname '*.a' -and -not -iwholename '*/vampyre_imaginglib/*' ')' -or \
 			   '(' -iname '*.res' -and \
 			       -not -iwholename '*/vampyre_imaginglib/*' -and \
+			       -not -iwholename '*/mbColorLib/*' -and \
 			       -not -iwholename '*/examples/delphi/*' ')' \
 			       -or \
 			   -iname '*.rsj' -or \
@@ -445,6 +444,7 @@ clean: cleanexamples
 	  packages/castle_base.pas \
 	  packages/castle_window.pas \
 	  packages/castle_components.pas \
+	  packages/castle_editor_components.pas \
 	  packages/alternative_castle_window_based_on_lcl.pas \
 	  tests/test_castle_game_engine \
 	  tests/test_castle_game_engine.exe \

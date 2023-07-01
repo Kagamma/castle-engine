@@ -13,17 +13,16 @@
   ----------------------------------------------------------------------------
 }
 
-{ Loading and rendering maps created in Tiled (https://www.mapeditor.org/).
+{ Loading and rendering maps created in Tiled.
+  See @url(https://castle-engine.io/tiled_maps manual about using Tiled maps)
+  for more details.
 
-  In the usual case,
-  create @link(TCastleTiledMapControl) and set @link(TCastleTiledMapControl.URL)
-  to indicate your Tiled map (TMX file).
-  @link(TCastleTiledMapControl) is a standard Castle Game Engine user interface
-  control (descendant of @link(TCastleUserInterface)), you can display it
-  like any other UI control, you can also design it using CGE Editor.
+  Most basic usage is to add @link(TCastleTiledMap) component to a viewport
+  and set @link(TCastleTiledMap.URL) to load your Tiled map (TMX file).
+  You can test it using CGE editor.
 
-  See the examples/tiled/ directory of Castle Game Engine
-  ( https://github.com/castle-engine/castle-engine/tree/master/examples/tiled ). }
+  See the examples in Castle Game Engine:
+  @url(https://github.com/castle-engine/castle-engine/tree/master/examples/tiled examples/tiled/). }
 unit CastleTiledMap;
 
 {$I castleconf.inc}
@@ -36,7 +35,7 @@ uses
   Generics.Collections,
   CastleVectors, CastleColors, CastleUtils, CastleURIUtils, CastleXMLUtils,
   CastleLog, CastleStringUtils, CastleUIControls, CastleGLImages, CastleTransform,
-  CastleRectangles, CastleClassUtils, CastleRenderOptions, CastleScene;
+  CastleRectangles, CastleClassUtils, CastleRenderOptions, CastleScene, X3DNodes;
 
 {$define read_interface}
 {$I castletiledmap_data.inc}

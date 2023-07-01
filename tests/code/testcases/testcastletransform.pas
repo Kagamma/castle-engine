@@ -71,6 +71,7 @@ type
     procedure TestPhysicsDefaultAutoSize;
     procedure TestReparentBehavior;
     procedure TestRemoveParent;
+    procedure TestLayersSetSize;
   end;
 
 implementation
@@ -1360,7 +1361,7 @@ procedure TTestCastleTransform.TestPass;
 var
   A: TInternalRenderingPass;
   B: TUserRenderingPass;
-  C: TInternalSceneRenderingPass;
+  C: TWireframeRenderingPass;
   P: TTotalRenderingPass;
 begin
   A := High(A);
@@ -2388,6 +2389,12 @@ begin
     FreeAndNil(Chi);
     FreeAndNil(Par);
   end;
+end;
+
+procedure TTestCastleTransform.TestLayersSetSize;
+begin
+  { TCastleLayerCollisions.CustomSerialization assumes this }
+  AssertTrue(SizeOf(Int32) = SizeOf(TPhysicsLayers));
 end;
 
 initialization

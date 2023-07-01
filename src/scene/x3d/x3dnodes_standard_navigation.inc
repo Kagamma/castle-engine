@@ -1,3 +1,4 @@
+{%MainUnit x3dnodes.pas}
 {
   Copyright 2002-2023 Michalis Kamburelis.
 
@@ -167,23 +168,6 @@
   {$I auto_generated_node_helpers/x3dnodes_lod.inc}
   end;
 
-  { Blending sorting that may also be "default", which indicates to use TCastleRenderOptions.BlendingSort.
-    See TBlendingSort for description of all values except obsDefault. }
-  TOptionalBlendingSort = (
-    { Use current TCastleRenderOptions.BlendingSort value. }
-    obsDefault,
-    { Like TBlendingSort.bsNone. }
-    obsNone,
-    { Like TBlendingSort.bs2D. }
-    obs2D,
-    { Like TBlendingSort.bs3D. }
-    obs3D,
-    { Like TBlendingSort.bs3DOrigin. }
-    obs3DOrigin,
-    { Like TBlendingSort.bs3DGround. }
-    obs3DGround
-  );
-
   { Describe the physical characteristics of the viewer's avatar and navigation. }
   TNavigationInfoNode = class(TAbstractBindableNode)
   strict private
@@ -292,8 +276,8 @@
 {$ifdef read_implementation}
 
 const
-  BlendingSortNames: array [TOptionalBlendingSort] of string =
-  ('DEFAULT', 'NONE', '2D', '3D', '3D_ORIGIN', '3D_GROUND');
+  ShapeSortNames: array [TShapeSort] of string =
+  ('AUTO', 'NONE', '2D', '3D', '3D_ORIGIN', '3D_GROUND', 'CUSTOM');
 
 { TAbstractViewpointNode -------------------------------------------------- }
 
@@ -314,7 +298,7 @@ begin
 
   if FdDirection.Items.Count > 0 then
   begin
-    CamDir := FdDirection.Items.List^[0];
+    CamDir := FdDirection.Items.L[0];
     if CamDir.IsZero then
     begin
       WritelnWarning('VRML/X3D', 'Viewpoint "direction" must not be zero, assuming defaults');
@@ -325,7 +309,7 @@ begin
 
   if FdUp.Items.Count > 0 then
   begin
-    CamUp := FdUp.Items.List^[0];
+    CamUp := FdUp.Items.L[0];
     if CamUp.IsZero then
     begin
       WritelnWarning('VRML/X3D', 'Viewpoint "up" must not be zero, assuming defaults');

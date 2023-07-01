@@ -50,7 +50,6 @@ type
         function Width: Integer; override;
         function Height: Integer; override;
         procedure SetInternalCursor(const Value: TMouseCursor); override;
-        function Dpi: Single; override;
       end;
 
     var
@@ -69,7 +68,7 @@ type
       to update Pressed when needed. }
     procedure UpdateShiftState(const Shift: TShiftState);
   private
-      procedure WMEraseBkgnd(var Message: TWMEraseBkgnd); message WM_ERASEBKGND;
+    procedure WMEraseBkgnd(var Message: TWMEraseBkgnd); message WM_ERASEBKGND;
   protected
     procedure CreateHandle; override;
     procedure DestroyHandle; override;
@@ -148,11 +147,6 @@ begin
 {$endif}
 end;
 
-function TCastleControl.TContainer.Dpi: Single;
-begin
-  Result := DefaultDpi;
-end;
-
 function TCastleControl.TContainer.GetMousePosition: TVector2;
 begin
   Result := Parent.FMousePosition;
@@ -167,7 +161,13 @@ class procedure TCastleControl.TContainer.UpdatingEnable;
 begin
   inherited;
   UpdatingTimer := TTimer.Create(nil);
-  UpdatingTimer.Interval := 1;
+  if csDesigning in UpdatingTimer.ComponentState then
+    { At design-time, limit FPS.
+      Otherwise even Delphi IDE may become sluggish on very old GPUs.
+      Observed on old laptops with Delphi 10.2.3 and 10.4 on Win64. }
+    UpdatingTimer.Interval := Round(1000 / 60)
+  else
+    UpdatingTimer.Interval := 1;
   UpdatingTimer.OnTimer := {$ifdef FPC}@{$endif} UpdatingTimerEvent;
 end;
 

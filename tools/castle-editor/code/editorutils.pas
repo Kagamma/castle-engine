@@ -1,5 +1,5 @@
 {
-  Copyright 2018-2022 Michalis Kamburelis.
+  Copyright 2018-2023 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -157,9 +157,10 @@ function YesNoBox(const Caption, Message: String): Boolean;
 procedure SetEnabledVisible(const C: TControl; const Value: Boolean);
 
 const
-  ApiReferenceUrl = 'https://castle-engine.io/apidoc/html/';
   FpcRtlApiReferenceUrl = 'https://www.freepascal.org/docs-html/rtl/';
   LclApiReferenceUrl = 'https://lazarus-ccr.sourceforge.io/docs/lcl/';
+
+function ApiReferenceUrl: String;
 
 { Get full URL to display API reference of a given property in the given
   PropertyObject.
@@ -268,13 +269,16 @@ type
     class function Equals(const A, B: TSavedSelection): Boolean; static;
   end;
 
+{ Show last file modification time as nice string. }
+function FileDateTimeStr(const FileName: String): String;
+
 implementation
 
 uses
-  SysUtils, Graphics, TypInfo, Generics.Defaults, Math,
+  SysUtils, Graphics, TypInfo, Generics.Defaults, Math, DateUtils,
   CastleUtils, CastleLog, CastleSoundEngine, CastleFilesUtils, CastleLclUtils,
   CastleComponentSerialize, CastleUiControls, CastleCameras, CastleTransform,
-  CastleColors,
+  CastleColors, CastleTimeUtils, CastleUriUtils,
   ToolCompilerInfo, ToolCommonUtils;
 
 procedure TMenuItemHelper.SetEnabledVisible(const Value: Boolean);
@@ -818,6 +822,27 @@ begin
   C.Visible := Value;
 end;
 
+function ApiReferenceUrl: String;
+// TODO: Make it possible to set from preferences, or make it just the default behavior?
+{.$define CASTLE_PREFER_OFFLINE_API_DOCS}
+
+{$ifdef CASTLE_PREFER_OFFLINE_API_DOCS}
+var
+  LocalDocsPath: String;
+{$endif}
+begin
+  {$ifdef CASTLE_PREFER_OFFLINE_API_DOCS}
+  if CastleEnginePath <> '' then
+  begin
+    LocalDocsPath := CastleEnginePath + 'doc' + PathDelim + 'reference' + PathDelim;
+    if DirectoryExists(LocalDocsPath) then
+      Exit(FilenameToURISafe(LocalDocsPath));
+  end;
+  {$endif}
+
+  Result := 'https://castle-engine.io/apidoc/html/';
+end;
+
 function ApiReference(const PropertyObject: TObject;
   const PropertyName, PropertyNameForLink: String): String;
 
@@ -1204,6 +1229,42 @@ begin
     (A.CurrentViewport = B.CurrentViewport) and
     (A.ItemIndex = B.ItemIndex) and
     (A.TabIndex = B.TabIndex);
+end;
+
+function FileDateTimeStr(const FileName: String): String;
+
+  function RoundUp(const Val: Double): Int64;
+  begin
+    Result := Trunc(Val);
+    if Frac(Val) > 0 then
+      Inc(Result);
+  end;
+
+var
+  FileDateTime: TDateTime;
+  Secs, Mins: Int64;
+begin
+  if FileAge(FileName, FileDateTime) then
+  begin
+    Secs := RoundUp(SecondSpan(Now, FileDateTime));
+    if Secs < 60 then
+      FileDateTimeStr := Format('%d second%s ago', [
+        Secs,
+        Iff(Secs > 0, 's', '')
+      ])
+    else
+    begin
+      Mins := RoundUp(MinuteSpan(Now, FileDateTime));
+      if Mins < 60 then
+        FileDateTimeStr := Format('%d minute%s ago', [
+          Mins,
+          Iff(Mins > 0, 's', '')
+        ])
+      else
+        FileDateTimeStr := DateTimeToAtStr(FileDateTime);
+    end;
+  end else
+    Result := 'Unknown';
 end;
 
 end.

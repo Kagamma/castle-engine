@@ -102,7 +102,7 @@ procedure WritelnLog(const Message: string); overload;
 procedure WritelnLog(const Message: Integer); overload;
 
 { Format and log a message.
-  This is a shortcut for @code(WritelnLog(Category, Format(MessageBase, Args))). }
+  This is a shortcut for @code(WritelnLog(Category, FormatDot(MessageBase, Args))). }
 procedure WritelnLog(const Category: string; const MessageBase: string;
   const Args: array of const); overload;
 procedure WritelnLog(const MessageBase: string;
@@ -137,7 +137,7 @@ procedure WriteLogMultiline(const Category: string; const Message: string); depr
 procedure WritelnWarning(const Category: string; const Message: string); overload;
 procedure WritelnWarning(const Message: string); overload;
 
-{ A shortcut for @code(WritelnWarning(Category, Format(MessageBase, Args))). }
+{ A shortcut for @code(WritelnWarning(Category, FormatDot(MessageBase, Args))). }
 procedure WritelnWarning(const Category: string; const MessageBase: string;
   const Args: array of const); overload;
 procedure WritelnWarning(const MessageBase: string;
@@ -474,13 +474,13 @@ end;
 procedure WritelnLog(const Category: string; const MessageBase: string;
   const Args: array of const);
 begin
-  WritelnLog(Category, Format(MessageBase, Args));
+  WritelnLog(Category, FormatDot(MessageBase, Args));
 end;
 
 procedure WritelnLog(const MessageBase: string;
   const Args: array of const);
 begin
-  WritelnLog('', Format(MessageBase, Args));
+  WritelnLog('', FormatDot(MessageBase, Args));
 end;
 
 procedure WriteLogMultiline(const Category: string; const Message: string);
@@ -519,7 +519,7 @@ end;
 procedure WritelnWarning(const Category: string; const MessageBase: string;
   const Args: array of const);
 begin
-  WritelnWarning(Category, Format(MessageBase, Args));
+  WritelnWarning(Category, FormatDot(MessageBase, Args));
 end;
 
 procedure WritelnWarning(const MessageBase: string;

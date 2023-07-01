@@ -296,7 +296,7 @@ begin
   MakeContextCurrent;
 
   EventBeforeRender;
-  Fps._RenderBegin;
+  Fps.InternalRenderBegin;
   try
     EventRender;
     if GLVersion.BuggySwapNonStandardViewport then
@@ -306,7 +306,7 @@ begin
     // Note that calling Invalidate from RenderContext is not allowed,
     // it doesn't play OK with LCL or VCL.
     // if AutoRedisplay then Invalidate;
-  finally Fps._RenderEnd end;
+  finally Fps.InternalRenderEnd end;
 end;
 
 procedure TCastleContainerEasy.DoUpdate;
@@ -423,8 +423,6 @@ procedure TCastleContainerEasy.LoadDesign;
 var
   OldCastleApplicationMode: TCastleApplicationMode;
 begin
-  WritelnLog('LoadDesign');
-
   if DesignUrl <> '' then
   begin
     { Make sure InternalCastleApplicationMode is correct, to

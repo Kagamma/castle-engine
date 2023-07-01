@@ -281,7 +281,8 @@ uses
   CastleFilesUtils, StrUtils, CastleURIUtils, CastleUnicode, CastleCurves,
   CastleLog, CastleScriptParser, CastleInternalDataUri, URIParser, CastleDownload,
   CastleInternalNurbs, CastleQuaternions, CastleXMLUtils, CastleOpenDocument,
-  CastleSoundBase, CastleTriangles, X3DLoadInternalUtils;
+  CastleSoundBase, CastleTriangles, X3DLoadInternalUtils,
+  CastleApplicationProperties;
 
 {$define read_implementation}
 
@@ -748,6 +749,8 @@ begin
   FreeAndNil(AnyNodeDestructionNotifications);
 
   FreeAndNil(CurrentlyLoading);
+
+  FontsFinalization;
 end;
 
 initialization
@@ -808,12 +811,16 @@ initialization
   TraverseSingleStack := TX3DGraphTraverseStateStack.Create;
 
   CurrentlyLoading := TCastleStringList.Create;
+
+  FontsInitialization;
 finalization
   { Because of various finalization order (some stuff may be owned
     e.g. by CastleWindow.Application, and freed at CastleWindow finalization,
     which may be done after X3DNodes finalization) we may defer
     finalization for later. }
   if (X3DCache = nil) or X3DCache.Empty then
-    X3DNodesFinalization else
+    X3DNodesFinalization
+  else
     X3DCache.OnEmpty := @X3DNodesFinalization;
 end.
+

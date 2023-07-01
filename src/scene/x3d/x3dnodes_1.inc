@@ -1,3 +1,4 @@
+{%MainUnit x3dnodes.pas}
 {
   Copyright 2002-2023 Michalis Kamburelis.
 
@@ -55,8 +56,8 @@
     function FontTextureNode: TAbstractTexture2DNode; override;
 
     { Force recalculating the shape when font changed.
-      For now, we don't detect font changes (when TFontStyleNode.OnFont
-      returns something different) outselves. }
+      For now, we don't detect font changes (e.g. when TFontStyleNode.CustomFont changed)
+      automatically. }
     procedure FontChanged;
 
     function Justify: TX3DFontJustify;
@@ -188,7 +189,7 @@
     function Family: TX3DFontFamily;
     function Bold: boolean;
     function Italic: boolean;
-    function Font: TTextureFontData;
+    function Font: TCastleFont;
   {$I auto_generated_node_helpers/x3dnodes_fontstyle_1.inc}
   end;
 
@@ -634,7 +635,7 @@ begin
     BIND_PER_PART_INDEXED,
     BIND_PER_FACE_INDEXED:
       Result := (FdNormalIndex.Count <> 0) and
-                (FdNormalIndex.Items.List^[0] >= 0);
+                (FdNormalIndex.Items.L[0] >= 0);
     else
       Result := true;
   end;
@@ -739,18 +740,9 @@ begin
 end;
 {$warnings on}
 
-function TFontStyleNode_1.Font: TTextureFontData;
-var
-  TemporaryFontStyle: TFontStyleNode;
+function TFontStyleNode_1.Font: TCastleFont;
 begin
-  TemporaryFontStyle := TFontStyleNode.Create('', BaseUrl);
-  try
-    TemporaryFontStyle.Family := Family;
-    TemporaryFontStyle.Bold := Bold;
-    TemporaryFontStyle.Italic := Italic;
-    { get font for a default FontStyle node }
-    Result := TemporaryFontStyle.Font;
-  finally FreeAndNil(TemporaryFontStyle) end;
+  Result := TFontStyleNode.GetDefaultFont(Family, Bold, Italic);
 end;
 
 constructor TLODNode_1.Create(const AX3DName: string = ''; const ABaseUrl: string = '');
@@ -821,7 +813,7 @@ begin
   if A.Count = 0 then
     Result := TPhongMaterialInfo.DefaultAmbientColor
   else
-    Result := A.List^[Min(FIndex, A.Count - 1)];
+    Result := A.L[Min(FIndex, A.Count - 1)];
 end;
 
 function TMaterialNode_1.TMaterialInfo_1.GetDiffuseColor: TVector3;
@@ -832,7 +824,7 @@ begin
   if A.Count = 0 then
     Result := TPhongMaterialInfo.DefaultDiffuseColor
   else
-    Result := A.List^[Min(FIndex, A.Count - 1)];
+    Result := A.L[Min(FIndex, A.Count - 1)];
 end;
 
 procedure TMaterialNode_1.TMaterialInfo_1.SetDiffuseColor(const Value: TVector3);
@@ -848,7 +840,7 @@ begin
   if A.Count = 0 then
     Result := TPhongMaterialInfo.DefaultSpecularColor
   else
-    Result := A.List^[Min(FIndex, A.Count - 1)];
+    Result := A.L[Min(FIndex, A.Count - 1)];
 end;
 
 procedure TMaterialNode_1.TMaterialInfo_1.SetSpecularColor(const Value: TVector3);
@@ -864,7 +856,7 @@ begin
   if A.Count = 0 then
     Result := TPhongMaterialInfo.DefaultEmissiveColor
   else
-    Result := A.List^[Min(FIndex, A.Count - 1)];
+    Result := A.L[Min(FIndex, A.Count - 1)];
 end;
 
 function TMaterialNode_1.TMaterialInfo_1.Shininess: Single;
@@ -875,7 +867,7 @@ begin
   if A.Count = 0 then
     Result := TPhongMaterialInfo.DefaultShininess
   else
-    Result := A.List^[Min(FIndex, A.Count - 1)];
+    Result := A.L[Min(FIndex, A.Count - 1)];
 end;
 
 function TMaterialNode_1.TMaterialInfo_1.ReflectionColor: TVector3;
@@ -887,7 +879,7 @@ begin
   if A.Count = 0 then
     M := 0.0 // TMaterialInfo.DefaultReflectionColor[0, 1 or 2]
   else
-    M := A.List^[Min(FIndex, A.Count - 1)];
+    M := A.L[Min(FIndex, A.Count - 1)];
 
   Result := Vector3(M, M, M);
 end;
@@ -900,7 +892,7 @@ begin
   if A.Count = 0 then
     Result := TMaterialInfo.DefaultTransparency
   else
-    Result := A.List^[Min(FIndex, A.Count - 1)];
+    Result := A.L[Min(FIndex, A.Count - 1)];
 end;
 
 function TMaterialNode_1.TMaterialInfo_1.ReflSpecular: TVector3;
@@ -911,7 +903,7 @@ begin
   if A.Count = 0 then
     Result := inherited
   else
-    Result := A.List^[Min(FIndex, A.Count - 1)];
+    Result := A.L[Min(FIndex, A.Count - 1)];
 end;
 
 function TMaterialNode_1.TMaterialInfo_1.ReflDiffuse: TVector3;
@@ -922,7 +914,7 @@ begin
   if A.Count = 0 then
     Result := inherited
   else
-    Result := A.List^[Min(FIndex, A.Count - 1)];
+    Result := A.L[Min(FIndex, A.Count - 1)];
 end;
 
 function TMaterialNode_1.TMaterialInfo_1.TransSpecular: TVector3;
@@ -933,7 +925,7 @@ begin
   if A.Count = 0 then
     Result := inherited
   else
-    Result := A.List^[Min(FIndex, A.Count - 1)];
+    Result := A.L[Min(FIndex, A.Count - 1)];
 end;
 
 function TMaterialNode_1.TMaterialInfo_1.TransDiffuse: TVector3;
@@ -944,7 +936,7 @@ begin
   if A.Count = 0 then
     Result := inherited
   else
-    Result := A.List^[Min(FIndex, A.Count - 1)];
+    Result := A.L[Min(FIndex, A.Count - 1)];
 end;
 
 function TMaterialNode_1.TMaterialInfo_1.ReflSpecularExp: Single;
@@ -955,7 +947,7 @@ begin
   if A.Count = 0 then
     Result := inherited
   else
-    Result := A.List^[Min(FIndex, A.Count - 1)];
+    Result := A.L[Min(FIndex, A.Count - 1)];
 end;
 
 function TMaterialNode_1.TMaterialInfo_1.TransSpecularExp: Single;
@@ -966,7 +958,7 @@ begin
   if A.Count = 0 then
     Result := inherited
   else
-    Result := A.List^[Min(FIndex, A.Count - 1)];
+    Result := A.L[Min(FIndex, A.Count - 1)];
 end;
 
 { TTexture2Node_1 ------------------------------------------------------------ }

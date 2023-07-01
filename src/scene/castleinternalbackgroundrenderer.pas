@@ -21,7 +21,8 @@ unit CastleInternalBackgroundRenderer;
 interface
 
 uses CastleVectors, SysUtils, CastleUtils, CastleImages, X3DNodes,
-  CastleColors, CastleGLUtils, CastleTransform, CastleRectangles, CastleProjection;
+  CastleColors, CastleGLUtils, CastleTransform, CastleRectangles, CastleProjection,
+  CastleInternalShapesRenderer, CastleInternalRenderer;
 
 type
   { Background under X3D scene.
@@ -58,7 +59,9 @@ type
     procedure Render(const RenderingCamera: TRenderingCamera;
       const Wireframe: boolean;
       const RenderRect: TFloatRectangle;
-      const CurrentProjection: TProjection); virtual;
+      const CurrentProjection: TProjection;
+      const ShapesCollector: TShapesCollector;
+      const ShapesRenderer: TShapesRenderer); virtual;
     { Change rotation.
       Initially rotation is taken from TBackgroundNode.TransformRotation
       (corresponds to the rotation of Background in the X3D file transformation). }
@@ -119,7 +122,9 @@ end;
 procedure TBackgroundRenderer.Render(const RenderingCamera: TRenderingCamera;
   const Wireframe: boolean;
   const RenderRect: TFloatRectangle;
-  const CurrentProjection: TProjection);
+  const CurrentProjection: TProjection;
+  const ShapesCollector: TShapesCollector;
+  const ShapesRenderer: TShapesRenderer);
 begin
 end;
 
@@ -150,7 +155,9 @@ type
     procedure Render(const RenderingCamera: TRenderingCamera;
       const Wireframe: boolean;
       const RenderRect: TFloatRectangle;
-      const CurrentProjection: TProjection); override;
+      const CurrentProjection: TProjection;
+      const ShapesCollector: TShapesCollector;
+      const ShapesRenderer: TShapesRenderer); override;
     procedure FreeResources; override;
   end;
 
@@ -171,7 +178,6 @@ begin
     "You cannot use the same X3D node in multiple instances of TCastleScene".
     Testcase: demo-models/background/ with ImageBackground or TextureBackground }
   Scene.InternalNodeSharing := true;
-
   Params := TBasicRenderParams.Create;
 end;
 
@@ -184,13 +190,20 @@ end;
 
 procedure TBackgroundScene.Render(const RenderingCamera: TRenderingCamera;
   const Wireframe: boolean; const RenderRect: TFloatRectangle;
-  const CurrentProjection: TProjection);
+  const CurrentProjection: TProjection;
+  const ShapesCollector: TShapesCollector;
+  const ShapesRenderer: TShapesRenderer);
+var
+  SavedOcclusionCulling: Boolean;
+  SavedBlendingSort, SavedOcclusionSort: TShapeSort;
 begin
   inherited;
 
   Params.InShadow := false;
   Params.ShadowVolumesReceivers := [false, true];
   Params.RenderingCamera := RenderingCamera;
+  Params.Collector := ShapesCollector;
+  Params.RendererToPrepareShapes := ShapesRenderer.Renderer;
 
   if Wireframe then
     Scene.RenderOptions.WireframeEffect := weWireframeOnly
@@ -207,12 +220,32 @@ begin
   //Params.Frustum := nil; // this is actually the default, we never set Params.Frustum
   Assert(Params.Frustum = nil);
 
+  ShapesCollector.Clear;
+
   { Scene.Render in this case should call Scene.LocalRender straight away,
     as Scene has no transformation.
     And that's good, the TCastleTransform.Render could not handle any transformation
     as Params.Frustum is nil.  }
   Params.Transparent := false; Scene.Render(Params);
   Params.Transparent := true ; Scene.Render(Params);
+
+  { Disable occlusion culling on background.
+    It works correctly... but the 1-frame delay is too noticeable,
+    testcase: examples/fps_game/ . }
+  SavedOcclusionCulling := ShapesRenderer.OcclusionCulling;
+  ShapesRenderer.OcclusionCulling := false;
+
+  SavedBlendingSort := ShapesRenderer.BlendingSort;
+  ShapesRenderer.BlendingSort := sortNone;
+
+  SavedOcclusionSort := ShapesRenderer.OcclusionSort;
+  ShapesRenderer.OcclusionSort := sortNone;
+
+  ShapesRenderer.Render(ShapesCollector, Params);
+
+  ShapesRenderer.OcclusionCulling := SavedOcclusionCulling;
+  ShapesRenderer.BlendingSort := SavedBlendingSort;
+  ShapesRenderer.OcclusionSort := SavedOcclusionSort;
 end;
 
 procedure TBackgroundScene.FreeResources;
@@ -233,7 +266,9 @@ type
     procedure Render(const RenderingCamera: TRenderingCamera;
       const Wireframe: boolean;
       const RenderRect: TFloatRectangle;
-      const CurrentProjection: TProjection); override;
+      const CurrentProjection: TProjection;
+      const ShapesCollector: TShapesCollector;
+      const ShapesRenderer: TShapesRenderer); override;
   end;
 
 constructor TBackground3D.Create(
@@ -411,22 +446,22 @@ const
 
     StackCircleCalc(CircleAngle, CircleY, CircleRadius);
 
-    SphereCoord.Items.List^[Start] := StackTipCalc(TipAngle);
-    SphereColor.Items.List^[Start] := TipColor;
+    SphereCoord.Items.L[Start] := StackTipCalc(TipAngle);
+    SphereColor.Items.L[Start] := TipColor;
     Inc(Next);
 
     for I := 0 to Slices - 1 do
     begin
-      SphereCoord.Items.List^[Next] := CirclePoint(CircleY, CircleRadius, I);
-      SphereColor.Items.List^[Next] := CircleColor;
+      SphereCoord.Items.L[Next] := CirclePoint(CircleY, CircleRadius, I);
+      SphereColor.Items.L[Next] := CircleColor;
       Inc(Next);
 
-      SphereCoordIndex.Items.List^[NextIndex    ] := Start;
-      SphereCoordIndex.Items.List^[NextIndex + 1] := Start + 1 + I;
+      SphereCoordIndex.Items.L[NextIndex    ] := Start;
+      SphereCoordIndex.Items.L[NextIndex + 1] := Start + 1 + I;
       if I <> Slices - 1 then
-        SphereCoordIndex.Items.List^[NextIndex + 2] := Start + 2 + I else
-        SphereCoordIndex.Items.List^[NextIndex + 2] := Start + 1;
-      SphereCoordIndex.Items.List^[NextIndex + 3] := -1;
+        SphereCoordIndex.Items.L[NextIndex + 2] := Start + 2 + I else
+        SphereCoordIndex.Items.L[NextIndex + 2] := Start + 1;
+      SphereCoordIndex.Items.L[NextIndex + 3] := -1;
       NextIndex := NextIndex + 4;
     end;
   end;
@@ -451,22 +486,22 @@ const
 
     for I := 0 to Slices - 1 do
     begin
-      SphereCoord.Items.List^[Next] := CirclePoint(CircleY, CircleRadius, I);
-      SphereColor.Items.List^[Next] := CircleColor;
+      SphereCoord.Items.L[Next] := CirclePoint(CircleY, CircleRadius, I);
+      SphereColor.Items.L[Next] := CircleColor;
       Inc(Next);
 
-      SphereCoordIndex.Items.List^[NextIndex    ] := Start + I;
+      SphereCoordIndex.Items.L[NextIndex    ] := Start + I;
       if I <> Slices - 1 then
       begin
-        SphereCoordIndex.Items.List^[NextIndex + 1] := Start + 1 + I;
-        SphereCoordIndex.Items.List^[NextIndex + 2] := Start + 1 + I - Slices;
+        SphereCoordIndex.Items.L[NextIndex + 1] := Start + 1 + I;
+        SphereCoordIndex.Items.L[NextIndex + 2] := Start + 1 + I - Slices;
       end else
       begin
-        SphereCoordIndex.Items.List^[NextIndex + 1] := Start;
-        SphereCoordIndex.Items.List^[NextIndex + 2] := Start - Slices;
+        SphereCoordIndex.Items.L[NextIndex + 1] := Start;
+        SphereCoordIndex.Items.L[NextIndex + 2] := Start - Slices;
       end;
-      SphereCoordIndex.Items.List^[NextIndex + 3] := Start + I - Slices;
-      SphereCoordIndex.Items.List^[NextIndex + 4] := -1;
+      SphereCoordIndex.Items.L[NextIndex + 3] := Start + I - Slices;
+      SphereCoordIndex.Items.L[NextIndex + 4] := -1;
       NextIndex := NextIndex + 5;
     end;
   end;
@@ -485,17 +520,17 @@ const
     NextIndex := StartIndex;
     SphereCoordIndex.Count := SphereCoordIndex.Count + Slices * 4;
 
-    SphereCoord.Items.List^[Start] := StackTipCalc(TipAngle);
-    SphereColor.Items.List^[Start] := TipColor;
+    SphereCoord.Items.L[Start] := StackTipCalc(TipAngle);
+    SphereColor.Items.L[Start] := TipColor;
 
     for I := 0 to Slices - 1 do
     begin
-      SphereCoordIndex.Items.List^[NextIndex    ] := Start;
+      SphereCoordIndex.Items.L[NextIndex    ] := Start;
       if I <> Slices - 1 then
-        SphereCoordIndex.Items.List^[NextIndex + 1] := Start - Slices + I + 1 else
-        SphereCoordIndex.Items.List^[NextIndex + 1] := Start - Slices;
-      SphereCoordIndex.Items.List^[NextIndex + 2] := Start - Slices + I;
-      SphereCoordIndex.Items.List^[NextIndex + 3] := -1;
+        SphereCoordIndex.Items.L[NextIndex + 1] := Start - Slices + I + 1 else
+        SphereCoordIndex.Items.L[NextIndex + 1] := Start - Slices;
+      SphereCoordIndex.Items.L[NextIndex + 2] := Start - Slices + I;
+      SphereCoordIndex.Items.L[NextIndex + 3] := -1;
       NextIndex := NextIndex + 4;
     end;
   end;
@@ -537,7 +572,6 @@ const
 
     Assert(ColorCount >= 1);
     Assert(AngleCount + 1 = ColorCount);
-    {$ifndef FPC}{$POINTERMATH ON}{$endif}
     ClearColor := Vector4(Color[0], 1.0);
 
     UseClearColor := ColorCount = 1;
@@ -568,7 +602,6 @@ const
       if Angle[AngleCount - 1] <= GroundHighestAngle + 0.01 then
         RenderLastStack(Color[ColorCount - 1], Pi);
     end;
-    {$ifndef FPC}{$POINTERMATH OFF}{$endif}
   end;
 
   procedure RenderGround;
@@ -596,12 +629,10 @@ const
 
       NeedsSphere;
 
-      {$ifndef FPC}{$POINTERMATH ON}{$endif}
       RenderFirstStack(Color[0], Pi,
                        Color[1], Pi - Angle[0]);
       for I := 1 to AngleCount - 1 do
         RenderNextStack(Color[I + 1], Pi - Angle[I]);
-      {$ifndef FPC}{$POINTERMATH OFF}{$endif}
     end;
   end;
 
@@ -635,7 +666,9 @@ end;
 procedure TBackground3D.Render(const RenderingCamera: TRenderingCamera;
   const Wireframe: boolean;
   const RenderRect: TFloatRectangle;
-  const CurrentProjection: TProjection);
+  const CurrentProjection: TProjection;
+  const ShapesCollector: TShapesCollector;
+  const ShapesRenderer: TShapesRenderer);
 var
   SavedProjectionMatrix: TMatrix4;
   AspectRatio: Single;
@@ -690,7 +723,9 @@ type
     procedure Render(const RenderingCamera: TRenderingCamera;
       const Wireframe: boolean;
       const RenderRect: TFloatRectangle;
-      const CurrentProjection: TProjection); override;
+      const CurrentProjection: TProjection;
+      const ShapesCollector: TShapesCollector;
+      const ShapesRenderer: TShapesRenderer); override;
   end;
 
 constructor TBackground2D.Create(const ANode: TImageBackgroundNode);
@@ -746,7 +781,9 @@ end;
 procedure TBackground2D.Render(const RenderingCamera: TRenderingCamera;
   const Wireframe: boolean;
   const RenderRect: TFloatRectangle;
-  const CurrentProjection: TProjection);
+  const CurrentProjection: TProjection;
+  const ShapesCollector: TShapesCollector;
+  const ShapesRenderer: TShapesRenderer);
 
   { Apply various Node properties at the beginning of each Render,
     this way we can animate them.

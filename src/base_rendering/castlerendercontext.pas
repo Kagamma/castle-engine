@@ -20,7 +20,7 @@ unit CastleRenderContext;
 
 interface
 
-uses SysUtils, Generics.Collections,
+uses SysUtils, Generics.Collections, Classes,
   {$ifdef FPC} CastleGL, {$else} OpenGL, OpenGLext, {$endif}
   CastleUtils, CastleVectors, CastleRectangles, CastleGLShaders, CastleColors,
   CastleRenderOptions, CastleGLUtils;
@@ -50,9 +50,6 @@ type
     property Enabled: boolean read FEnabled write SetEnabled;
   end;
 
-  { Possible values of @link(TRenderContext.DepthRange). }
-  TDepthRange = (drFull, drNear, drFar);
-
   { Possible values of @link(TRenderContext.DepthFunc).
     Note: For now, the values of this enum correspond to OpenGL(ES) constants,
     but do not depend on this outside (and it may change in the future).
@@ -67,9 +64,6 @@ type
     dfGreaterEqual = $0206,
     dfAlways = $0207
   );
-
-  TColorChannel = 0..3;
-  TColorChannels = set of TColorChannel;
 
   TPolygonOffset = record
     Enabled: Boolean;
@@ -96,7 +90,7 @@ type
     anything you rely on being stored. Instead, use your own variables for this,
     and only synchronize @link(RenderContext) with your variables.
   }
-  TRenderContext = class
+  TRenderContext = class(TComponent)
   strict private
     type
       TScissorList = class({$ifdef FPC}specialize{$endif} TObjectList<TScissor>)
@@ -156,13 +150,18 @@ type
   private
     FEnabledScissors: TScissorList;
   public
-    constructor Create;
+    { If @true, @link(Clear) will clear color buffer by DrawRectangle instead
+      of OpenGL glClear call.
+      This is a bit slower, but makes it honor the stencil test. }
+    InternalClearColorsByDraw: Boolean;
+
+    constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
     { Clear the whole buffer contents.
 
       Never call OpenGL glClear or glClearColor, always use this method. }
-    procedure Clear(const Buffers: TClearBuffers; const ClearColor: TCastleColor);
+    procedure Clear(Buffers: TClearBuffers; const ClearColor: TCastleColor);
 
     { The rendered line width.
       Never call OpenGL glLineWidth directly.
@@ -258,7 +257,7 @@ type
       )
     }
     property ColorChannels: TColorChannels
-      read FColorChannels write SetColorChannels default [0..3];
+      read FColorChannels write SetColorChannels default AllColorChannels;
 
     { Is depth buffer updated by rendering.
       This affects all rendering that enables depth testing
@@ -352,7 +351,7 @@ implementation
 
 uses CastleLog, CastleProjection, CastleInternalGLUtils;
 
-constructor TRenderContext.Create;
+constructor TRenderContext.Create(AOwner: TComponent);
 begin
   inherited;
   FLineWidth := 1;
@@ -363,7 +362,7 @@ begin
   FDepthRange := drFull;
   FCullFace := false;
   FFrontFaceCcw := true;
-  FColorChannels := [0..3];
+  FColorChannels := AllColorChannels;
   FDepthBufferUpdate := true;
   FDepthTest := false;
   FDepthFunc := dfLess;
@@ -389,7 +388,7 @@ begin
   WritelnWarning('RenderContext', 'Do not access TRenderContext properties and methods when this context is not the "current" one. Always access the properties and methods through the RenderContext singleton to avoid this warning.');
 end;
 
-procedure TRenderContext.Clear(const Buffers: TClearBuffers;
+procedure TRenderContext.Clear(Buffers: TClearBuffers;
   const ClearColor: TCastleColor);
 const
   ClearBufferMask: array [TClearBuffer] of TGLbitfield =
@@ -402,6 +401,16 @@ var
 begin
   if Self <> RenderContext then
     WarnContextNotCurrent;
+
+  if InternalClearColorsByDraw and (cbColor in Buffers) then
+  begin
+    DrawRectangle(Viewport, ClearColor,
+      { Using these blending factors means that ClearColor overrides screen,
+        just like glClear does. So we don't do blending, in case ClearColor.W is <> 1,
+        which is consistent with our behavior when InternalClearColorsByDraw = false. }
+      bsOne, bdZero, false);
+    Exclude(Buffers, cbColor);
+  end;
 
   if (cbColor in Buffers) and
      not TVector4.PerfectlyEquals(FClearColor, ClearColor) then
@@ -589,7 +598,7 @@ end;
 procedure TRenderContext.SetColorMask(const Value: boolean);
 begin
   if Value then
-    ColorChannels := [0..3]
+    ColorChannels := AllColorChannels
   else
     ColorChannels := [];
 end;
@@ -700,7 +709,7 @@ begin
     if GLFeatures.VertexArrayObject then
     begin
       if Value <> nil then
-        glBindVertexArray(Value.InternalHandle)
+        glBindVertexArray(Value.InternalHandle(Self))
       else
         glBindVertexArray(0);
     end;

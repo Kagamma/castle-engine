@@ -1,5 +1,5 @@
 {
-  Copyright 2014-2022 Michalis Kamburelis.
+  Copyright 2014-2023 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -120,7 +120,7 @@ const
       So it is simpler to just name all includes and units differently,
       even across system-specific dirs. }
 
-  EnginePaths: array [0..41] of String = (
+  EnginePaths: array [0..42] of String = (
     'base',
     'common_includes',
     'base/android',
@@ -141,6 +141,7 @@ const
     'scene/x3d',
     'scene/load',
     'scene/load/spine',
+    'scene/load/md3',
     'scene/load/collada',
     'scene/load/pasgltf',
     'audio',
@@ -389,8 +390,13 @@ begin
   { Lowercase once and later use IsPrefix many times with IgnoreCase=false (faster). }
   LineLower := LowerCase(Line);
   Result := not (
+    { Occur without -vb }
     IsPrefix('generics.collections.pas(', LineLower, false) or
     IsPrefix('generics.dictionaries.inc(', LineLower, false) or
+    { Occur with -vb }
+    (Pos('generics.collections.ppu:generics.collections.pas(', LineLower) <> 0) or
+    (Pos('generics.collections.ppu:generics.dictionaries.inc(', LineLower) <> 0) or
+    { Others }
     IsSuffix('warning: section "__datacoal_nt" is deprecated', LineLower, false) or
     IsSuffix('note: change section name to "__data"', LineLower, false) or
     (Line = '.section __DATA, __datacoal_nt, coalesced') or
@@ -633,6 +639,7 @@ begin
     FpcOptions.Add('-Sh');
     FpcOptions.Add('-vm2045'); // do not show Warning: (2045) APPTYPE is not supported by the target OS
     FpcOptions.Add('-vm5024'); // do not show Hint: (5024) Parameter "..." not used
+    FpcOptions.Add('-vb'); // show full filenames, makes it easier for software (like VS Code problem matcher and CGE editor) to figure out the relevant file
 
     // do not show
     // Warning: Constructing a class "TCustomDictionaryEnumerator$4$crc6100464F" with abstract method "GetCurrent"
@@ -1105,11 +1112,10 @@ begin
     // register CGE packages first
     if CastleEnginePath <> '' then
     begin
-      LazbuildAddPackage('src/vampyre_imaginglib/src/Packages/VampyreImagingPackage.lpk');
-      LazbuildAddPackage('src/vampyre_imaginglib/src/Packages/VampyreImagingPackageExt.lpk');
       LazbuildAddPackage('packages/castle_base.lpk');
       LazbuildAddPackage('packages/castle_window.lpk');
       LazbuildAddPackage('packages/castle_components.lpk');
+      LazbuildAddPackage('packages/castle_editor_components.lpk');
     end;
 
     LazbuildOptions.Clear;

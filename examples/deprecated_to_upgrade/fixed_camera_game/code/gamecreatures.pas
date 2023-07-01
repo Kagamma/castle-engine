@@ -21,7 +21,8 @@ interface
 uses SysUtils, Classes, Generics.Collections,
   CastleUtils, CastleClassUtils, CastleScene,
   CastleVectors, CastleTransform, CastleFrustum, CastleApplicationProperties,
-  CastleTimeUtils, X3DNodes, CastleColors, CastleDebugTransform;
+  CastleTimeUtils, X3DNodes, CastleColors, CastleDebugTransform,
+  CastleComponentSerialize;
 
 type
   TCreatureState = (csIdle, csBored, csWalk);
@@ -30,7 +31,7 @@ type
   TCreatureKind = class
   private
     FName: string;
-    SceneTemplate: TCastleScene;
+    Template: TSerializedComponent;
     Url: String;
     Loaded: boolean;
   public
@@ -97,7 +98,7 @@ implementation
 
 uses Math,
   CastleLog, CastleGLUtils, CastleUIControls, CastleSceneCore,
-  GameConfiguration;
+  GameConfiguration, CastleViewport;
 
 const
   Debug = true;
@@ -116,7 +117,7 @@ end;
 
 destructor TCreatureKind.Destroy;
 begin
-  FreeAndNil(SceneTemplate);
+  FreeAndNil(Template);
   inherited;
 end;
 
@@ -129,8 +130,7 @@ procedure TCreatureKind.Load(const PrepareParams: TPrepareParams);
 begin
   if Loaded then Exit;
   Loaded := true;
-  SceneTemplate := TCastleScene.Create(nil);
-  SceneTemplate.Url := Url;
+  Template := TSerializedComponent.Create(Url);
 end;
 
 { TCreature ------------------------------------------------------------------ }
@@ -148,8 +148,7 @@ begin
   FDebugTransform := TDebugTransform.Create(Self);
   FDebugTransform.Parent := Self;
 
-  Scene := AKind.SceneTemplate.Clone(Self);
-  Scene.DefaultAnimationTransition := 0.1;
+  Scene := AKind.Template.TransformLoad(Self) as TCastleScene;
   Scene.AutoAnimation := CreatureAnimationName[FState];
   Add(Scene);
 end;
@@ -188,6 +187,7 @@ constructor TPlayer.Create(AKind: TCreatureKind);
   var
     Sphere: TSphereNode;
     Material: TMaterialNode;
+    Appearance: TAppearanceNode;
   begin
     Sphere := TSphereNode.Create;
     Sphere.Radius := 0.1;
@@ -195,8 +195,11 @@ constructor TPlayer.Create(AKind: TCreatureKind);
     Material := TMaterialNode.Create;
     Material.DiffuseColor := RedRGB;
 
+    Appearance := TAppearanceNode.Create;
+    Appearance.Material := Material;
+
     FTargetVisualizeShape := TShapeNode.Create;
-    FTargetVisualizeShape.Material := Material;
+    FTargetVisualizeShape.Appearance := Appearance;
     FTargetVisualizeShape.Geometry := Sphere;
 
     FTargetVisualize := TTransformNode.Create;
@@ -221,11 +224,13 @@ var
   AngleToTarget: Single;
 
   procedure Rotate;
+  const
+    RotationSpeed = 10.0; //< radians per second
   var
     AngleRotate: Single;
   begin
     { first adjust direction }
-    AngleRotate := SecondsPassed;
+    AngleRotate := RotationSpeed * SecondsPassed;
     if AngleToTarget < 0 then
       AngleRotate := Max(-AngleRotate, AngleToTarget) else
       AngleRotate := Min( AngleRotate, AngleToTarget);
@@ -234,7 +239,7 @@ var
 
   procedure Move;
   const
-    MoveSpeed = 0.5;
+    MoveSpeed = 1;
   var
     MoveDirectionCurrent, MoveDirectionMax: TVector3;
     MoveDirectionCurrentScale: Single;
@@ -269,21 +274,35 @@ begin
     { TODO: check collisions with the scene before changing Translation }
 
     IsTargetPos := TVector3.Equals(Translation, WantsToWalkPos);
-    IsTargetDir := TVector3.Equals(Direction, WantsToWalkDir);
+
+    { When WantsToWalkDir is zero, consider IsTargetDir always true.
+      This avoids crash at
+
+        RotationAngleRadBetweenVectors(Direction, WantsToWalkDir, ...)
+
+      when WantsToWalkDir is zero. }
+    IsTargetDir :=
+      WantsToWalkDir.IsZero or
+      TVector3.Equals(Direction, WantsToWalkDir);
 
     if not IsTargetDir then
     begin
-      { compare Direction and WantsToWalkDir with more tolerance }
-      RotationAxis := TVector3.CrossProduct(Direction, WantsToWalkDir);
+      { Calculate RotationAxis and AngleToTarget used by Rotate.
+        By the way, compare Direction and WantsToWalkDir with more tolerance,
+        so possibly IsTargetDir changes to true. }
+      RotationAxis := //TVector3.CrossProduct(Direction, WantsToWalkDir);
+        Vector3(0, 1, 0);
       AngleToTarget := RotationAngleRadBetweenVectors(Direction, WantsToWalkDir, RotationAxis);
       if Abs(AngleToTarget) < 0.01 then
         IsTargetDir := true;
     end;
 
     if IsTargetPos and IsTargetDir then
-      State := csIdle else
+      State := csIdle
+    else
     if not IsTargetDir then
-      Rotate else
+      Rotate
+    else
       Move;
   end;
 
@@ -305,16 +324,9 @@ end;
 procedure TPlayer.WantsToWalk(const Value: TVector3);
 begin
   WantsToWalkPos := Value;
-  WantsToWalkDir := (WantsToWalkPos - Direction).Normalize;
-  { fix WantsToWalkDir, to avoid wild rotations.
-    Without this, our avatar would wildly change up when walking to some
-    higher/lower target. This is coupled with the fact that currently
-    we accept any clicked position as walk target --- in a real game,
-    it would be more limited where you can walk, and so this safeguard
-    could be less critical. }
-  if VectorsParallel(WantsToWalkDir, Up) then
-    WantsToWalkDir := Direction else
-    MakeVectorsOrthoOnTheirPlane(WantsToWalkDir, Up);
+  WantsToWalkDir := WantsToWalkPos - Translation;
+  WantsToWalkDir.Y := 0; // do not move in Y axis, only move horizontally
+  WantsToWalkDir := WantsToWalkDir.Normalize;
   State := csWalk;
 end;
 

@@ -46,7 +46,7 @@ implementation
 
 uses Math, SysUtils,
   CastleGLUtils, CastleStringUtils, CastleUtils, CastleCameras,
-  CastleFilesUtils, CastleImages,
+  CastleFilesUtils, CastleImages, CastleScene,
   CastleGameNotifications, CastleRectangles, CastleColors,
   GameViewMainMenu;
 
@@ -55,13 +55,14 @@ uses Math, SysUtils,
 procedure TViewPlay.Resize;
 begin
   inherited;
-  CurrentLocation.Scene.ViewportRect := Viewport.RenderRect.Round;
+  CurrentLocation.ImageTransform.ViewportRect := Viewport.RenderRect.Round;
 end;
 
 procedure TViewPlay.Start;
 var
   Location: TLocation;
   CreatureKind: TCreatureKind;
+  LightForShadows: TCastleDirectionalLight;
 begin
   inherited;
   CurrentLocation := Locations.StartLocation;
@@ -74,6 +75,14 @@ begin
   Viewport.AutoCamera := true;
   InsertFront(Viewport);
 
+  { TODO: light type, direction, should be configured in .castle-transform
+    that also contains location model.
+    This is prevented now because it needs a special TLocationScene to render. }
+  LightForShadows := TCastleDirectionalLight.Create(FreeAtStop);
+  LightForShadows.Shadows := true;
+  LightForShadows.Direction := Vector3(-1, 1, 1);
+  Viewport.Items.Add(LightForShadows);
+
   for Location in Locations do
   begin
     Location.Load(Viewport.PrepareParams);
@@ -83,6 +92,7 @@ begin
     CreatureKind.Load(Viewport.PrepareParams);
   end;
 
+  Viewport.Items.Add(CurrentLocation.ImageTransform);
   Viewport.Items.Add(CurrentLocation.Scene);
   { set as MainScene, to allow location VRML / X3D file to determine
     headlight, viewpoint, shadow volumes light... }
@@ -92,7 +102,8 @@ begin
   Player.SetView(
     CurrentLocation.PlayerPosition,
     CurrentLocation.PlayerDirection,
-    CurrentLocation.PlayerUp);
+    // hardcode up vector to +Y, this is easier for moving calculations
+    Vector3(0, 1, 0));
   Player.LocationChanged;
   Viewport.Items.Add(Player);
 
@@ -134,8 +145,8 @@ begin
       { Debug keys }
       case Event.Key of
         keyF2:
-          CurrentLocation.Scene.RenderInternalModel :=
-            not CurrentLocation.Scene.RenderInternalModel;
+          CurrentLocation.RenderInternalModel :=
+            not CurrentLocation.RenderInternalModel;
         keyF5:
           begin
             URL := Container.SaveScreenToDefaultFile;

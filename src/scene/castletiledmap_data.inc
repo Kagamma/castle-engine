@@ -313,7 +313,7 @@ type
     FStaggerIndex: TStaggerIndex;
     FBackgroundColor: TCastleColor;
     FRenderOrder: TMapRenderOrder;
-    BaseUrl: string;
+    FBaseUrl: string;
     FTilesets: TTilesetList;
     FProperties: TPropertyList;
     FLayers: TLayerList;
@@ -372,7 +372,14 @@ type
       where map bottom-left corner is (0, 0).
 
       This method returns @false if the position is outside of the map.
-      Valid map tiles are defined as by @link(TilePositionValid). }
+      Valid map tiles are defined as by @link(TilePositionValid).
+
+      Note: Regardless of the result (@true or @false), the TilePosition
+      is reliably defined and set.
+      It is just outside of the map range if the result is @false.
+      If you don't care about it (that is, you want to accept even positions that
+      are outside of map range) that you're free to use TilePosition for
+      whatever calculations. }
     function PositionToTile(const Position: TVector2;
       out TilePosition: TVector2Integer): Boolean;
 
@@ -578,12 +585,19 @@ const
   DefaultTrans: TCastleColorRGB = (X: 1.0; Y: 0.0; Z: 1.0); {Fuchsia}
 var
   I: TXMLElementIterator;
-  TmpStr: string;
+  TmpStr, URLPrefix: string;
 begin
   if Element.AttributeString('format', TmpStr) then
     Format := TmpStr;
   if Element.AttributeString('source', TmpStr) then
-    URL := CombineURI(BaseUrl, TmpStr);
+  begin
+    URLPrefix := CombineURI(BaseUrl, TmpStr);
+    { Tiled allows loading images ignoring the '.png' suffix }
+    if (ExtractFileExt(TmpStr) = '') and not URIFileExists(URLPrefix) then
+      URL := URLPrefix + '.png'
+    else
+      URL := URLPrefix;
+  end;
   if Element.AttributeString('trans', TmpStr) then
     Trans := TiledToColorRGB(TmpStr)
   else
@@ -1010,7 +1024,7 @@ procedure TCastleTiledMapData.TTileset.Load(const Element: TDOMElement; const Ba
     try
       Check(LowerCase(Doc.DocumentElement.TagName) = 'tileset',
         'Root element of TSX file must be <tileset>');
-      Load(Doc.DocumentElement, BaseUrl);
+      Load(Doc.DocumentElement, URL);
     finally
       FreeAndNil(Doc);
     end;
@@ -1258,29 +1272,29 @@ begin
       if LowerTagName = 'tileset' then
       begin
         NewTileset := TTileset.Create;
-        NewTileset.Load(I.Current, BaseUrl);
+        NewTileset.Load(I.Current, FBaseUrl);
         FTilesets.Add(NewTileset);
       end else
       if LowerTagName = 'layer' then
       begin
         NewLayer := TLayer.Create;
-        NewLayer.Load(I.Current, BaseUrl);
+        NewLayer.Load(I.Current, FBaseUrl);
         FLayers.Add(NewLayer);
       end else
       if LowerTagName = 'objectgroup' then
       begin
         NewLayer := TObjectGroupLayer.Create;
-        NewLayer.Load(I.Current, BaseUrl);
+        NewLayer.Load(I.Current, FBaseUrl);
         FLayers.Add(NewLayer);
       end else
       if LowerTagName = 'imagelayer' then
       begin
         NewLayer := TImageLayer.Create;
-        NewLayer.Load(I.Current, BaseUrl);
+        NewLayer.Load(I.Current, FBaseUrl);
         FLayers.Add(NewLayer);
       end else
       if LowerTagName = 'properties' then
-        FProperties.Load(I.Current, BaseUrl);
+        FProperties.Load(I.Current, FBaseUrl);
     end;
   finally FreeAndNil(I) end;
 end;
@@ -1292,7 +1306,7 @@ begin
   FTilesets := TTilesetList.Create;
   FProperties := TPropertyList.Create;
   FLayers := TLayerList.Create(true);
-  BaseUrl := ABaseUrl;
+  FBaseUrl := ABaseUrl;
 
   //Load TMX
   LoadTMXFile(Stream, ABaseUrl);
