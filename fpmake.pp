@@ -260,7 +260,6 @@ begin
     P.Targets.AddUnit('castlecreatures.pas');
     P.Targets.AddUnit('castlefontfamily.pas');
     P.Targets.AddUnit('castlegamenotifications.pas');
-    P.Targets.AddUnit('castlegenericlists.pas');
     P.Targets.AddUnit('castleglcontainer.pas');
     P.Targets.AddUnit('castlegoogleplaygames.pas');
     P.Targets.AddUnit('castleinternalusedeprecatedunits.pas');
@@ -479,7 +478,7 @@ begin
     P.Targets.AddUnit('castlescene.pas');
     P.Targets.AddUnit('castlescenecore.pas');
     P.Targets.AddUnit('castlesceneinternalblending.pas');
-    P.Targets.AddUnit('castlesceneinternalocclusion.pas');
+    P.Targets.AddUnit('castleinternalocclusionculling.pas');
     P.Targets.AddUnit('castlesceneinternalshape.pas');
     P.Targets.AddUnit('castlescreeneffects.pas');
     P.Targets.AddUnit('castleshapeinternalrendershadowvolumes.pas');

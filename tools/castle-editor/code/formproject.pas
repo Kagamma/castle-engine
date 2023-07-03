@@ -32,7 +32,7 @@ uses
   AnchorDocking, XMLPropStorage, ImgList,
   ProjectUtils, Types, Contnrs, CastleControl, CastleUIControls,
   CastlePropEdits, CastleDialogs, X3DNodes, CastleFindFiles,
-  DataModuleIcons,
+  DataModuleIcons, CastleClassUtils,
   EditorUtils, FrameDesign, FrameViewFile, FormNewUnit, ToolManifest,
   ToolPackageFormat;
 
@@ -43,6 +43,7 @@ const
 type
   { Main project management. }
   TProjectForm = class(TForm)
+    ActionImportSketchfab: TAction;
     ActionShowStatistics: TAction;
     ActionRunParameterCapabilitiesForceFixedFunction: TAction;
     ActionRunParameterCapabilitiesForceModern: TAction;
@@ -80,7 +81,6 @@ type
     ActionComponentCopy: TAction;
     ActionViewportToggleProjection: TAction;
     ActionViewportSetup2D: TAction;
-    ActionViewportSort2D: TAction;
     ActionViewportAlignCameraToView: TAction;
     ActionViewportTop: TAction;
     ActionNavigationToggle2D: TAction;
@@ -119,6 +119,8 @@ type
     MenuItem39: TMenuItem;
     MenuItem40: TMenuItem;
     MenuItem41: TMenuItem;
+    MenuItem42: TMenuItem;
+    Separator13: TMenuItem;
     Separator12: TMenuItem;
     MenuItemRunParameterDefaultWindowOrFullscreen: TMenuItem;
     Separator11: TMenuItem;
@@ -165,7 +167,6 @@ type
     MenuItem20: TMenuItem;
     Separator4: TMenuItem;
     MenuItem18: TMenuItem;
-    MenuItem19: TMenuItem;
     MenuItem2: TMenuItem;
     Separator2: TMenuItem;
     MenuItem13: TMenuItem;
@@ -327,6 +328,7 @@ type
     TabOutput: TTabSheet;
     ProcessUpdateTimer: TTimer;
     TabWarnings: TTabSheet;
+    procedure ActionImportSketchfabExecute(Sender: TObject);
     procedure ActionPhysicsShowAllJointsToolsExecute(Sender: TObject);
     procedure ActionPhysicsHideAllJointsToolsExecute(Sender: TObject);
     procedure ActionFocusDesignExecute(Sender: TObject);
@@ -391,7 +393,6 @@ type
     procedure ActionViewportLeftExecute(Sender: TObject);
     procedure ActionViewportRightExecute(Sender: TObject);
     procedure ActionViewportSetup2DExecute(Sender: TObject);
-    procedure ActionViewportSort2DExecute(Sender: TObject);
     procedure ActionViewportTopExecute(Sender: TObject);
     procedure ActionViewportViewAllExecute(Sender: TObject);
     procedure ActionViewportViewSelectedExecute(Sender: TObject);
@@ -490,6 +491,7 @@ type
       OutputList: TOutputList;
       RunningProcess: TAsynchronousProcessQueue;
       Design: TDesignFrame;
+      DesignObserver: TFreeNotificationObserver;
       ShellListView1: TCastleShellListView;
       ShellTreeView1: TCastleShellTreeView;
       ViewFileFrame: TViewFileFrame;
@@ -528,6 +530,7 @@ type
       Line: Integer = -1;
       Column: Integer = -1);
     procedure RefreshFiles(const RefreshNecessary: TRefreshFiles);
+    procedure RefreshAllFiles(Sender: TObject);
     (*Runs custom code editor.
       Use this only when CodeEditor = ceCustom.
       CustomCodeEditorCommand is the command to use (like CodeEditorCommand
@@ -580,9 +583,16 @@ type
     { Question about saving during physics simulation. }
     function SaveDuringPhysicsSimulation: Boolean;
     function IsCreatingNewDesignAvailable: Boolean;
+    procedure DesignObserverFreeNotification(const Sender: TFreeNotificationObserver);
   public
     { Open a project, given an absolute path to CastleEngineManifest.xml }
     procedure OpenProject(const ManifestUrl: String);
+
+    { Can we right now add imported thing from this URL? }
+    function CanAddImported(const AddUrl: String): Boolean;
+
+    { Import URL (to instantiate it in design) now. }
+    procedure AddImported(const AddUrl: String);
   end;
 
 var
@@ -599,11 +609,22 @@ uses TypInfo, LCLType, RegExpr, StrUtils, LCLVersion,
   CastleTransform, CastleControls, CastleDownload, CastleApplicationProperties,
   CastleLog, CastleComponentSerialize, CastleSceneCore, CastleStringUtils,
   CastleFonts, X3DLoad, CastleFileFilters, CastleImages, CastleSoundEngine,
-  CastleClassUtils, CastleLclEditHack, CastleRenderOptions, CastleTimeUtils,
+  CastleLclEditHack, CastleRenderOptions, CastleTimeUtils,
   FormAbout, FormChooseProject, FormPreferences, FormSpriteSheetEditor,
-  FormSystemInformation, FormRestartCustomEditor,
+  FormSystemInformation, FormRestartCustomEditor, FormImportSketchfab,
   ToolCompilerInfo, ToolCommonUtils, ToolArchitectures, ToolProcess,
   ToolFpcVersion;
+
+{$ifdef LCLGTK2}
+  { TODO:
+    LCL on GTK2 has random crashes at TProjectForm freeing
+    (from Application.ReleaseComponents).
+    The current workaround is rather brutal but effective,
+    we let old TProjectForm instances leak (but we free Design with
+    really heavy resources),
+    and we close with Halt. }
+  {$define CASTLE_CLOSE_HACK}
+{$endif}
 
 procedure TProjectForm.MenuItemQuitClick(Sender: TObject);
 begin
@@ -614,7 +635,13 @@ begin
   end;
 
   if ProposeSaveDesign then
+  begin
+    {$ifdef CASTLE_CLOSE_HACK}
+    Halt;
+    {$else}
     Application.Terminate;
+    {$endif}
+  end;
 end;
 
 procedure TProjectForm.MenuItemReferenceClick(Sender: TObject);
@@ -748,6 +775,20 @@ begin
 end;
 
 procedure TProjectForm.FormCloseQuery(Sender: TObject; var CanClose: boolean);
+
+  function HandleNonModalAssociatedForm(Form: TForm): Boolean;
+  begin
+    Result := true;
+    if (Form <> nil) and Form.Visible then
+    begin
+      if not Form.CloseQuery then
+      begin
+        CanClose := false;
+        Exit(false);
+      end;
+    end;
+  end;
+
 begin
   if CastleApplicationMode in [appSimulation, appSimulationPaused] then
   begin
@@ -758,17 +799,19 @@ begin
 
   if ProposeSaveDesign then
   begin
-    { Close sprite sheet editor window if visible }
-    if (SpriteSheetEditorForm <> nil) and (SpriteSheetEditorForm.Visible) then
+    { Close associated windows if visible }
+    if not HandleNonModalAssociatedForm(SpriteSheetEditorForm) then
     begin
-      if not SpriteSheetEditorForm.CloseQuery then
-      begin
-        CanClose := false;
-        Exit;
-      end;
+      CanClose := false;
+      Exit;
+    end;
+    if not HandleNonModalAssociatedForm(ImportSketchfabForm) then
+    begin
+      CanClose := false;
+      Exit;
     end;
 
-    Application.Terminate
+    Application.Terminate;
   end else
     CanClose := false;
 end;
@@ -776,6 +819,11 @@ end;
 procedure TProjectForm.FormClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
   SaveDockLayout;
+  {$ifdef CASTLE_CLOSE_HACK}
+  // TODO: Hack to avoid LCL crashes. Memory will leak
+  // (trying to manually free ProjectForm from ChooseProjectForm would also crash).
+  CloseAction := caHide;
+  {$endif}
 end;
 
 procedure TProjectForm.ActionNewSpriteSheetExecute(Sender: TObject);
@@ -921,6 +969,18 @@ procedure TProjectForm.ActionPhysicsShowAllJointsToolsExecute(Sender: TObject);
 begin
   Assert(Design <> nil); // menu item is disabled otherwise
   Design.ShowAllJointsTools;
+end;
+
+procedure TProjectForm.ActionImportSketchfabExecute(Sender: TObject);
+begin
+  if ImportSketchfabForm = nil then
+    ImportSketchfabForm := TImportSketchfabForm.Create(Application);
+
+  ImportSketchfabForm.ProjectPath := ProjectPath;
+  ImportSketchfabForm.OnRefreshFiles := @RefreshAllFiles;
+  ImportSketchfabForm.OnCanAddImported := @CanAddImported;
+  ImportSketchfabForm.OnAddImported := @AddImported;
+  ImportSketchfabForm.Show;
 end;
 
 procedure TProjectForm.ActionPhysicsHideAllJointsToolsExecute(Sender: TObject);
@@ -1250,12 +1310,6 @@ procedure TProjectForm.ActionViewportSetup2DExecute(Sender: TObject);
 begin
   if Design <> nil then
     Design.ViewportSetup2D;
-end;
-
-procedure TProjectForm.ActionViewportSort2DExecute(Sender: TObject);
-begin
-  if Design <> nil then
-    Design.ViewportSort(bs2D);
 end;
 
 procedure TProjectForm.ActionViewportTopExecute(Sender: TObject);
@@ -1676,6 +1730,8 @@ procedure TProjectForm.FormCreate(Sender: TObject);
 var
   EnableDocking: Boolean;
 begin
+  DesignObserver := TFreeNotificationObserver.Create(Self);
+  DesignObserver.OnFreeNotification := {$ifdef FPC}@{$endif} DesignObserverFreeNotification;
   EnableDocking := URIFileExists(ApplicationConfig('enable-docking.txt'));
   MenuItemWindow.SetEnabledVisible(EnableDocking);
   Docking := EnableDocking and UserConfig.GetValue('ProjectForm_Docking', false);
@@ -1787,6 +1843,12 @@ begin
   FreeAndNil(DesignWarningsForm);
   FreeAndNil(PlatformsInfo);
   FreeAndNil(ListOpenExistingViewStr);
+end;
+
+procedure TProjectForm.DesignObserverFreeNotification(const Sender: TFreeNotificationObserver);
+begin
+  // set property to nil when the referenced component is freed
+  Design := nil;
 end;
 
 procedure TProjectForm.FormHide(Sender: TObject);
@@ -2338,6 +2400,19 @@ begin
 
   if Design = nil then
     ListOpenExistingViewRefresh;
+
+  { Synchronize action state with new design.
+    Testcase:
+    - open project
+    - open design
+    - toggle "Show Colliders" to true by clicking in menu
+    - close design
+    - open design again
+    - -> desired effect: "Show Colliders" is synchronized with Design.ShowColliders,
+      which means it is reset to false now.
+  }
+  if Design <> nil then
+    ActionShowColliders.Checked := Design.ShowColliders;
 end;
 
 procedure TProjectForm.ProposeOpenDesign(const DesignUrl: String);
@@ -2357,6 +2432,7 @@ begin
   if Design = nil then
   begin
     Design := TDesignFrame.Create(Self);
+    DesignObserver.Observed := Design;
     Design.Parent := PanelAboveTabs;
     Design.Align := alClient;
     Design.OnUpdateFormCaption := @UpdateFormCaption;
@@ -2537,6 +2613,22 @@ begin
 end;
 
 procedure TProjectForm.MenuItemSwitchProjectClick(Sender: TObject);
+
+  function HandleNonModalAssociatedForm(var Form: TForm): Boolean;
+  begin
+    Result := true;
+    if (Form <> nil) and Form.Visible then
+    begin
+      if not Form.CloseQuery then
+        Exit(false);
+      Form.Close; // not needed on GTK2, maybe add ifdef?
+      // Calling Release seems safer than FreeAndNil(Form) below,
+      // though tests didn't actually show any difference now.
+      Form.Release;
+    end;
+    //FreeAndNil(Form);
+  end;
+
 begin
   if CastleApplicationMode in [appSimulation, appSimulationPaused] then
   begin
@@ -2546,15 +2638,31 @@ begin
 
   if ProposeSaveDesign then
   begin
-    { Close sprite sheet editor window if visible }
-    if (SpriteSheetEditorForm <> nil) and (SpriteSheetEditorForm.Visible) then
+    { Close and free associated windows.
+      Reason for free: E.g. ImportSketchfabForm has some "links" to current project,
+      like TImportSketchfabForm.OnAddImported, so it's simpler to just
+      free it and recreate in new projects. }
+    if not HandleNonModalAssociatedForm(TForm(SpriteSheetEditorForm)) then
+      Exit;
+    if not HandleNonModalAssociatedForm(TForm(ImportSketchfabForm)) then
+      Exit;
+
+    {$ifdef CASTLE_CLOSE_HACK}
+    if Design <> nil then
     begin
-      if not SpriteSheetEditorForm.CloseQuery then
-        Exit;
-      SpriteSheetEditorForm.Close; // not needed on GTK2, maybe add ifdef?
+      FreeAndNil(Design);
+      DesignExistenceChanged;
     end;
 
+    { Call Close, not Release.
+     Avoids crashes on closing sometimes.
+     Testcase: open escape-universe, open loading design, "Close and SWitch Project". }
+    OnCloseQuery := nil;
+    Close;
+    {$else}
     Release; // do not call MenuItemDesignClose, to avoid OnCloseQuery
+    {$endif}
+
     ChooseProjectForm.Show;
   end;
 end;
@@ -3370,6 +3478,11 @@ begin
   end;
 end;
 
+procedure TProjectForm.RefreshAllFiles(Sender: TObject);
+begin
+  RefreshFiles(rfEverything);
+end;
+
 procedure TProjectForm.RefreshFiles(const RefreshNecessary: TRefreshFiles);
 var
   DirToRefresh, ErrorStr, TreeViewPath, SavedSelectedFileNameInRoot: String;
@@ -3447,6 +3560,26 @@ begin
   Mi := Sender as TMenuItem;
   CurrentPackageFormat := TPackageFormat(Mi.Tag);
   Mi.Checked := true;
+end;
+
+function TProjectForm.CanAddImported(const AddUrl: String): Boolean;
+begin
+  { TODO: Maybe in the future it will query more,
+    e.g. to add glTF we need Design.AddImportedUrl be able to determine
+    parent that is TCastleTransform descendant.
+    For now we let Design.AddImportedUrl to raise exception in such case. }
+  Result := Design <> nil;
+end;
+
+procedure TProjectForm.AddImported(const AddUrl: String);
+begin
+  if Design <> nil then
+  begin
+    if Design.AddImported(AddUrl) = nil then
+      ErrorBox(Format('Coult not import "%s". Make sure the current design has a viewport selected', [
+        URIDisplay(AddUrl)
+      ]));
+  end;
 end;
 
 initialization

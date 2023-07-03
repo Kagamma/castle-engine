@@ -281,7 +281,8 @@ uses
   CastleFilesUtils, StrUtils, CastleURIUtils, CastleUnicode, CastleCurves,
   CastleLog, CastleScriptParser, CastleInternalDataUri, URIParser, CastleDownload,
   CastleInternalNurbs, CastleQuaternions, CastleXMLUtils, CastleOpenDocument,
-  CastleSoundBase, CastleTriangles, X3DLoadInternalUtils;
+  CastleSoundBase, CastleTriangles, X3DLoadInternalUtils,
+  CastleApplicationProperties;
 
 {$define read_implementation}
 
@@ -822,3 +823,4 @@ finalization
   else
     X3DCache.OnEmpty := @X3DNodesFinalization;
 end.
+

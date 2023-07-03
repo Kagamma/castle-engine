@@ -1,3 +1,4 @@
+{%MainUnit x3dfields.pas}
 {
   Copyright 2002-2022 Michalis Kamburelis.
 
@@ -107,11 +108,6 @@
       - Coordinate changes (these go to chCoordinate)
       - Normal changes (these go to chNormal, they are non-geometry anyway). }
     chGeometryVRML1State,
-
-    { Something that may affect TShape.AlphaChannel calculation possibly changed.
-      It's understood that only shapes that use given material
-      need AlphaChannel recalculated. }
-    chAlphaChannel,
 
     { Light property that is also reflected in TLightInstance structure.
       Only allowed on node's descending from TAbstractLightNode. }
