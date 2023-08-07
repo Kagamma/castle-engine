@@ -33,8 +33,6 @@ type
 
   TScreenOrientation = (soAny, soLandscape, soPortrait);
 
-  TAndroidProjectType = (apBase, apIntegrated);
-
   TLocalizedAppName = class
     Language: String;
     AppName: String;
@@ -90,12 +88,6 @@ type
       DefautVersionCode = 1;
       { iOS requires version display to be <> '' }
       DefautVersionDisplayValue = '0.1';
-      DefaultAndroidCompileSdkVersion = 31;
-      DefaultAndroidTargetSdkVersion = DefaultAndroidCompileSdkVersion;
-      { See https://castle-engine.io/android-FAQ#what-android-devices-are-supported
-        for reasons behind this minimal version. }
-      ReallyMinSdkVersion = 16;
-      DefaultAndroidMinSdkVersion = ReallyMinSdkVersion;
       DefaultUsesNonExemptEncryption = true;
       DefaultDataExists = true;
       DefaultFullscreenImmersive = true;
@@ -141,7 +133,6 @@ type
       FFullscreenImmersive: boolean;
       FScreenOrientation: TScreenOrientation;
       FAndroidCompileSdkVersion, FAndroidMinSdkVersion, FAndroidTargetSdkVersion: Cardinal;
-      FAndroidProjectType: TAndroidProjectType;
       FAndroidServices, FIOSServices: TServiceList;
       FAssociateDocumentTypes: TAssociatedDocTypeList;
       FLocalizedAppNames: TLocalizedAppNameList;
@@ -171,6 +162,15 @@ type
     procedure AddDependencyFromFoundDataFile(const FileInfo: TFileInfo; var StopSearch: Boolean);
   public
     const
+      { Android SDK versions.
+        See https://castle-engine.io/project_manifest#_android_information . }
+      DefaultAndroidCompileSdkVersion = 33;
+      DefaultAndroidTargetSdkVersion = DefaultAndroidCompileSdkVersion;
+      { See https://castle-engine.io/android_faq
+        for reasons behind this minimal version. }
+      ReallyMinSdkVersion = 21;
+      DefaultAndroidMinSdkVersion = ReallyMinSdkVersion;
+
       DataName = 'data';
 
     { Load defaults.
@@ -245,7 +245,6 @@ type
     property AndroidCompileSdkVersion: Cardinal read FAndroidCompileSdkVersion;
     property AndroidMinSdkVersion: Cardinal read FAndroidMinSdkVersion;
     property AndroidTargetSdkVersion: Cardinal read FAndroidTargetSdkVersion;
-    property AndroidProjectType: TAndroidProjectType read FAndroidProjectType;
     property AndroidServices: TServiceList read FAndroidServices;
 
     { Standalone source specified in CastleEngineManifest.xml.
@@ -436,7 +435,6 @@ begin
   FLaunchImageStoryboard := TLaunchImageStoryboard.Create;
   FSearchPaths := TStringList.Create;
   FLibraryPaths := TStringList.Create;
-  FAndroidProjectType := apIntegrated;
   FAndroidServices := TServiceList.Create(true);
   FIOSServices := TServiceList.Create(true);
   FAssociateDocumentTypes := TAssociatedDocTypeList.Create;
@@ -638,11 +636,7 @@ begin
 
       if Element.AttributeString('project_type', AndroidProjectTypeStr) then
       begin
-        if AndroidProjectTypeStr = 'base' then
-          FAndroidProjectType := apBase else
-        if AndroidProjectTypeStr = 'integrated' then
-          FAndroidProjectType := apIntegrated else
-          raise Exception.CreateFmt('Invalid android project_type "%s"', [AndroidProjectTypeStr]);
+        WritelnWarning('Specifying android project_type in CastleEngineManifest.xml is deprecated now, all projects are "integrated" always. Remove the project_type="..." attribute from <android ...> element in CastleEngineManifest.xml.');
       end;
 
       ChildElement := Element.ChildElement('components', false);
