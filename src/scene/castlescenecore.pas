@@ -3903,19 +3903,38 @@ begin
 
   if Node is TAbstractGeometryNode then
   begin
-    { Add shape to Shapes }
-    Shape := ParentScene.CreateShape(Node as TAbstractGeometryNode,
-      TX3DGraphTraverseState.CreateCopy(StateStack.Top), ParentInfo);
-    ShapesGroup.Children.Add(Shape);
-
-    { When Spatial contain ssDynamicCollisions, then each collidable
-      shape must have octree created. Normally, this is watched over by
-      SetSpatial. In this case, we just created new Shape, so we have
-      to set it's Spatial property correctly. }
-    if (ssDynamicCollisions in ParentScene.FSpatial) and
-      Shape.Collidable then
+    if (not (Node is TAbstractGeometryNode_1)) and
+       ( (ParentInfo = nil) or
+         (not (ParentInfo^.Node is TShapeNode) ) ) then
     begin
-      Shape.InternalSpatial := [ssTriangles];
+      { Detect and reject trying to use geometry nodes incorrectly in X3D or
+        VRML 2.0.
+
+        Testcase: tests/data/geometry_not_in_shape.x3dv
+
+        Without this safeguard, in debug mode, it would cause failure
+        at "Assert(State.ShapeNode <> nil)" in
+        src/scene/castleinternalarraysgenerator.pas .
+      }
+      WritelnWarning('Node "%s" is a geometry node, it has to be placed within a Shape node', [
+        Node.NiceName
+      ]);
+    end else
+    begin
+      { Add shape to Shapes }
+      Shape := ParentScene.CreateShape(Node as TAbstractGeometryNode,
+        TX3DGraphTraverseState.CreateCopy(StateStack.Top), ParentInfo);
+      ShapesGroup.Children.Add(Shape);
+
+      { When Spatial contain ssDynamicCollisions, then each collidable
+        shape must have octree created. Normally, this is watched over by
+        SetSpatial. In this case, we just created new Shape, so we have
+        to set it's Spatial property correctly. }
+      if (ssDynamicCollisions in ParentScene.FSpatial) and
+        Shape.Collidable then
+      begin
+        Shape.InternalSpatial := [ssTriangles];
+      end;
     end;
   end else
 
@@ -4017,7 +4036,7 @@ begin
      (LODTree.Children.Count <> 0) then
   begin
     LODTree.WasLevel_ChangedSend := true;
-    LODTree.LODNode.EventLevel_Changed.Send(LongInt(NewLevel), NextEventTime);
+    LODTree.LODNode.EventLevel_Changed.Send(Integer(NewLevel), NextEventTime);
   end;
 
   if OldLevel <> NewLevel then
@@ -4040,6 +4059,12 @@ end;
 
 procedure TCastleSceneCore.BeforeNodesFree(const InternalChangedAll: boolean);
 begin
+  // paranoid check is the World valid before accessing it
+  if (World <> nil) and
+     (not (csDestroying in World.ComponentState)) and
+     Assigned(World.InternalOnNodesFree) then
+    World.InternalOnNodesFree(Self);
+
   { Stuff that will be recalculated by ChangedAll }
   BillboardNodes.Count := 0;
   GeneratedTextures.Count := 0;
@@ -6246,7 +6271,7 @@ begin
     try
       for I := 0 to KeyDeviceSensorNodes.Count - 1 do
         (KeyDeviceSensorNodes.Items[I] as TAbstractKeyDeviceSensorNode).
-          KeyDown(Event.Key, Event.KeyCharacter, NextEventTime);
+          KeyDown(Event.Key, Event.KeyString, NextEventTime);
     finally EndChangesSchedule; end;
 
     { Never treat the event as handled here,
@@ -6271,7 +6296,7 @@ begin
     try
       for I := 0 to KeyDeviceSensorNodes.Count - 1 do
         (KeyDeviceSensorNodes.Items[I] as TAbstractKeyDeviceSensorNode).
-          KeyUp(Event.Key, Event.KeyCharacter, NextEventTime);
+          KeyUp(Event.Key, Event.KeyString, NextEventTime);
     finally EndChangesSchedule; end;
 
     { Never treat the event as handled here,
@@ -6476,14 +6501,6 @@ end;
 
 procedure TCastleSceneCore.DoPointingDeviceSensorsChange;
 begin
-  { I want to keep assertion that Cursor = mcHand when
-    we're over or keeping active some pointing-device sensors. }
-  if ((PointingDeviceSensors <> nil) and
-      (PointingDeviceSensors.EnabledCount <> 0)) or
-     (PointingDeviceActiveSensors.Count <> 0) then
-    Cursor := mcHand else
-    Cursor := mcDefault;
-
   if Assigned(OnPointingDeviceSensorsChange) then
     OnPointingDeviceSensorsChange(Self);
 end;

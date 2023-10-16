@@ -88,9 +88,7 @@
       FCollides: Boolean;
       FPickable: Boolean;
       FVisible: Boolean;
-      FCursor: TMouseCursor;
       FCollidesWithMoving: Boolean;
-      FInternalExcludeFromParentBoundingVolume: Boolean;
       FWorld: TCastleAbstractRootTransform;
       { How many times this is a child in the FWorld, counting all possible paths in transformation tree. }
       FWorldReferences: Cardinal;
@@ -139,7 +137,6 @@
     procedure SerializeBehaviorsAdd(const C: TComponent);
     procedure SerializeBehaviorsClear;
     procedure SerializeBehaviorsEnumerate(const Proc: TGetChildProc);
-    procedure SetCursor(const Value: TMouseCursor);
     procedure SetCenter(const Value: TVector3);
     procedure SetRotation(const Value: TVector4);
     procedure SetScale(const Value: TVector3);
@@ -600,6 +597,19 @@
         @exclude }
       InternalIgnoreParentScale: Boolean;
 
+      { Exclude this object's bounding volume
+        from parent bounding volume.
+
+        This should be always @false for non-debug scenes.
+        Changing this may cause rendering artifacts, things could
+        disappear when they should not.
+        Using this is reasonable only if you attach a debug geometry
+        to your scene, and you don't want to enlarge your bounding volume
+        (e.g. because this debug geometry visualizes something determined
+        by the bounding volume, and it would create a "feedback loop"
+        if the visualization itself would enlarge the bounding box). }
+      InternalExcludeFromParentBoundingVolume: Boolean;
+
     { How many times this is a child in the FWorld,
       counting all possible paths in transformation tree.
       @exclude }
@@ -608,10 +618,11 @@
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
-    procedure BeforeDestruction;override;
+    procedure BeforeDestruction; override;
 
     procedure CustomSerialization(const SerializationProcess: TSerializationProcess); override;
     function PropertySections(const PropertyName: String): TPropertySections; override;
+    procedure DesignerWarnings(const SList: TStrings); override;
     function GetEnumerator: TEnumerator;
 
     {$ifdef FPC}
@@ -619,7 +630,7 @@
     {$endif}
 
     { Does this transform have a collision mesh that TCastleMeshCollider can use.
-      Default implementaion returns @false. }
+      Default implementation returns @false. }
     function HasColliderMesh: Boolean; virtual;
 
     { Enumerate triangles for a collision mesh that TCastleMeshCollider can use. }
@@ -1030,9 +1041,6 @@
       @nil if we are not (yet) part of some hierarchy rooted in TCastleAbstractRootTransform. }
     property World: TCastleAbstractRootTransform read FWorld;
 
-    { Mouse cursor over this object. }
-    property Cursor: TMouseCursor read FCursor write SetCursor default mcDefault;
-
     { Called when rendering context is destroyed.
       This will be also automatically called from destructor.
       Object should clear here any resources that are connected to the rendering context. }
@@ -1283,20 +1291,6 @@
     function RayCast(const RayOrigin, RayDirection: TVector3;
       out Distance: Single): TCastleTransform; overload;
     { @groupEnd }
-
-    { Is this object's bounding volume (@link(BoundingBox))
-      included in parent bounding volume.
-      This should be always @true for non-debug scenes.
-      Violating this may cause rendering artifacts, things could
-      disappear when they should not.
-      Using this is reasonable only if you attach a debug geometry
-      to your scene, and you don't want to enlarge your bounding volume
-      (e.g. because this debug geometry visualizes something determined
-      by the bounding volume, and it would create a "feedback loop"
-      if the visualization itself would enlarge the bounding box). }
-    property InternalExcludeFromParentBoundingVolume: boolean
-      read FInternalExcludeFromParentBoundingVolume
-      write FInternalExcludeFromParentBoundingVolume;
 
     { Convert position between local and outside coordinate system.
       This is called OutsideToLocal, not WorldToLocal, because it only handles transformation
@@ -2053,7 +2047,6 @@ begin
   FCollides := true;
   FPickable := true;
   FVisible := true;
-  FCursor := mcDefault;
   FList := TCastleTransformList.Create(false);
   FList.FOwner := Self; // get notified about add/release, assign children World, Parent
   FBehaviors := TComponentList.Create(false);
@@ -2115,7 +2108,7 @@ begin
   while FList.Count <> 0 do
   begin
     PreviousCount := FList.Count;
-    Remove(FList[0]);
+    Delete(0);
     if FList.Count >= PreviousCount then
     begin
       WritelnWarning('During TCastleTransform.BeforeDestruction, the number of children does not decrease -- this means that some TCastleTransform destructor adds new TCastleTransform instances. ' +
@@ -2157,16 +2150,6 @@ begin
       Inc(World.InternalVisibleGeometryStateId);
     if vcVisibleNonGeometry in Changes then
       Inc(World.InternalVisibleNonGeometryStateId);
-  end;
-end;
-
-procedure TCastleTransform.SetCursor(const Value: TMouseCursor);
-begin
-  if FCursor <> Value then
-  begin
-    FCursor := Value;
-    if (World <> nil) and Assigned(World.OnCursorChange) then
-      World.OnCursorChange(Self);
   end;
 end;
 
@@ -2594,16 +2577,7 @@ begin
       { Ignoring InternalExcludeFromParentBoundingVolume when
         InternalGizmoBoundingBox <> 0 is a hack,
         so that when TCastleViewport.ItemsWithGizmosBoundingBox is called,
-        then TGizmoScene box is taken into account.
-        Otherwise 2D projection in editor could cut off the TGizmoScene.
-
-        Testcase:
-        - 2d viewport
-        - add a few TCastleImageTransform with some image loaded with Z = -1000.
-        - add TCastleTransform with translation 0,0,0, select it
-        - -> the gizmo of it has to be visible, even though everything visible
-          (excluding gizmos) is at Z = -1000.
-      }
+        then all gizmos are taken into account. }
       if not (List[I].InternalExcludeFromParentBoundingVolume and
               (InternalGizmoBoundingBox = 0)) then
         Result.Include(List[I].BoundingBox);
@@ -4352,6 +4326,50 @@ begin
       Parent.Remove(Self);
     if Value <> nil then
       Value.Add(Self);
+  end;
+end;
+
+procedure TCastleTransform.DesignerWarnings(const SList: TStrings);
+
+  { Scale is uniform (all 3 components are ~equal) and all components are > 0. }
+  function ScalePhysicsFriendly(const S: TVector3): Boolean;
+  begin
+    Result :=
+      (S.X > 0) and
+      (S.Y > 0) and
+      (S.Z > 0) and
+      SameValue(S.X, S.Y) and
+      SameValue(S.X, S.Z);
+  end;
+
+var
+  R, C: TCastleBehavior;
+begin
+  inherited;
+  R := FindBehavior(TCastleRigidBody);
+  C := FindBehavior(TCastleCollider);
+
+  if (R <> nil) <> (C <> nil) then
+  begin
+
+    SList.Add('Both TCastleRigidBody and TCastleCollider behaviors are required for physics to affect this component.');
+  end;
+
+  if (R <> nil) and
+     (C <> nil) then
+  begin
+    { physics behaviors set up }
+    if not ScalePhysicsFriendly(Scale) then
+    begin
+      SList.Add('Physics engine only supports a uniform scale: all 3 scale components must be equal and posititive.');
+    end;
+  end else
+  begin
+    { physics behaviors not set up }
+    if FindBehavior(TCastleAbstractJoint) <> nil then
+    begin
+      SList.Add('Physics joint only works if also TCastleRigidBody and TCastleCollider behaviors are present.');
+    end;
   end;
 end;
 

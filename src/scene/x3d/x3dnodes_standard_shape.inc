@@ -24,12 +24,12 @@
 
   { Base node type for the child nodes of @link(TAbstractAppearanceNode). }
   TAbstractAppearanceChildNode = class(TAbstractNode)
-    {$I auto_generated_node_helpers/x3dnodes_x3dappearancechildnode.inc}
+  {$I auto_generated_node_helpers/x3dnodes_x3dappearancechildnode.inc}
   end;
 
   { Base node type for all Appearance nodes. }
   TAbstractAppearanceNode = class(TAbstractNode)
-    {$I auto_generated_node_helpers/x3dnodes_x3dappearancenode.inc}
+  {$I auto_generated_node_helpers/x3dnodes_x3dappearancenode.inc}
   end;
 
   { Base node type for all Material nodes. }
@@ -41,7 +41,7 @@
       this node is freed. }
     function MaterialInfo: TMaterialInfo; virtual; abstract;
 
-    {$I auto_generated_node_helpers/x3dnodes_x3dmaterialnode.inc}
+  {$I auto_generated_node_helpers/x3dnodes_x3dmaterialnode.inc}
   end;
 
   TAppearanceNode = class;
@@ -132,7 +132,12 @@
       in any viewport in any scene. }
     function WasVisible: Boolean;
 
-    {$I auto_generated_node_helpers/x3dnodes_x3dshapenode.inc}
+  {$I auto_generated_node_helpers/x3dnodes_x3dshapenode.inc}
+
+  public
+    { @deprecated Deprecated name for @link(Visible). }
+    property Render: Boolean read GetVisible write SetVisible default true;
+      {$ifdef FPC}deprecated 'use Visible';{$endif}
   end;
 
   TFillPropertiesNode = class;
@@ -183,13 +188,12 @@
     function InternalMaterialProperty: TMaterialProperty;
     function MaterialProperty: TMaterialProperty; deprecated 'use InternalMaterialProperty, or (better) do not use it at all -- this is internal';
 
-    {$I auto_generated_node_helpers/x3dnodes_appearance.inc}
+  {$I auto_generated_node_helpers/x3dnodes_appearance.inc}
   end;
 
   { Additional visual properties to be applied to all polygonal areas. }
   TFillPropertiesNode = class(TAbstractAppearanceChildNode)
-  public
-    {$I auto_generated_node_helpers/x3dnodes_fillproperties.inc}
+  {$I auto_generated_node_helpers/x3dnodes_fillproperties.inc}
   end;
 
   { Additional visible properties to be applied to all line geometry. }
@@ -200,12 +204,11 @@
   public
     { Line type (pattern). }
     property LineType: TLineType read GetLineType write SetLineType default ltSolid;
-    {$I auto_generated_node_helpers/x3dnodes_lineproperties.inc}
+  {$I auto_generated_node_helpers/x3dnodes_lineproperties.inc}
   end;
 
   TAbstractOneSidedMaterialNode = class(TAbstractMaterialNode)
-  public
-    {$I auto_generated_node_helpers/x3dnodes_x3donesidedmaterialnode.inc}
+  {$I auto_generated_node_helpers/x3dnodes_x3donesidedmaterialnode.inc}
   end;
 
   { Material determines how the geometry looks on the screen,
@@ -284,7 +287,7 @@
       other colors to black. }
     procedure ForcePureEmissive; deprecated 'use TUnlitMaterialNode for unlit materials';
 
-    {$I auto_generated_node_helpers/x3dnodes_material.inc}
+  {$I auto_generated_node_helpers/x3dnodes_material.inc}
   end;
   TMaterialNode_2 = TMaterialNode;
 
@@ -308,7 +311,7 @@
     destructor Destroy; override;
     function MaterialInfo: TMaterialInfo; override;
 
-    {$I auto_generated_node_helpers/x3dnodes_physicalmaterial.inc}
+  {$I auto_generated_node_helpers/x3dnodes_physicalmaterial.inc}
   end;
 
   { Shape is a rendered object in the world, with an appearance and geometry. }
@@ -318,7 +321,7 @@
       (1) necessary and (2) possible to generate and (3) not present yet. }
     procedure GenerateTangents;
 
-    {$I auto_generated_node_helpers/x3dnodes_shape.inc}
+  {$I auto_generated_node_helpers/x3dnodes_shape.inc}
   end;
 
   { @deprecated
@@ -353,7 +356,7 @@
     destructor Destroy; override;
     function MaterialInfo: TMaterialInfo; override;
 
-    {$I auto_generated_node_helpers/x3dnodes_twosidedmaterial.inc}
+  {$I auto_generated_node_helpers/x3dnodes_twosidedmaterial.inc}
   end;
 
   TUnlitMaterialNode = class(TAbstractOneSidedMaterialNode)
@@ -374,7 +377,7 @@
     destructor Destroy; override;
     function MaterialInfo: TMaterialInfo; override;
 
-    {$I auto_generated_node_helpers/x3dnodes_unlitmaterial.inc}
+  {$I auto_generated_node_helpers/x3dnodes_unlitmaterial.inc}
   end;
 
 {$endif read_interface}
@@ -447,6 +450,8 @@ begin
   FdBboxSize.ChangeAlways := chBBox;
   FdAppearance.ChangeAlways := chEverything;
   FdGeometry.ChangeAlways := chEverything;
+  // Older name for this field, specific to CGE and InstantReality
+  FdVisible.AddAlternativeName('render', 0);
 end;
 
 procedure TAbstractShapeNode.SetAppearanceBefore(const Sender: TSFNode; const NewNode: TX3DNode);

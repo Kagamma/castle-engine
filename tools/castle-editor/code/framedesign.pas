@@ -71,6 +71,7 @@ type
     LabelEventsInfo: TLabel;
     LabelSimulation: TLabel;
     LabelSizeInfo: TLabel;
+    MemoInfo: TMemo;
     PanelSpinEditAllowVerticalCentering: TPanel;
     SeparatorBeforeChangeClass: TMenuItem;
     MenuItemChangeClassUserInterface: TMenuItem;
@@ -125,6 +126,7 @@ type
     TabEvents: TTabSheet;
     TabLayout: TTabSheet;
     TabBasic: TTabSheet;
+    TabInfo: TTabSheet;
     UpdateObjectInspector: TTimer;
     procedure ActionApiReferenceOfCurrentExecute(Sender: TObject);
     procedure ActionPlayStopExecute(Sender: TObject);
@@ -426,7 +428,8 @@ type
     function ValidateHierarchy: Boolean;
 
     procedure UpdateSelectedControl;
-    procedure UpdateLabelSizeInfo(const UI: TCastleUserInterface);
+    { Update whether TabInfo is visible and if yes -- what it contains. }
+    procedure UpdateSelectedInfo;
     { Update anchors shown, based on UI state.
       Updates which buttons are pressed inside 2 TAnchorFrame instances.
       If AllowToHideParentAnchorsFrame, updates also checkbox
@@ -502,6 +505,12 @@ type
       ControlsTree knowledge.
       Returns nil if no parent. }
     function NonVisualComponentParent(const C: TCastleComponent): TCastleComponent;
+
+    { Currently selected transformation, chosen more aggressively than just
+      SelectedTransform. Even selecting a behavior makes the parent current.
+      This way e.g. VisualizeTransformSelected also shows
+      the transformation of selected behavior. }
+    function CurrentTransform: TCastleTransform;
   protected
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
   public
@@ -514,7 +523,9 @@ type
     OnIsRunning: TBooleanEvent;
     OnShowStatistics: TBooleanEvent;
 
-    function RenamePossible: Boolean;
+    function RenameSelectedPossible: Boolean;
+    function RenamePossible(const C: TComponent): Boolean;
+
     constructor Create(TheOwner: TComponent); override;
     destructor Destroy; override;
 
@@ -754,6 +765,8 @@ begin
   LabelStatistics.Color := White;
   LabelStatistics.Alignment := hpRight;
   RectStatistics.InsertFront(LabelStatistics);
+
+  ForceFallbackLook(RectStatistics);
 end;
 
 function TDesignFrame.TDesignerLayer.HoverUserInterface(
@@ -1610,6 +1623,8 @@ begin
   VisualizeTransformSelected.OnGizmoStopDrag := @GizmoStopDrag;
 
   SaveDesignDialog.InitialDir := URIToFilenameSafe(ApplicationDataOverride);
+
+  TabInfo.TabVisible := false;
 
   ChangeMode(moTranslate); // most expected default
 
@@ -3654,7 +3669,7 @@ begin
           anyway, and the name must be unique within the owner -- better
           to leave it unedited) }
       if (PropertyName = 'Name') and
-         (TComponent(Instance).Owner <> DesignOwner) then
+         (not RenamePossible(TComponent(Instance))) then
         Exit;
 
       { Hide editing transformation of TCastleAbstractRootTransform,
@@ -3771,11 +3786,9 @@ procedure TDesignFrame.PropertyGridModified(Sender: TObject);
       // update also LabelControlSelected
       LabelControlSelected.Caption := 'Selected:' + NL + ComponentCaption(Sel);
 
-      // update also LabelSizeInfo
       if Sel is TCastleUserInterface then
       begin
         SelUI := Sel as TCastleUserInterface;
-        UpdateLabelSizeInfo(SelUI);
         UpdateAnchors(SelUI, true);
       end;
 
@@ -3786,6 +3799,8 @@ procedure TDesignFrame.PropertyGridModified(Sender: TObject);
       if TreeNodeMap.TryGetValue(Sel, SelNode) then
         SelNode.Text := TreeNodeCaption(Sel);
     end;
+
+    UpdateSelectedInfo;
   end;
 
   procedure DoRecordUndo;
@@ -4654,6 +4669,66 @@ begin
   ControlsTreeSelectionChanged(nil);
 end;
 
+function TDesignFrame.CurrentTransform: TCastleTransform;
+begin
+  if SelectedComponent is TCastleBehavior then
+    Result := TCastleBehavior(SelectedComponent).Parent
+  else
+    Result := SelectedTransform;
+end;
+
+procedure TDesignFrame.UpdateSelectedInfo;
+var
+  C: TComponent;
+  SListInfo, SListWarnings: TStringList;
+begin
+  C := SelectedComponent;
+  if C is TCastleComponent then
+  begin
+    SListInfo := nil;
+    SListWarnings := nil;
+    try
+      SListInfo := TStringList.Create;
+      SListWarnings := TStringList.Create;
+
+      TCastleComponent(C).DesignerInfo(SListInfo);
+      TCastleComponent(C).DesignerWarnings(SListWarnings);
+
+      if (SListInfo.Count <> 0) or (SListWarnings.Count <> 0) then
+      begin
+        TabInfo.TabVisible := true;
+
+        MemoInfo.Lines.Clear;
+
+        if SListWarnings.Count <> 0 then
+        begin
+          MemoInfo.Lines.Add('Warnings (%d):', [SListWarnings.Count]);
+          MemoInfo.Lines.AddStrings(SListWarnings, false);
+          TabInfo.Caption := Format('Warnings (%d)', [SListWarnings.Count]);
+        end else
+          TabInfo.Caption := 'Info';
+
+        if SListInfo.Count <> 0 then
+        begin
+          if MemoInfo.Lines.Count <> 0 then
+            MemoInfo.Lines.Add('');
+          MemoInfo.Lines.Add('Information:');
+          MemoInfo.Lines.AddStrings(SListInfo, false);
+        end;
+      end else
+      begin
+        TabInfo.TabVisible := false;
+      end;
+    finally
+      FreeAndNil(SListInfo);
+      FreeAndNil(SListWarnings);
+    end;
+  end else
+  begin
+    TabInfo.TabVisible := false;
+  end;
+end;
+
 procedure TDesignFrame.UpdateSelectedControl;
 
   procedure InitializeCollectionFormEvents(InspectorType: TInspectorType);
@@ -4724,7 +4799,7 @@ var
   V: TCastleViewport;
   T: TCastleTransform;
 begin
-  OnSelectionChanged(Self); // Calling it in ControlsTreeSelectionChanged doesn't seem to be enough as RenamePossible is true there even in case SelectedCount = 0 (does it use some obsolete value?)
+  OnSelectionChanged(Self); // Calling it in ControlsTreeSelectionChanged doesn't seem to be enough as RenameSelectedPossible is true there even in case SelectedCount = 0 (does it use some obsolete value?)
 
   GetSelected(Selected, SelectedCount);
   try
@@ -4751,17 +4826,10 @@ begin
     UI := SelectedUserInterface;
     SetEnabledVisible(PanelAnchors, UI <> nil);
     if UI <> nil then
-    begin
-      UpdateLabelSizeInfo(UI);
       UpdateAnchors(UI, true);
-    end;
 
     V := SelectedViewport;
-    if SelectedComponent is TCastleBehavior then
-      { Highlight using VisualizeTransformSelected also transformation of selected behavior }
-      T := TCastleBehavior(SelectedComponent).Parent
-    else
-      T := SelectedTransform;
+    T := CurrentTransform;
     SetEnabledVisible(PanelLayoutTransform, T <> nil);
 
     (*
@@ -4794,6 +4862,8 @@ begin
   { if selection determines CurrentViewport, update CurrentViewport immediately
     (without waiting for OnUpdate) -- maybe this will be relevant at some point }
   UpdateCurrentViewport;
+
+  UpdateSelectedInfo;
 end;
 
 (*
@@ -4912,16 +4982,42 @@ begin
       Exit;
     end;
 
-    UndoComment := 'Rename ' + Sel.Name + ' into ' + Node.Text;
-    { Without this check, one could change Sel.Name to empty ('').
-      Although TComponent.SetName checks that it's a valid Pascal identifier already,
-      but it also explicitly allows to set Name = ''.
-      Object inspector has special code to secure from empty Name
-      (in TComponentNamePropertyEditor.SetValue), so we need a similar check here. }
-    if not IsValidIdent(Node.Text) then
-      raise Exception.Create(Format(oisComponentNameIsNotAValidIdentifier, [Node.Text]));
-    Sel.Name := Node.Text;
-    ModifiedOutsideObjectInspector(UndoComment, ucHigh); // It'd be good if we set "ItemIndex" to index of "name" field, but there doesn't seem to be an easy way to
+    { Check whether the edit actually changed anything.
+      Otherwise the code below would execute too often (and make e.g. warnings
+      about name uneditable for subcomponents) even when clicking around on "Items"
+      without changing anything. }
+    if Sel.Name <> Node.Text then
+    begin
+      if not RenamePossible(Sel) then
+      begin
+        if Sel.Owner <> nil then
+        begin
+          WritelnWarning('Renaming subcomponent (%s.%s) is not allowed. Subcomponents cannot be accessed by their names using TCastleView.DesignedComponent.', [
+            Sel.Owner.ClassName,
+            Sel.Name
+          ]);
+        end else
+        begin
+          { This never happens now, as RenamePossible for now only blocks editing
+            name of subcomponents. }
+          WritelnWarning('Renaming %s is not allowed.', [
+            Sel.Name
+          ]);
+        end;
+        Exit;
+      end;
+
+      UndoComment := 'Rename ' + Sel.Name + ' into ' + Node.Text;
+      { Without this check, one could change Sel.Name to empty ('').
+        Although TComponent.SetName checks that it's a valid Pascal identifier already,
+        but it also explicitly allows to set Name = ''.
+        Object inspector has special code to secure from empty Name
+        (in TComponentNamePropertyEditor.SetValue), so we need a similar check here. }
+      if not IsValidIdent(Node.Text) then
+        raise Exception.Create(Format(oisComponentNameIsNotAValidIdentifier, [Node.Text]));
+      Sel.Name := Node.Text;
+      ModifiedOutsideObjectInspector(UndoComment, ucHigh); // It'd be good if we set "ItemIndex" to index of "name" field, but there doesn't seem to be an easy way to
+    end;
   finally
     { This method must set Node.Text, to cleanup after ControlsTreeEditing + user editing.
       - If the name was correct, then "Sel.Name := " goes without exception,
@@ -4994,8 +5090,20 @@ begin
   NewRect := UI.RenderRectWithBorder;
   if NewRect.IsEmpty or RenderRectBeforeChange.IsEmpty then
   begin
-    // don't know what to do, adjust delta to 0, to avoid leaving some crazy value
-    UI.Translation := TVector2.Zero;
+    { Empty rectangle(s) may happen e.g. if control is empty,
+      e.g. TCastleLabel.Caption = ''.
+      To implement AdjustUserInterfaceAnchorsToKeepRect perfectly for this case,
+      we'd need TCastleUserInterface method like GlobalTranslationEvenIfEmpty,
+      but it would be a burden to implement it just for this special case.
+
+      It seems that not doing anythign is just valid in this case.
+      At least, user can choose various anchors, and clicking back on original
+      anchor will (intuitively) restore the control back to where it was.
+
+      Note: Resetting "UI.Translation := TVector2.Zero"
+      wasn't intuitive, see https://github.com/castle-engine/castle-engine/issues/422 .
+      It would reset the control position when it's not expected.
+    }
   end else
   begin
     UI.Translation := UI.Translation + Vector2(
@@ -5013,7 +5121,16 @@ begin
   ControlsTree.Invalidate; // force custom-drawn look redraw
 end;
 
-function TDesignFrame.RenamePossible: Boolean;
+function TDesignFrame.RenamePossible(const C: TComponent): Boolean;
+begin
+  { Do not allow renaming subcomponents.
+    It is confusing, since their names live in different namespace
+    (e.g. Items owned by TCastleViewport), and should not really be used
+    to access them. }
+  Result := C.Owner = DesignOwner;
+end;
+
+function TDesignFrame.RenameSelectedPossible: Boolean;
 begin
   { Notes:
 
@@ -5029,12 +5146,13 @@ begin
   }
   Result :=
     (ControlsTreeOneSelected <> nil) and
-    (ControlsTreeOneSelected.Data <> nil);
+    (ControlsTreeOneSelected.Data <> nil) and
+    RenamePossible(TComponent(ControlsTreeOneSelected.Data));
 end;
 
 procedure TDesignFrame.RenameSelectedItem;
 begin
-  if RenamePossible then
+  if RenameSelectedPossible then
     ControlsTreeOneSelected.EditText;
 end;
 
@@ -5599,7 +5717,7 @@ procedure TDesignFrame.ButtonResetTransformationClick(Sender: TObject);
 var
   T: TCastleTransform;
 begin
-  T := SelectedTransform;
+  T := CurrentTransform;
   if T <> nil then
   begin
     T.Identity;
@@ -5778,7 +5896,7 @@ begin
   if Sel <> nil then
     AddComponentEditorVerbs(Sel);
 
-  MenuTreeViewItemRename.Enabled := RenamePossible;
+  MenuTreeViewItemRename.Enabled := RenameSelectedPossible;
   MenuTreeViewItemDuplicate.Enabled := Sel <> nil;
   MenuTreeViewItemCut.Enabled := Sel <> nil;
   MenuTreeViewItemCopy.Enabled := Sel <> nil;
@@ -5995,38 +6113,6 @@ begin
       Inspector[InspectorType].DefaultItemHeight := H;
   end;
   {$endif}
-end;
-
-procedure TDesignFrame.UpdateLabelSizeInfo(const UI: TCastleUserInterface);
-var
-  RR: TFloatRectangle;
-  S: String;
-begin
-  RR := UI.RenderRectWithBorder;
-  if RR.IsEmpty then
-    S := 'Size: Empty'
-  else
-  begin
-    S := Format(
-      'Effective size: %f x %f' + NL +
-      NL +
-      'Render rectangle (scaled and with anchors):' + NL +
-      '  Left x Bottom: %f x %f' + NL +
-      '  Size: %f x %f',
-      [ UI.EffectiveWidth,
-        UI.EffectiveHeight,
-        RR.Left,
-        RR.Bottom,
-        RR.Width,
-        RR.Height
-      ]);
-  end;
-
-  if (UI.Parent <> nil) and
-     (not UI.Parent.RenderRect.Contains(UI.RenderRectWithBorder)) then
-    S := S + NL + NL + 'WARNING: The rectangle occupied by this control is outside of the parent rectangle. The events (like mouse clicks) may not reach this control. You must always fit child control inside the parent.';
-
-  LabelSizeInfo.Hint := S;
 end;
 
 procedure TDesignFrame.UpdateAnchors(const UI: TCastleUserInterface;

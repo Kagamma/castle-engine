@@ -47,26 +47,60 @@ pipeline {
                 sh 'make clean examples-laz'
               }
             }
+          }
+        }
+        stage('Docker (Linux) (FPC 3.2.0)') {
+          agent {
+            docker {
+              image 'kambi/castle-engine-cloud-builds-tools:cge-none-fpc320'
+            }
+          }
+          environment {
+            CASTLE_ENGINE_PATH = "${WORKSPACE}"
+          }
+          stages {
+            stage('(Docker) Cleanup') {
+              steps {
+                sh "repository_cleanup . --remove-unversioned"
+              }
+            }
             stage('(Docker) Build Examples (FPC 3.2.0)') {
               steps {
                 /* clean 1st, to make sure it's OK even when state is "clean" before "make examples" */
-                sh 'source /usr/local/fpclazarus/bin/setup.sh 3.2.0 && make clean examples'
+                sh 'make clean examples'
               }
             }
             stage('(Docker) Build Examples Using Lazarus (FPC 3.2.0/Lazarus)') {
               steps {
-                sh 'source /usr/local/fpclazarus/bin/setup.sh 3.2.0 && make clean examples-laz'
+                sh 'make clean examples-laz'
               }
             }
-            stage('(Docker) Build Examples (FPC trunk)') {
+          }
+        }
+        stage('Docker (Linux) (FPC 3.3.1)') {
+          agent {
+            docker {
+              image 'kambi/castle-engine-cloud-builds-tools:cge-none-fpc331'
+            }
+          }
+          environment {
+            CASTLE_ENGINE_PATH = "${WORKSPACE}"
+          }
+          stages {
+            stage('(Docker) Cleanup') {
+              steps {
+                sh "repository_cleanup . --remove-unversioned"
+              }
+            }
+            stage('(Docker) Build Examples (FPC 3.3.1)') {
               steps {
                 /* clean 1st, to make sure it's OK even when state is "clean" before "make examples" */
-                sh 'source /usr/local/fpclazarus/bin/setup.sh trunk && make clean examples'
+                sh 'make clean examples'
               }
             }
-            stage('(Docker) Build Examples Using Lazarus (FPC trunk/Lazarus)') {
+            stage('(Docker) Build Examples Using Lazarus (FPC 3.3.1/Lazarus)') {
               steps {
-                sh 'source /usr/local/fpclazarus/bin/setup.sh trunk && make clean examples-laz'
+                sh 'make clean examples-laz'
               }
             }
           }
@@ -154,6 +188,10 @@ pipeline {
                 sh 'fpc -iV'
                 sh 'lazbuild --version'
                 sh 'make --version'
+                /* Make sure we got GNU Make, not Embarcadero make.
+                   This is important, as Delphi installer inserts Embarcadero make into PATH,
+                   earlier than Cygwin's. It has to be corrected after installation. */
+                sh 'if make -version 2>&1 | grep -i "GNU Make" -; then echo "Make from GNU"; else echo "Make not from GNU!"; exit 1; fi'
               }
             }
             stage('(Windows) Cleanup') {

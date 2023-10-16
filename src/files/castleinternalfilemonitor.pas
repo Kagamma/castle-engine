@@ -244,4 +244,7 @@ begin
   Result := FFileMonitor;
 end;
 
+initialization
+finalization
+  FreeAndNil(FFileMonitor);
 end.

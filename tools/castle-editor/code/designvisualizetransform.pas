@@ -62,9 +62,7 @@ type
         GizmoScalingAssumeScale: Boolean;
         GizmoScalingAssumeScaleValue: TVector3;
         InsideInternalCameraChanged: Boolean;
-
-        const
-          DistanceToExistGizmo = 1;
+        LastIsProjectionOrthographic: Boolean;
 
         { Point on axis closest to given pick.
           Axis may be -1 to indicate we drag on all axes with the same amount
@@ -673,19 +671,21 @@ end;
 
 procedure TVisualizeTransformSelected.TGizmoScene.LocalRender(const Params: TRenderParams);
 var
-  DistanceToCameraSqr: Single;
-  GizmoShouldExist: Boolean;
+  GizmoRendered: Boolean;
 begin
-  { Similar to TInternalCastleEditorGizmo.LocalRender, do not render when gizmo is over
-    the rendering camera (happens when moving/rotating/scaling the camera that is aligned to view). }
-  DistanceToCameraSqr := PointsDistanceSqr(
+  { Similar to TInternalCastleEditorGizmo.LocalRender, do not render when gizmo
+    is over the rendering camera (happens when moving/rotating/scaling
+    the camera that is aligned to view). }
+  LastIsProjectionOrthographic :=
+    (Params.RenderingCamera.Camera <> nil) and
+    (Params.RenderingCamera.Camera.ProjectionType = ptOrthographic);
+  GizmoRendered := TInternalCastleEditorGizmo.ShouldGizmoBeRendered(
+    LastIsProjectionOrthographic,
     Params.Transform^.MultPoint(TVector3.Zero),
     Params.RenderingCamera.View.Translation
   );
-  GizmoShouldExist := DistanceToCameraSqr > Sqr(DistanceToExistGizmo);
-  if not GizmoShouldExist then
+  if not GizmoRendered then
     Exit; // do not show gizmo
-
   inherited;
 end;
 
@@ -693,18 +693,14 @@ function TVisualizeTransformSelected.TGizmoScene.LocalRayCollision(
   const RayOrigin, RayDirection: TVector3;
   const TrianglesToIgnoreFunc: TTriangleIgnoreFunc): TRayCollision;
 var
-  DistanceToCameraSqr: Single;
-  GizmoShouldExist: Boolean;
+  GizmoRendered: Boolean;
 begin
   { Similar to TInternalCastleEditorGizmo.LocalRayCollision, do not collide
     when gizmo is also hidden. }
-
-  DistanceToCameraSqr := PointsDistanceSqr(
-    TVector3.Zero,
-    RayOrigin
-  );
-  GizmoShouldExist := DistanceToCameraSqr > Sqr(DistanceToExistGizmo);
-  if not GizmoShouldExist then
+  GizmoRendered := TInternalCastleEditorGizmo.ShouldGizmoBeRendered(
+    LastIsProjectionOrthographic,
+    TVector3.Zero, RayOrigin);
+  if not GizmoRendered then
     Exit(nil); // do not pick with gizmo with raycast
 
   Result := inherited;
