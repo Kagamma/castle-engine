@@ -288,9 +288,9 @@ begin
       if (Result = nil) or (not UsedNodeFinished) then
       begin
         if Result = nil then
-          S := Format('Incorrect USE clause: node name "%s" undefined', [NodeName]) else
+          S := Format(SIncorrectUse, [NodeName]) else
         begin
-          S := Format('Cycles in VRML/X3D graph: USE clause inside node "%s" refers to the same node', [NodeName]);
+          S := Format(SNodeUseCycle, [NodeName]);
           Result := nil; { return nil in case of cycles }
         end;
         if NilIfUnresolvedUSE then
@@ -506,10 +506,7 @@ var
     begin
       NewNode := ParseXMLNode(Element, ContainerFieldDummy, Reader, false);
       NewNode.PositionInParent := PositionInParent;
-      Result.FdChildren.Add(NewNode);
-      { for prototypes, do not check NewNode class, as anything is valid. }
-      if FileTopLevel then
-        Result.TopLevelCheckChild(NewNode);
+      Result.AddRootNode(NewNode, FileTopLevel);
     end;
 
   begin

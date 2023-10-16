@@ -4036,7 +4036,7 @@ begin
      (LODTree.Children.Count <> 0) then
   begin
     LODTree.WasLevel_ChangedSend := true;
-    LODTree.LODNode.EventLevel_Changed.Send(LongInt(NewLevel), NextEventTime);
+    LODTree.LODNode.EventLevel_Changed.Send(Integer(NewLevel), NextEventTime);
   end;
 
   if OldLevel <> NewLevel then
@@ -4059,6 +4059,12 @@ end;
 
 procedure TCastleSceneCore.BeforeNodesFree(const InternalChangedAll: boolean);
 begin
+  // paranoid check is the World valid before accessing it
+  if (World <> nil) and
+     (not (csDestroying in World.ComponentState)) and
+     Assigned(World.InternalOnNodesFree) then
+    World.InternalOnNodesFree(Self);
+
   { Stuff that will be recalculated by ChangedAll }
   BillboardNodes.Count := 0;
   GeneratedTextures.Count := 0;
@@ -6495,14 +6501,6 @@ end;
 
 procedure TCastleSceneCore.DoPointingDeviceSensorsChange;
 begin
-  { I want to keep assertion that Cursor = mcHand when
-    we're over or keeping active some pointing-device sensors. }
-  if ((PointingDeviceSensors <> nil) and
-      (PointingDeviceSensors.EnabledCount <> 0)) or
-     (PointingDeviceActiveSensors.Count <> 0) then
-    Cursor := mcHand else
-    Cursor := mcDefault;
-
   if Assigned(OnPointingDeviceSensorsChange) then
     OnPointingDeviceSensorsChange(Self);
 end;
