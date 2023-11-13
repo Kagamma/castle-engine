@@ -1,9 +1,9 @@
 {%MainUnit castleinternalpng.pas}
 (*
   Libpng bindings. See [http://www.libpng.org/].
-  Bases on FPC sources, modified by Kambi.
+  Bases on FPC sources, modified by Michalis Kamburelis for Castle Game Engine.
 
-  Kambi modifications:
+  Michalis modifications:
 
   @unorderedList(
     @item(
@@ -45,10 +45,17 @@
 
     @item(
       Many deprecated stuff removed by default.
-      See LIBPNG_DEPRECATED define.
-      Also, there's a define LIBPNG_1_4, to change some types to match 1.4
-      headers, see
-      [http://www.libpng.org/pub/png/src/libpng-1.2.x-to-1.4.x-summary.txt].)
+      See LIBPNG_DEPRECATED define.)
+
+    @item(
+      We account for breaking changes in LibPng 1.4 to some types (size_t vs
+      32-bit difference, which matters on non-32-bit systems).
+      See http://www.libpng.org/pub/png/src/libpng-1.2.x-to-1.4.x-summary.txt .
+
+      By default the routines are just commented out, for safety and to force
+      max compatibility.
+      But you can define LIBPNG_1_4 to enable them.
+    )
 
     @item(
       Compileable with Delphi (under Delphi use "{$ALIGN 4}" instead of
@@ -60,7 +67,7 @@
 
 interface
 
-uses CastleInternalZLib;
+uses CastleInternalZLib, CTypes;
 
 { Automatically converted by H2Pas 0.99.15 from png.h }
 { The following command line parameters were used:
@@ -255,15 +262,9 @@ const
   PNG_FILTER_HEURISTIC_LAST = 3  { Not a valid value };
 
 type
-   { @noAutoLinkHere }
-   size_t = longint;
-   { @noAutoLinkHere }
-   time_t = longint;
-   { @noAutoLinkHere }
-   int = longint;
+   png_time_t = longint;
+   png_int = longint;
    z_stream = TZStream;
-   { @noAutoLinkHere }
-   voidp = pointer;
 
    png_uint_32 = LongWord;
    png_int_32 = longint;
@@ -280,7 +281,7 @@ type
    pppng_uint_16 = ^ppng_uint_16;
    pppng_int_16 = ^ppng_int_16;
    pppng_byte = ^ppng_byte;
-   png_size_t = size_t;
+   png_size_t = csize_t;
    png_fixed_point = png_int_32;
    ppng_fixed_point = ^png_fixed_point;
    pppng_fixed_point = ^ppng_fixed_point;
@@ -536,11 +537,11 @@ Type
 png_error_ptr = Procedure(Arg1 : png_structp; Arg2 : png_const_charp);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
 png_rw_ptr = Procedure(Arg1 : png_structp; Arg2 : png_bytep; Arg3 : png_size_t);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
 png_flush_ptr = procedure (Arg1 : png_structp) ;{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
-png_read_status_ptr = procedure (Arg1 : png_structp; Arg2 : png_uint_32; Arg3: int);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
-png_write_status_ptr = Procedure (Arg1 : png_structp; Arg2: png_uint_32;Arg3 : int) ;{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
+png_read_status_ptr = procedure (Arg1 : png_structp; Arg2 : png_uint_32; Arg3: png_int);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
+png_write_status_ptr = Procedure (Arg1 : png_structp; Arg2: png_uint_32;Arg3 : png_int) ;{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
 png_progressive_info_ptr = Procedure (Arg1 : png_structp; Arg2 : png_infop) ;{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
 png_progressive_end_ptr = Procedure (Arg1 : png_structp; Arg2 : png_infop) ;{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
-png_progressive_row_ptr = Procedure (Arg1 : png_structp; Arg2 : png_bytep; Arg3 : png_uint_32; Arg4 : int) ;{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
+png_progressive_row_ptr = Procedure (Arg1 : png_structp; Arg2 : png_bytep; Arg3 : png_uint_32; Arg4 : png_int) ;{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
 png_user_transform_ptr = Procedure (Arg1 : png_structp; Arg2 : png_row_infop; Arg3 : png_bytep) ;{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
 png_user_chunk_ptr = Function (Arg1 : png_structp; Arg2 : png_unknown_chunkp): longint;{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
 png_unknown_chunk_ptr = Procedure (Arg1 : png_structp);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
@@ -684,8 +685,10 @@ var
   png_sig_cmp: function(sig: png_bytep; start: png_size_t; num_to_check: png_size_t): longint;{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
   png_create_read_struct: function(user_png_ver: png_const_charp; error_ptr: png_voidp; error_fn: png_error_ptr; warn_fn: png_error_ptr): png_structp;{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
   png_create_write_struct: function(user_png_ver: png_const_charp; error_ptr: png_voidp; error_fn: png_error_ptr; warn_fn: png_error_ptr): png_structp;{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
-  png_get_compression_buffer_size: function(png_ptr: png_structp): {$ifdef LIBPNG_1_4} png_size_t {$else} png_uint_32 {$endif};{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
-  png_set_compression_buffer_size: procedure(png_ptr: png_structp; size: {$ifdef LIBPNG_1_4} png_size_t {$else} png_uint_32 {$endif});{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
+  {$ifdef LIBPNG_1_4}
+  png_get_compression_buffer_size: function(png_ptr: png_structp): png_size_t { png_uint_32 in libpng < 1.4 };{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
+  png_set_compression_buffer_size: procedure(png_ptr: png_structp; size: png_size_t { png_uint_32 in libpng < 1.4 });{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
+  {$endif}
   png_reset_zstream: function(png_ptr: png_structp): longint;{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
   png_write_chunk: procedure(png_ptr: png_structp; chunk_name: png_bytep; data: png_bytep; length: png_size_t);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
   png_write_chunk_start: procedure(png_ptr: png_structp; chunk_name: png_bytep; length: png_uint_32);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
@@ -697,7 +700,7 @@ var
   png_read_info: procedure(png_ptr: png_structp; info_ptr: png_infop);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
   png_convert_to_rfc1123: function(png_ptr: png_structp; ptime: png_timep): png_charp;{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
   png_convert_from_struct_tm: procedure(ptime: png_timep; ttime: Pointer);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
-  png_convert_from_time_t: procedure(ptime: png_timep; ttime: time_t);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
+  png_convert_from_time_t: procedure(ptime: png_timep; ttime: png_time_t);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
   png_set_expand: procedure(png_ptr: png_structp);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
   png_set_palette_to_rgb: procedure(png_ptr: png_structp);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
   png_set_tRNS_to_alpha: procedure(png_ptr: png_structp);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
@@ -762,7 +765,9 @@ var
   png_get_progressive_ptr: function(png_ptr: png_structp): png_voidp;{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
   png_process_data: procedure(png_ptr: png_structp; info_ptr: png_infop; buffer: png_bytep; buffer_size: png_size_t);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
   png_progressive_combine_row: procedure(png_ptr: png_structp; old_row: png_bytep; new_row: png_bytep);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
-  png_malloc: function(png_ptr: png_structp; size: {$ifdef LIBPNG_1_4} png_alloc_size_t {$else} png_uint_32 {$endif}): png_voidp;{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
+  {$ifdef LIBPNG_1_4}
+  png_malloc: function(png_ptr: png_structp; size: png_alloc_size_t { png_uint_32 in libpng < 1.4 }): png_voidp;{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
+  {$endif}
   png_free: procedure(png_ptr: png_structp; ptr: png_voidp);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
   png_free_data: procedure(png_ptr: png_structp; info_ptr: png_infop; free_me: png_uint_32; num: longint);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
   png_data_freer: procedure(png_ptr: png_structp; info_ptr: png_infop; freer: longint; mask: png_uint_32);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
@@ -845,8 +850,8 @@ var
   png_set_unknown_chunk_location: procedure(png_ptr: png_structp; info_ptr: png_infop; chunk: longint; location: longint);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
   png_get_unknown_chunks: function(png_ptr: png_structp; info_ptr: png_infop; entries: png_unknown_chunkpp): png_uint_32;{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
   png_set_invalid: procedure(png_ptr: png_structp; info_ptr: png_infop; mask: longint);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
-  png_read_png: procedure(png_ptr: png_structp; info_ptr: png_infop; transforms: longint; params: voidp);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
-  png_write_png: procedure(png_ptr: png_structp; info_ptr: png_infop; transforms: longint; params: voidp);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
+  png_read_png: procedure(png_ptr: png_structp; info_ptr: png_infop; transforms: longint; params: png_voidp);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
+  png_write_png: procedure(png_ptr: png_structp; info_ptr: png_infop; transforms: longint; params: png_voidp);{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
   png_get_header_ver: function(png_ptr: png_structp): png_charp;{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
   png_get_header_version: function(png_ptr: png_structp): png_charp;{$ifndef LIBPNG_CDECL} stdcall {$else} cdecl {$endif};
 
@@ -984,8 +989,10 @@ begin
     Pointer({$ifndef FPC}@{$endif} png_sig_cmp) := PngLibrary.Symbol('png_sig_cmp');
     Pointer({$ifndef FPC}@{$endif} png_create_read_struct) := PngLibrary.Symbol('png_create_read_struct');
     Pointer({$ifndef FPC}@{$endif} png_create_write_struct) := PngLibrary.Symbol('png_create_write_struct');
+    {$ifdef LIBPNG_1_4}
     Pointer({$ifndef FPC}@{$endif} png_get_compression_buffer_size) := PngLibrary.Symbol('png_get_compression_buffer_size');
     Pointer({$ifndef FPC}@{$endif} png_set_compression_buffer_size) := PngLibrary.Symbol('png_set_compression_buffer_size');
+    {$endif}
     Pointer({$ifndef FPC}@{$endif} png_reset_zstream) := PngLibrary.Symbol('png_reset_zstream');
     Pointer({$ifndef FPC}@{$endif} png_write_chunk) := PngLibrary.Symbol('png_write_chunk');
     Pointer({$ifndef FPC}@{$endif} png_write_chunk_start) := PngLibrary.Symbol('png_write_chunk_start');
@@ -1061,7 +1068,9 @@ begin
     Pointer({$ifndef FPC}@{$endif} png_get_progressive_ptr) := PngLibrary.Symbol('png_get_progressive_ptr');
     Pointer({$ifndef FPC}@{$endif} png_process_data) := PngLibrary.Symbol('png_process_data');
     Pointer({$ifndef FPC}@{$endif} png_progressive_combine_row) := PngLibrary.Symbol('png_progressive_combine_row');
+    {$ifdef LIBPNG_1_4}
     Pointer({$ifndef FPC}@{$endif} png_malloc) := PngLibrary.Symbol('png_malloc');
+    {$endif}
     Pointer({$ifndef FPC}@{$endif} png_free) := PngLibrary.Symbol('png_free');
     Pointer({$ifndef FPC}@{$endif} png_free_data) := PngLibrary.Symbol('png_free_data');
     Pointer({$ifndef FPC}@{$endif} png_data_freer) := PngLibrary.Symbol('png_data_freer');
