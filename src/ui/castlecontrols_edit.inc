@@ -29,8 +29,7 @@
   }
   TCastleEdit = class(TCastleUserInterfaceFont)
   strict private
-    FText: string;
-    FIndex,FLastIndex:integer;
+    FText: String;
     FPaddingHorizontal, FPaddingVertical, FPadding: Single;
     FBackgroundColor, FFocusedColor, FUnfocusedColor: TCastleColor;
     FPlaceholderColor: TCastleColor;
@@ -48,12 +47,7 @@
     FTextTranslate, FPlaceholderTranslate: Boolean;
     FAlignment: THorizontalPosition;
     FEnabled: boolean;
-    FBolSelect:Boolean;
-    FSelectedColor:TCastleColor;
-    procedure SetSelectedColor(const Value:TCastleColor);
-    procedure SetText(const Value: string);
-    procedure SetIndex(const Value:integer);
-    procedure SetLastIndex(const Value:integer);
+    procedure SetText(const Value: String);
     procedure SetFocusedColor(const Value: TCastleColor);
     procedure SetUnfocusedColor(const Value: TCastleColor);
     procedure SetPlaceholderColor(const Value: TCastleColor);
@@ -128,7 +122,7 @@
       DefaultAutoOnScreenKeyboard = false;
 
     { Currently input text. }
-    property Text: string read FText write SetText;
+    property Text: String read FText write SetText;
 
     { Inside the box rectangle, padding between the borders (or frame, if @link(Frame)) and text.
       Total horizontal padding is the sum @code(PaddingHorizontal + Padding),
@@ -350,12 +344,7 @@ begin
   inherited;
 end;
 
-procedure TCastleEdit.SetSelectedColor(const Value: TCastleColor);
-begin
-  FSelectedColor:=Value;
-end;
-
-procedure TCastleEdit.SetText(const Value: string);
+procedure TCastleEdit.SetText(const Value: String);
 begin
   if FText <> Value then
   begin
@@ -494,6 +483,9 @@ end;
 
 procedure TCastleEdit.DoChange;
 begin
+  { Every time the contents change, make sure caret is visible.
+    This matches what other GUIs (like GTK) do. }
+  LifeTime := 0;
   if Assigned(OnChange) then
     OnChange(Self);
 end;
@@ -535,7 +527,7 @@ var
   US, TextLeft, TextBottom: Single;
   FrameSides: TBorder;
   CaretVisible: boolean;
-  S: string;
+  S: String;
   Color: TCastleColor;
   CaretShift: Single;
   SelectedTextRect:TFloatRectangle;
@@ -681,6 +673,10 @@ procedure TCastleEdit.Update(const SecondsPassed: Single;
 begin
   inherited;
   LifeTime := LifeTime + SecondsPassed;
+
+  // cursor is blinking based on LifeTime, so redisplay each frame
+  VisibleChange([chRender]);
+
   { do not allow other controls to handle key presses
     (and e.g. move camera when "A" is pressed down), TCastleEdit handles all keys }
   HandleInput := false;

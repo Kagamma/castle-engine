@@ -105,13 +105,15 @@
   published
     { Speed of scrolling by arrow keys, in pixels (before UI scaling) per second. }
     property KeyScrollSpeed: Single read FKeyScrollSpeed write FKeyScrollSpeed {$ifdef FPC}default DefaultKeyScrollSpeed{$endif};
+
     { Speed of scrolling by mouse wheel, in pixels (before UI scaling) per event. }
     property WheelScrollSpeed: Single read FWheelScrollSpeed write FWheelScrollSpeed {$ifdef FPC}default DefaultWheelScrollSpeed{$endif};
+
     { Width of the scroll bar.
       Value of 0 means to use global default
       in @link(TCastleTheme.ScrollBarWidth Theme.ScrollBarWidth). }
-    property ScrollBarWidth: Single read FScrollBarWidth write FScrollBarWidth default 0;
-        property ScrollBarHeight: Single read FScrollBarHeight write FScrollBarHeight default 0;
+    property ScrollBarWidth: Single read FScrollBarWidth write FScrollBarWidth {$ifdef FPC}default 0{$endif};
+
     { Position of the scroll bar.
       @definitionList(
         @itemLabel(@false)
@@ -128,12 +130,12 @@
     property ActiveCtrlHomeEnd:Boolean read FActiveCtrlHomeEnd write FActiveCtrlHomeEnd default false;
        {If ActiveCtrlHomeEnd=True then scrolling with key CtrlHome and Key CtrlEnd will work}
     property ScrollBarLeft: Boolean read FScrollBarLeft write FScrollBarLeft default false;
+
     { Enable scrolling by dragging @italic(anywhere) in the scroll area.
       This is usually suitable for mobile devices.
       Note that this doesn't affect the dragging directly by the scrollbar,
       which is always enabled. }
-    property EnableDragging: Boolean read FEnableDragging write FEnableDragging default false;
-      property Horizontal: boolean read FVertical write  SetVertical default false;
+    property EnableDragging: Boolean read FEnableDragging write FEnableDragging default true;
 
     { How much do we scroll.
       Setting it always clamps the value to a sensible range,
@@ -284,7 +286,7 @@ begin
   FKeyScrollSpeed := DefaultKeyScrollSpeed;
   FWheelScrollSpeed := DefaultWheelScrollSpeed;
   FTintScrollBarInactive := White;
-  FVertical:=false;
+  FEnableDragging := true;
 
   FScrollbarFrame := TCastleImagePersistent.Create;
   FScrollbarFrame.OnChange := {$Ifdef FPC}@{$endif} CustomScrollBarChanged;
@@ -345,7 +347,7 @@ function TCastleScrollViewCustom.PropertySections(const PropertyName: String
   ): TPropertySections;
 begin
   if ArrayContainsString(PropertyName, [
-       'ScrollBarWidth', 'ScrollbarFrame', 'ScrollbarSlider'
+       'ScrollBarWidth', 'ScrollbarFrame', 'ScrollbarSlider', 'EnableDragging'
      ]) then
     Result := [psBasic]
   else
