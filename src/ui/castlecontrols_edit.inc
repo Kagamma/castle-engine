@@ -29,7 +29,8 @@
   }
   TCastleEdit = class(TCastleUserInterfaceFont)
   strict private
-    FText: String;
+    FText: string;
+    FIndex,FLastIndex:integer;
     FPaddingHorizontal, FPaddingVertical, FPadding: Single;
     FBackgroundColor, FFocusedColor, FUnfocusedColor: TCastleColor;
     FPlaceholderColor: TCastleColor;
@@ -47,7 +48,12 @@
     FTextTranslate, FPlaceholderTranslate: Boolean;
     FAlignment: THorizontalPosition;
     FEnabled: boolean;
-    procedure SetText(const Value: String);
+    FBolSelect:Boolean;
+    FSelectedColor:TCastleColor;
+    procedure SetSelectedColor(const Value:TCastleColor);
+    procedure SetText(const Value: string);
+    procedure SetIndex(const Value:integer);
+    procedure SetLastIndex(const Value:integer);
     procedure SetFocusedColor(const Value: TCastleColor);
     procedure SetUnfocusedColor(const Value: TCastleColor);
     procedure SetPlaceholderColor(const Value: TCastleColor);
@@ -342,6 +348,11 @@ begin
   {$I auto_generated_persistent_vectors/tcastleedit_persistent_vectors.inc}
   {$undef read_implementation_destructor}
   inherited;
+end;
+
+procedure TCastleEdit.SetSelectedColor(const Value: TCastleColor);
+begin
+  FSelectedColor:=Value;
 end;
 
 procedure TCastleEdit.SetText(const Value: String);

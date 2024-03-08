@@ -112,8 +112,8 @@
     { Width of the scroll bar.
       Value of 0 means to use global default
       in @link(TCastleTheme.ScrollBarWidth Theme.ScrollBarWidth). }
-    property ScrollBarWidth: Single read FScrollBarWidth write FScrollBarWidth {$ifdef FPC}default 0{$endif};
-
+    property ScrollBarWidth: Single read FScrollBarWidth write FScrollBarWidth default 0;
+        property ScrollBarHeight: Single read FScrollBarHeight write FScrollBarHeight default 0;
     { Position of the scroll bar.
       @definitionList(
         @itemLabel(@false)
@@ -135,7 +135,8 @@
       This is usually suitable for mobile devices.
       Note that this doesn't affect the dragging directly by the scrollbar,
       which is always enabled. }
-    property EnableDragging: Boolean read FEnableDragging write FEnableDragging default true;
+    property EnableDragging: Boolean read FEnableDragging write FEnableDragging default false;
+      property Horizontal: boolean read FVertical write  SetVertical default false;
 
     { How much do we scroll.
       Setting it always clamps the value to a sensible range,
@@ -286,7 +287,7 @@ begin
   FKeyScrollSpeed := DefaultKeyScrollSpeed;
   FWheelScrollSpeed := DefaultWheelScrollSpeed;
   FTintScrollBarInactive := White;
-  FEnableDragging := true;
+  FVertical:=false;
 
   FScrollbarFrame := TCastleImagePersistent.Create;
   FScrollbarFrame.OnChange := {$Ifdef FPC}@{$endif} CustomScrollBarChanged;
