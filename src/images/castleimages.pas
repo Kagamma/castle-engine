@@ -41,9 +41,9 @@
   or an image with data compressed for GPU (@link(TGPUCompressedImage)).
 
   When reading and writing image files, we understand various image
-  formats. See castle-view-image documentation
-  ( https://castle-engine.io/castle-view-image.php )
-  for a current list of supported image formats.
+  formats. See
+  @url(https://castle-engine.io/castle-image-viewer Castle Image Viewer)
+  documentation for a current list of supported image formats.
 
   The basic loading and saving procedures are LoadImage and SaveImage.
   Example usage:
@@ -2085,7 +2085,6 @@ uses {$ifdef FPC} ExtInterpolation, FPCanvas, FPImgCanv, {$endif}
 {$I castleimages_loading_saving_func.inc}
 {$I castleimages_vcl_imaging.inc}
 {$I castleimages_png.inc} // must be included after castleimages_libpng.inc and castleimages_fpimage.inc
-{$I castleimages_ipl.inc}
 {$I castleimages_composite.inc}
 {$I castleimages_assign.inc}
 

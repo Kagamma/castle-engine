@@ -43,6 +43,8 @@ const
 type
   { Main project management. }
   TProjectForm = class(TForm)
+    ActionFindNext: TAction;
+    ActionFindToggle: TAction;
     ActionImportSketchfab: TAction;
     ActionShowStatistics: TAction;
     ActionRunParameterCapabilitiesForceFixedFunction: TAction;
@@ -109,6 +111,9 @@ type
     MenuItem11: TMenuItem;
     MenuItem12: TMenuItem;
     MenuItem15: TMenuItem;
+    MenuItem19: TMenuItem;
+    MenuItem43: TMenuItem;
+    Separator14: TMenuItem;
     MenuItem21: TMenuItem;
     MenuItem22: TMenuItem;
     MenuItem24: TMenuItem;
@@ -328,6 +333,8 @@ type
     TabOutput: TTabSheet;
     ProcessUpdateTimer: TTimer;
     TabWarnings: TTabSheet;
+    procedure ActionFindNextExecute(Sender: TObject);
+    procedure ActionFindToggleExecute(Sender: TObject);
     procedure ActionImportSketchfabExecute(Sender: TObject);
     procedure ActionPhysicsShowAllJointsToolsExecute(Sender: TObject);
     procedure ActionPhysicsHideAllJointsToolsExecute(Sender: TObject);
@@ -988,6 +995,22 @@ begin
   ImportSketchfabForm.Show;
 end;
 
+procedure TProjectForm.ActionFindNextExecute(Sender: TObject);
+begin
+  Assert(Design <> nil); // menu item is disabled otherwise
+  Design.FindNext;
+end;
+
+procedure TProjectForm.ActionFindToggleExecute(Sender: TObject);
+begin
+  Assert(Design <> nil); // menu item is disabled otherwise
+
+  // TODO: Make it a checked action, toggle checked state,
+  // synchronize with design (also when it's closed).
+
+  Design.FindToggle;
+end;
+
 procedure TProjectForm.ActionPhysicsHideAllJointsToolsExecute(Sender: TObject);
 begin
   Assert(Design <> nil); // menu item is disabled otherwise
@@ -1625,7 +1648,7 @@ procedure TProjectForm.FormCreate(Sender: TObject);
     ShellListView1.OnSelectItem := @ShellListViewSelectItem;
     ShellListView1.Hint := 'Double-click to open.' + NL +
       NL +
-      '- Scenes and images open in engine viewers (view3dscene, castle-view-image).' + NL +
+      '- Scenes and images open in engine viewers (castle-model-viewer, castle-image-viewer).' + NL +
       '- Designs open in this editor.' + NL +
       '- Pascal files open in the code editor.' + NL +
       '- Other files open in OS default applications.';
@@ -1836,7 +1859,6 @@ begin
   UserConfig.SetValue('ProjectForm_Docking', WantedDocking);
   FormHide(Self); //to save config properly
   ApplicationProperties.OnWarning.Remove(@WarningNotification);
-  ApplicationDataOverride := '';
   FreeProcess;
   FreeAndNil(OutputList);
   FreeAndNil(Manifest);
@@ -1849,6 +1871,26 @@ begin
   FreeAndNil(DesignWarningsForm);
   FreeAndNil(PlatformsInfo);
   FreeAndNil(ListOpenExistingViewStr);
+  FreeAndNil(Design);
+
+  { It is important to reset ApplicationDataOverride
+    *after* FreeAndNil(Design), which in turn freed components like
+    TCastleScene that possibly interacted with FileMonitor.
+
+    That's because TCastleScene doing FileMonitor.Watch of
+    e.g. "castle-data:/soldier.gltf" with one ApplicationDataOverride value,
+    and then doing Unwatch on the same "castle-data:/soldier.gltf"
+    but *after* ApplicationDataOverride changed,
+    is effectively talking about 2 different files.
+
+    And FileMonitor detects it, as it remembers "final" URLs,
+    with castle-data resolved (and that's good).
+
+    Testcase: Open 3D FPS game template (it has 4 soldiers),
+    open play view,
+    close the editor with Alt + F4.
+    There should be no warnings that we "cannot unwatch .../soldier.gltf" }
+  ApplicationDataOverride := '';
 end;
 
 procedure TProjectForm.DesignObserverFreeNotification(const Sender: TFreeNotificationObserver);
@@ -2376,6 +2418,8 @@ begin
   ActionModeRotate.Enabled := Design <> nil;
   ActionModeScale.Enabled := Design <> nil;
   ActionShowStatistics.Enabled := Design <> nil;
+  ActionFindToggle.Enabled := Design <> nil;
+  ActionFindNext.Enabled := Design <> nil;
 
   { Options that toggle InternalForceWireframe could actually work with Design=nil,
     with current implementation.
@@ -3107,7 +3151,7 @@ begin
     { Check for images first because TCastleScene can now load images. }
     if LoadImage_FileFilters.Matches(SelectedURL) then
     begin
-      OpenWithCastleTool('castle-view-image', SelectedURL, [SelectedURL]);
+      OpenWithCastleTool('castle-image-viewer', SelectedURL, [SelectedURL]);
       Exit;
     end;
 
@@ -3123,7 +3167,7 @@ begin
 
     if TFileFilterList.Matches(LoadScene_FileFilters, SelectedURL) then
     begin
-      OpenWithCastleTool('view3dscene', SelectedURL,
+      OpenWithCastleTool('castle-model-viewer', SelectedURL,
         ['--project', ProjectPathUrl, SelectedURL]);
       Exit;
     end;
