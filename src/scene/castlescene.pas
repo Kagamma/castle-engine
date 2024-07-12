@@ -1,5 +1,5 @@
 {
-  Copyright 2003-2023 Michalis Kamburelis.
+  Copyright 2003-2024 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -35,7 +35,7 @@ uses SysUtils, Classes, Generics.Collections,
   CastleGLUtils, CastleInternalShapeOctree, CastleInternalGLShadowVolumes, X3DFields,
   CastleTriangles, CastleShapes, CastleFrustum, CastleTransform, CastleGLShaders,
   CastleRectangles, CastleCameras, CastleRendererInternalShader, CastleColors,
-  CastleSceneInternalShape,
+  CastleSceneInternalShape, CastleInternalFileMonitor,
   CastleRenderOptions, CastleTimeUtils, CastleImages,
   CastleBehaviors, CastleInternalShapesRenderer, CastleSceneInternalBlending;
 
@@ -457,12 +457,6 @@ const
   weWireframeOnly = CastleRenderOptions.weWireframeOnly;
   weSolidWireframe = CastleRenderOptions.weSolidWireframe;
   weSilhouette = CastleRenderOptions.weSilhouette;
-
-  paDefault = CastleSceneCore.paDefault;
-  paForceLooping = CastleSceneCore.paForceLooping;
-  paForceNotLooping = CastleSceneCore.paForceNotLooping;
-  paLooping = CastleSceneCore.paLooping;
-  paNotLooping = CastleSceneCore.paNotLooping;
 
   ssRendering = CastleSceneCore.ssRendering;
   ssDynamicCollisions = CastleSceneCore.ssDynamicCollisions;
@@ -1136,6 +1130,13 @@ var
   ShapeWorldTransform: TMatrix4;
   ForceOpaque: boolean;
 begin
+  { Call inherited to render shadow quads of children,
+    in case one TCastleScene is a child of another.
+    See https://forum.castle-engine.io/t/shadow-ignors-distanceculling/670/14 for testcase.
+    Note that inherited also checks "CheckVisible and CastShadows",
+    so they work recursively. }
+  inherited;
+
   if CheckVisible and
      CastShadows and
      { Do not render shadow volumes when rendering wireframe.

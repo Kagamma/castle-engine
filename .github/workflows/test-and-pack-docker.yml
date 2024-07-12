@@ -55,6 +55,10 @@ jobs:
         run: make clean test-fpmake
       - name: Test CastleWindow backends
         run: ./tools/internal/check_castle_window_backends_compilation
+      - name: Test build tool --output
+        run: ./tools/internal/check_build_tool_output
+      - name: Test LPG (Lazarus Package Group)
+        run: ./tools/internal/check_lpg_compilation
 
   test-docker-examples:
     strategy:
@@ -123,11 +127,16 @@ jobs:
         run: echo "CASTLE_ENGINE_PATH=$GITHUB_WORKSPACE" >> $GITHUB_ENV
       - name: Remove previous artifacts
         run: rm -f castle-engine*.zip
-      - name: Pack
-        run: ./tools/internal/pack_release/pack_release.sh
+
+      - name: Pack Win64/x86_64
+        run: ./tools/internal/pack_release/pack_release.sh win64 x86_64
+      - name: Pack Win32/i386
+        run: ./tools/internal/pack_release/pack_release.sh win32 i386
+      - name: Pack Linux/x86_64
+        run: ./tools/internal/pack_release/pack_release.sh linux x86_64
 
       - name: Download bundled FPC
-        uses: robinraju/release-downloader@v1.10
+        uses: robinraju/release-downloader@v1.11
         with:
           repository: "castle-engine/cge-fpc"
           latest: true

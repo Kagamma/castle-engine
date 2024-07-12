@@ -127,12 +127,21 @@ type
       const Subdivisions: TVector2; const InputRange, OutputRange: TFloatRectangle);
 
     { Alternative version of @link(CreateNode) that creates a different shape.
-      It's has little less quality (triangulation is not adaptive like
-      for ElevationGrid), but updating it (by UpdateTriangulatedNode)
-      is a little faster (than updating the CreateNode by UpdatNode).
-      In practice, the speed gain is minimal, and this method will likely
-      be removed at some point.
 
+      Disadvantages of this method:
+
+      - A little less quality (triangulation is not "adaptive" like
+        for ElevationGrid, which splits each quad along the shortest diagonal).
+      - A little slower to render, we cause multiplple draw calls for multiple
+        strips.
+
+      Advantages:
+
+      - Updating this (by UpdateTriangulatedNode)
+        is a little faster (than updating the CreateNode by UpdatNode).
+
+      Though in practice, the speed gain is minimal, and this method will likely
+      be removed at some point?
       The parameters have the same meaning as for @link(CreateNode),
       and resulting look should be the same. }
     function CreateTriangulatedNode(const Subdivisions: TVector2;
@@ -190,7 +199,7 @@ type
   TCastleTerrainImage = class(TCastleTerrainData)
   strict private
     { FImage = nil and FUrl = '' when not loaded. }
-    FImage: TGrayscaleImage;
+    FImage: TGrayscaleFloatImage;
     FUrl: String;
     FMinLevel, FMaxLevel: Single;
     procedure SetUrl(const Value: String);
@@ -1062,12 +1071,20 @@ procedure TCastleTerrainImage.SetUrl(const Value: String);
 
   procedure LoadImage(const NewUrl: String);
   var
-    NewImage: TGrayscaleImage;
+    NewImage: TGrayscaleFloatImage;
   begin
     if NewUrl = '' then
       NewImage := nil
     else
-      NewImage := CastleImages.LoadImage(NewUrl, [TGrayscaleImage]) as TGrayscaleImage;
+    begin
+      { Read as TGrayscaleFloatImage.
+        Allows to read high-precision data from image formats that support it,
+        like 16-bit PNG, 16/32-bit TIFF, OpenEXR in the future.
+        The 8-bit formats will be converted to TGrayscaleFloatImage by
+        TGrayscaleFloatImage.Assign. }
+      NewImage := CastleImages.LoadImage(NewUrl, [TGrayscaleFloatImage])
+        as TGrayscaleFloatImage;
+    end;
 
     FreeAndNil(FImage);
     FImage := NewImage;
@@ -1109,7 +1126,7 @@ begin
     PY := Floor(TexCoord.Y * FImage.Height);
     ClampVar(PX, 0, FImage.Width  - 1);
     ClampVar(PY, 0, FImage.Height - 1);
-    Intensity := MapRangeTo01(FImage.PixelPtr(PX, PY)^, 0, High(Byte));
+    Intensity := FImage.PixelPtr(PX, PY)^;
   end else
     Intensity := 0.5;
   Result := Lerp(Intensity, MinLevel, MaxLevel);

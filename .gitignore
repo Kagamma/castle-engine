@@ -82,6 +82,7 @@ castle-game-engine-*.fpm
 /examples/animations/simultaneous_animations_one_scene/simultaneous_animations_one_scene
 /examples/animations/split_long_animation/split_long_animation
 /examples/animations/md3_animations_tags/md3_animations_tags
+/examples/animations/optimize_animations_test/optimize_animations_test
 /examples/audio/audio_player/audio_player
 /examples/audio/doppler_demo/doppler_demo
 /examples/audio/game_3d_sound/game_3d_sound
@@ -199,6 +200,7 @@ castle-game-engine-*.fpm
 /examples/user_interface/dragging_test/dragging_test
 /examples/user_interface/edit_test/edit_test
 /examples/user_interface/mask/mask
+/examples/user_interface/screen_resolution_change/screen_resolution_change
 /examples/user_interface/show_various_ui_controls/show_various_ui_controls
 /examples/user_interface/test_all_view_events/test_all_view_events
 /examples/user_interface/timer_test/timer_test
@@ -226,6 +228,7 @@ castle-game-engine-*.fpm
 /examples/viewport_and_scenes/render_3d_to_image/render_3d_to_image
 /examples/viewport_and_scenes/render_3d_to_texture_and_use_as_quad/render_3d_to_texture_and_use_as_quad
 /examples/viewport_and_scenes/shader_effects/shader-effects
+/examples/viewport_and_scenes/shader_effects_on_texture/shader_effects_on_texture
 /examples/viewport_and_scenes/shader_override/shader_override
 /examples/viewport_and_scenes/show_bounding_rect_in_2d/show_bounding_rect_in_2d
 /examples/viewport_and_scenes/test_triangulate/test_triangulate

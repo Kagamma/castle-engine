@@ -14,11 +14,6 @@ set -euxo pipefail
 #     ./pack_release.sh darwin x86_64
 #     ./pack_release.sh freebsd x86_64
 #
-# - no arguments, to pack for "default" platforms.
-#   "Default" are desktop target platforms possible thanks to Docker image
-#   https://hub.docker.com/r/kambi/castle-engine-cloud-builds-tools/
-#   -- right now this means Linux and Windows.
-#
 # - 1 argument 'windows_installer' to build a Windows installer.
 #   This requires InnoSetup installed.
 #
@@ -34,14 +29,16 @@ set -euxo pipefail
 # - and fpc, lazbuild on $PATH
 #
 # Works on
-# - Linux,
-# - Windows (with Cygwin),
-#   Note: It assumes that Cygwin tools, like cp, are first on $PATH, before equivalent from MinGW in FPC.
+# - Linux
+# - Windows (with Cygwin, MSYS2, Git Bash...)
+#   Note: We assume that tools that understand Unix paths
+#   (like "cp" from Cygwin, MSYS2, Git Bash) are first on $PATH,
+#   before equivalent tools in FPC (from old MinGW version).
 #   A simple solution to make sure it's true is to execute
 #     export PATH="/bin:$PATH"
-#   in Cygwin shell right before this script.
-# - FreeBSD (install GNU make and sed),
-# - macOS (install GNU sed from Homebrew).
+#   in shell right before this script.
+# - FreeBSD (install GNU make and GNU sed)
+# - macOS (install GNU sed from Homebrew)
 # ----------------------------------------------------------------------------
 
 # ----------------------------------------------------------------------------
@@ -56,6 +53,26 @@ VERBOSE=true
 
 ORIGINAL_CASTLE_ENGINE_PATH="${CASTLE_ENGINE_PATH}"
 
+# Deal with temporary dir -------------------------------------------------
+
+# Calculate temporary directory, where we will put all the temporary files
+# during packing.
+#
+# Notes:
+# - We make it unique, using process ID, just in case multiple jobs run in parallel.
+# - This cannot be subdirectory of CI workspace (like ${GITHUB_WORKSPACE})
+#   as then we'll have "cp -R ..." fail "we cannot copy directory into itself".
+#   To clean it up, we use bash trap.
+TEMP_PARENT="/tmp/castle-engine-release-$$/"
+
+cleanup_temp ()
+{
+  echo "Cleaning up temporary dir ${TEMP_PARENT}"
+  rm -Rf "${TEMP_PARENT}"
+}
+
+trap cleanup_temp EXIT
+
 # ----------------------------------------------------------------------------
 # Define functions
 
@@ -64,10 +81,48 @@ ORIGINAL_CASTLE_ENGINE_PATH="${CASTLE_ENGINE_PATH}"
 check_fpc_version ()
 {
   local FPC_VERSION=`fpc -iV | tr -d '\r'`
+  echo "FPC version: ${FPC_VERSION}"
+
   local REQUIRED_FPC_VERSION='3.2.2'
-  if [ "${FPC_VERSION}" '!=' "${REQUIRED_FPC_VERSION}" ]; then
-    echo "pack_release: Expected FPC version ${REQUIRED_FPC_VERSION}, but got ${FPC_VERSION}"
+
+  if [ "${CASTLE_PACK_DISABLE_FPC_VERSION_CHECK:-}" '!=' 'true' ]; then
+    if [ "${FPC_VERSION}" '!=' "${REQUIRED_FPC_VERSION}" ]; then
+      echo "pack_release: Expected FPC version ${REQUIRED_FPC_VERSION}, but got ${FPC_VERSION}"
+      exit 1
+    fi
+  fi
+}
+
+# Require building release with a supported Lazarus (also LCL, lazbuild) version.
+# See https://castle-engine.io/supported_compilers.php .
+check_lazarus_version ()
+{
+  # Note that we have to remove lines "using config file", since "lazbuild --version"
+  # can answer something like
+  #   using config file /Users/jenkins/installed/fpclazarus/fpc322-lazfixes30/lazarus/lazarus.cfg
+  #   3.5
+
+  local LAZARUS_VERSION=`lazbuild --version | grep --invert-match 'using config file' | tr -d '\r'`
+  echo "Lazarus version: ${LAZARUS_VERSION}"
+
+  # Note that we have to support Lazarus 3.0,
+  # since it's the last supported by https://github.com/gcarreno/setup-lazarus for now,
+  # see https://github.com/gcarreno/setup-lazarus/issues/30 .
+  if [ "${LAZARUS_VERSION}" '!=' '3.0' -a \
+       "${LAZARUS_VERSION}" '!=' '3.2' -a \
+       "${LAZARUS_VERSION}" '!=' '3.4' -a \
+       "${LAZARUS_VERSION}" '!=' '3.5' ]; then
+    echo "pack_release: Incorrect Lazarus version to pack release, see ${LAZARUS_VERSION}"
     exit 1
+  fi
+
+  # To avoid https://gitlab.com/freepascal.org/lazarus/lazarus/-/merge_requests/291
+  # we need Lazarus 3.5 on macOS.
+  if [ "`uname -s`" '=' 'Darwin' ]; then
+    if [ "${LAZARUS_VERSION}" '!=' '3.5' ]; then
+      echo "pack_release: macOS: Incorrect Lazarus version to pack release, see ${LAZARUS_VERSION}"
+      exit 1
+    fi
   fi
 }
 
@@ -87,8 +142,8 @@ detect_platform ()
 
   if which cygpath.exe > /dev/null; then
 
-    # If we're inside Cygwin/MinGW (despite the name, cygpath also is in MinGW,
-    # and this is the case on GH hosted runner), then we want to use Cygwin/MinGW
+    # If we're inside Cygwin/MSYS2 (despite the name, cygpath also is in MSYS2,
+    # and this is the case on GH hosted runner), then we want to use Cygwin/MSYS2
     # tools. They will call bash properly, and our "make" must be able to call
     # e.g. "tools/build-tool/castle-engine_compile.sh".
     #
@@ -105,7 +160,7 @@ detect_platform ()
       fi
     fi
 
-    # On Cygwin/MinGW, make sure to use Cygwin/MinGW's find, not the one from Windows
+    # On Cygwin/MSYS2, make sure to use Cygwin/MSYS2's find, not the one from Windows
     FIND='/bin/find'
   fi
 
@@ -116,6 +171,7 @@ detect_platform ()
 
   if [ "`uname -s`" '=' 'Darwin' ]; then
     SED='gsed'
+    FIND='gfind'
   fi
 
   # for debugging, output versions of tools
@@ -134,7 +190,7 @@ prepare_build_tool ()
 
   cd "${CASTLE_ENGINE_PATH}"
   tools/build-tool/castle-engine_compile.sh
-  local BIN_TEMP_PATH="/tmp/castle-engine-release-bin-$$/"
+  local BIN_TEMP_PATH="${TEMP_PARENT}bin/"
   mkdir -p "${BIN_TEMP_PATH}"
   cp "tools/build-tool/castle-engine${HOST_EXE_EXTENSION}" "${BIN_TEMP_PATH}"
   export PATH="${BIN_TEMP_PATH}:${PATH}"
@@ -207,7 +263,7 @@ add_external_tool ()
   #   TOOL_BRANCH_NAME='shapes-rendering-2'
   # fi
 
-  local TEMP_PATH_TOOL="/tmp/castle-engine-release-$$/${GITHUB_NAME}/"
+  local TEMP_PATH_TOOL="${TEMP_PARENT}tool-${GITHUB_NAME}/"
   mkdir -p "${TEMP_PATH_TOOL}"
   cd "${TEMP_PATH_TOOL}"
   download "https://codeload.github.com/castle-engine/${GITHUB_NAME}/zip/${TOOL_BRANCH_NAME}" "${GITHUB_NAME}".zip
@@ -236,6 +292,70 @@ add_external_tool ()
       mv castle-model-converter"${EXE_EXTENSION}" "${OUTPUT_BIN}"
     fi
   fi
+}
+
+# Followup to "make clean" that cleans even more stuff,
+# good to really have 100% clean state for packing.
+# Deletes files in current working directory (and doesn't change current working directory).
+#
+# Note: It doesn't delete bin-to-keep, created and used in this script.
+cge_clean_all ()
+{
+  # Delete
+  # - backup files from
+  #     Emacs (*~),
+  #     Lazarus (backup),
+  #     Delphi (*.~???),
+  #     Blender (*.blend?),
+  #     QtCreator (*.pro.user).
+  # - macOS app bundles (made by "make examples-laz", not cleaned up by "make clean").
+	"${FIND}" . \
+    '(' -type d -name 'bin-to-keep' -prune ')' -or \
+    '(' -type f '(' \
+          -iname '*~' -or \
+          -iname '*.bak' -or \
+          -iname '*.~???' -or \
+          -iname '*.pro.user' -or \
+          -iname '*.blend?' \
+        ')' -exec rm -f '{}' ';' ')' -or \
+    '(' -type d '(' \
+          -iname 'backup' -or \
+          -iname '*.app' \
+        ')' -exec rm -Rf '{}' ';' -prune ')'
+
+  # Delete pasdoc generated documentation in doc/pasdoc/ and doc/reference/
+	"${MAKE}" -C doc/pasdoc/ clean
+
+  # Delete closed-source libs you may have left in tools/build-tool/data
+  # (as some past instructions recommended to copy them into CGE tree).
+	rm -Rf tools/build-tool/data/android/integrated-services/chartboost/app/libs/*.jar \
+	       tools/build-tool/data/android/integrated-services/startapp/app/libs/*.jar \
+	       tools/build-tool/data/ios/services/game_analytics/cge_project_name/game_analytics/GameAnalytics.h \
+	       tools/build-tool/data/ios/services/game_analytics/cge_project_name/game_analytics/libGameAnalytics.a
+
+  # Delete previous pack_release.sh leftovers
+	rm -f castle-engine*.zip tools/internal/pack_release/castle-engine*.zip
+
+  # Delete bundled FPC leftovers
+	rm -Rf fpc-*.zip tools/contrib/fpc/
+
+  # Cleanup .exe more brutally.
+  # TODO: This should not be needed "castle-engine clean" done by "make clean"
+  # should clean all relevant exes, cross-platform.
+  # This is just a temporary workaround of the fact that our Delphi projects right now
+  # sometimes leave artifacts -- xxx_standalone.exe, base_tests/Win32/Debug/xxx.exe .
+  "${FIND}" examples/ -iname '*.exe' -execdir rm -f '{}' ';'
+
+  # Delete installed subdir (in case you did
+  # "make install PREFIX=${CASTLE_ENGINE_PATH}/installed/", as some CI jobs do)
+  rm -Rf installed/
+
+  # Remove Vampyre Demos - take up 60 MB space, and are not necessary for users of CGE.
+  rm -Rf src/vampyre_imaginglib/src/Demos/
+
+  # Made by "make examples-laz", not cleaned up by "make clean".
+  rm -f examples/audio/test_sound_source_allocator/mainf.lrs \
+        examples/lazarus/model_3d_with_2d_controls/model_3d_with_2d_controls.obj
 }
 
 # Prepare directory with precompiled CGE.
@@ -285,7 +405,7 @@ pack_platform_dir ()
   fi
 
   # Create temporary CGE copy, for packing
-  TEMP_PATH="/tmp/castle-engine-release-$$/"
+  TEMP_PATH="${TEMP_PARENT}release/"
   if which cygpath.exe > /dev/null; then
     # must be native (i.e. cannot be Unix path on Cygwin) as this path
     # (or paths derived from it) is used by CGE native tools
@@ -317,18 +437,10 @@ pack_platform_dir ()
   lazbuild_twice $CASTLE_LAZBUILD_OPTIONS packages/castle_components.lpk
   lazbuild_twice $CASTLE_LAZBUILD_OPTIONS packages/castle_editor_components.lpk
 
-  # Make sure no leftovers from previous compilations remain, to not affect tools, to not pack them in release
-  "${MAKE}" cleanmore ${MAKE_OPTIONS}
-
-  # Cleanup .exe more brutally.
-  # TODO: This should not be needed "castle-engine clean" done by "make clean"
-  # should clean all relevant exes, cross-platform.
-  # This is just a temporary workaround of the fact that our Delphi projects right now
-  # sometimes leave artifacts -- xxx_standalone.exe, base_tests/Win32/Debug/xxx.exe .
-  "${FIND}" examples/ -iname '*.exe' -execdir rm -f '{}' ';'
-
-  # Remove Vampyre Demos - take up 60 MB space, and are not necessary for users of CGE.
-  rm -Rf src/vampyre_imaginglib/src/Demos/
+  # Make sure no leftovers from previous compilations remain,
+  # to not pack them in release.
+  "${MAKE}" clean ${MAKE_OPTIONS}
+  cge_clean_all
 
   # Compile tools (except editor) with just FPC
   "${MAKE}" tools ${MAKE_OPTIONS} BUILD_TOOL="castle-engine ${CASTLE_BUILD_TOOL_OPTIONS}"
@@ -401,10 +513,18 @@ pack_platform_dir ()
   esac
 
   # Make sure no leftovers from tools compilation remain
-  "${MAKE}" cleanmore ${MAKE_OPTIONS}
+  "${MAKE}" clean ${MAKE_OPTIONS}
+  cge_clean_all
 
   # After make clean, make sure bin/ exists and is filled with what we need
   mv "${TEMP_PATH_CGE}"bin-to-keep "${TEMP_PATH_CGE}"bin
+
+  if [ "$OS" '=' 'darwin' ]; then
+    if [ ! -d "${TEMP_PATH_CGE}"bin/castle-editor.app ]; then
+      echo "Error: castle-editor.app not found in bin/ at packaging macOS release"
+      exit 1
+    fi
+  fi
 
   # Add PasDoc docs
   "${MAKE}" -C doc/pasdoc/ clean html ${MAKE_OPTIONS}
@@ -492,9 +612,8 @@ pack_windows_installer ()
 # Main body
 
 detect_platform
-if [ "${CASTLE_PACK_DISABLE_FPC_VERSION_CHECK:-}" '!=' 'true' ]; then
-  check_fpc_version
-fi
+check_fpc_version
+check_lazarus_version
 prepare_build_tool
 calculate_cge_version
 if [ -n "${1:-}" ]; then
@@ -504,8 +623,6 @@ if [ -n "${1:-}" ]; then
     pack_platform_zip "${1}" "${2}"
   fi
 else
-  # build for default platforms (expected by Jenkinsfile)
-  pack_platform_zip win64 x86_64
-  pack_platform_zip win32 i386
-  pack_platform_zip linux x86_64
+  echo 'pack_release: Requires 2 arguments, OS and CPU, or 1 argument "windows_installer"'
+  exit 1
 fi
