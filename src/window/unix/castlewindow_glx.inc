@@ -67,6 +67,8 @@ begin
     http://www.opengl.org/wiki/Tutorial:_OpenGL_3.0_Context_Creation_%28GLX%29 }
   UseFBConfig := GLX_version_1_3(Application.XDisplay);
 
+  AlphaBits := 8;
+
   Attribs := TInt32List.Create;
   try
     { constant Attribs part }
@@ -83,12 +85,8 @@ begin
       { Buffer sizes below are all in bits. }
       GLX_DEPTH_SIZE, DepthBits,
       GLX_STENCIL_SIZE, StencilBits,
-      GLX_ALPHA_SIZE, AlphaBits,
-      GLX_ALPHA_SIZE, 8,
-      GLX_ACCUM_RED_SIZE, 8,
-      GLX_ACCUM_GREEN_SIZE, 8,
-      GLX_ACCUM_BLUE_SIZE, 8,
-      GLX_ACCUM_ALPHA_SIZE, 8 ]);
+      GLX_ALPHA_SIZE, AlphaBits
+    ]);
     if RedBits   <> 0 then Attribs.AddRange([GLX_RED_SIZE  , RedBits  ]);
     if GreenBits <> 0 then Attribs.AddRange([GLX_GREEN_SIZE, GreenBits]);
     if BlueBits  <> 0 then Attribs.AddRange([GLX_BLUE_SIZE , BlueBits ]);
