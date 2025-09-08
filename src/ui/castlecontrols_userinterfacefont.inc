@@ -231,6 +231,7 @@ begin
     TooltipLabel := TCastleLabelTooltip.Create(Self);
     TooltipLabel.Anchor(hpLeft, TooltipPadding);
     TooltipLabel.Anchor(vpBottom, TooltipPadding);
+    TooltipLabel.Html := True;
     TooltipLabelContainer.InsertFront(TooltipLabel);
   end;
 
