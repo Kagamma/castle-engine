@@ -244,7 +244,7 @@ begin
   TooltipHeight := TooltipLabelContainer.EffectiveHeight;
 
   // convert TooltipPosition from final coordinates to scaled coordinates
-  Pos := (TooltipPosition + Vector2(20, -60)) / TooltipLabelContainer.UIScale;
+  Pos := (TooltipPosition + Vector2(10, -70)) / TooltipLabelContainer.UIScale;
 
   { now try to fix X, Y to make tooltip fit inside a window }
   {$warnings off} // using deprecated ContainerWidth/Height now
