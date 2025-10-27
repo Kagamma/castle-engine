@@ -797,6 +797,18 @@ begin
       //FpcOptions.Add('-CaEABIHF');
     end;
 
+    { Align memory to 16 KB, to satisfy Goole Play requirements, following
+      https://developer.android.com/guide/practices/page-sizes
+      see also useful:
+      - https://forum.lazarus.freepascal.org/index.php?topic=71336.15
+      - https://medium.com/@contact2kalshetty/android-15-16kb-page-size-a-complete-handbook-for-android-developers-detect-fix-ship-6c4df068aef6
+    }
+    if Options.OS = Android then
+    begin
+      FpcOptions.Add('-k-z common-page-size=16384');
+      FpcOptions.Add('-k-z max-page-size=16384');
+    end;
+
     if Options.DetectMemoryLeaks then // see https://castle-engine.io/memory_leaks
     begin
       FpcOptions.Add('-gl'); // HeapTrc
@@ -864,8 +876,21 @@ begin
     begin
       LinkerOutputBinaryPos := LinkerOutputBinaryPos + StrLen('Linking ');
       Options.LinkerOutputFile := Copy(FpcOutput, LinkerOutputBinaryPos, Pos(NL, FpcOutput, LinkerOutputBinaryPos) - LinkerOutputBinaryPos);
-    end else
-      Writeln('Warning: build-tool could not recognize the linker output binary name, may cause error later.');
+    end
+    { Do not show a warning when Options.LinkerOutputFile = ''.
+      Because:
+      - It will cause a clear error anyway, when something wants to use this,
+        which happens only from CompileMacOS now.
+      - In most cases (non-macOS) users don't need to care about this.
+      - And it is, unfortunately, easily possible to stumble on this,
+        if FPC verbosity options disable the "Linking" line.
+        Which may happen if you modified fpc.cfg or if you don't have one,
+        FPC defaults are actually to be silent (when no fpc.cfg present).
+      Ultimately, we should solve above TODO and get this info without parsing
+      FPC output.
+    }
+    { else
+      Writeln('Warning: build-tool could not recognize the linker output binary name, may cause error later.')};
   finally FreeAndNil(FpcOptions) end;
 end;
 
