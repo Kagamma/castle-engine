@@ -167,7 +167,12 @@ unit X3DNodes;
 
 interface
 
-uses SysUtils, Generics.Collections, Classes, XMLRead, DOM,
+uses SysUtils, Classes,
+  { Generics.Collections after Classes, so that TCollectionNotification
+    and related cnXxx constants are from Generics.Collections.
+    This is important for FPC that has 2 TCollectionNotification versions. }
+  Generics.Collections,
+  XMLRead, DOM,
   CastleVectors, CastleRectangles, CastleTimeUtils, CastleFonts,
   CastleInternalX3DLexer, CastleUtils, CastleClassUtils,
   X3DFields, CastleBoxes, CastleImages, CastleColors, CastleCameras,
@@ -257,7 +262,7 @@ uses Math, StrUtils, URIParser,
   CastleLog, CastleScriptParser, CastleInternalDataUri, CastleDownload,
   CastleInternalNurbs, CastleQuaternions, CastleXmlUtils, CastleOpenDocument,
   CastleSoundBase, CastleTriangles, X3DLoadInternalUtils, CastleFileFilters,
-  CastleApplicationProperties, CastleInternalNodesUnsupported;
+  CastleApplicationProperties, CastleInternalNodesUnsupported, CastleShapes;
 
 {$define read_implementation}
 
@@ -382,7 +387,6 @@ uses Math, StrUtils, URIParser,
 {$I auto_generated_node_helpers/x3dnodes_coordinatedouble.inc}
 {$I auto_generated_node_helpers/x3dnodes_coordinateinterpolator.inc}
 {$I auto_generated_node_helpers/x3dnodes_coordinateinterpolator2d.inc}
-{$I auto_generated_node_helpers/x3dnodes_coordinateinterpolator4d.inc}
 {$I auto_generated_node_helpers/x3dnodes_cube_1.inc}
 {$I auto_generated_node_helpers/x3dnodes_cubicbezier2dorientationinterpolator.inc}
 {$I auto_generated_node_helpers/x3dnodes_cubicbeziercoordinateinterpolator.inc}
@@ -508,6 +512,7 @@ uses Math, StrUtils, URIParser,
 {$I auto_generated_node_helpers/x3dnodes_shaderprogram.inc}
 {$I auto_generated_node_helpers/x3dnodes_shadertexture.inc}
 {$I auto_generated_node_helpers/x3dnodes_shape.inc}
+{$I auto_generated_node_helpers/x3dnodes_skin.inc}
 {$I auto_generated_node_helpers/x3dnodes_sound.inc}
 {$I auto_generated_node_helpers/x3dnodes_sphere.inc}
 {$I auto_generated_node_helpers/x3dnodes_sphere_1.inc}
@@ -712,7 +717,7 @@ initialization
   RegistedInventorNodes;
   RegisterVRML1Nodes;
   RegisterVRML97HAnimNodes;
-  RegisterKambiNodes;
+  RegisterCastleEngineNodes;
   RegisterInstantRealityNodes;
 
   { X3D components registration : }
