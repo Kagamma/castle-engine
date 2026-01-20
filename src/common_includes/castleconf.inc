@@ -238,6 +238,45 @@
   {$undef GENERICS_CONSTREF}
 {$endif}
 
+{ FPC 3.2.3 on 32-bit ARM (Raspberry Pi) has wrong List.IndexOf by default
+  (due to constref / const changes in the Generics.Collections ?), workaround.
+
+  TODO: submit to FPC. }
+{$if defined(FPC) and defined(VER3_2) and defined(LINUX) and defined(CPUarm)}
+  {$define CASTLE_LIST_METHODS_WORKAROUND}
+{$endif}
+
+{ FPC 3.2.3 (fixes_3_2 branch) fails
+
+    Result := inherited Items[AKey];
+
+  or even
+
+    if not TryGetValue(AKey, Result) then
+      raise EListError.CreateFmt('Dictionary key "%s" does not exist', [AKey]);
+
+  Testcase: TTestX3DNodes.TestRootNodeMeta .
+  Fixed already in FPC 3.3.1 .
+  TODO: submit to FPC to merge into fixes_3_2 branch.
+}
+{$if defined(DARWIN) and defined(CPUX86_64) and defined(VER3_2_3)}
+  {$define CASTLE_WORKAROUND_DICTIONARY_FIND}
+{$endif}
+
+{ TODO: macOS/Aarch64 (at least with FPC 3.2.3, unknown with 3.3.1)
+  fails on DeFormat usage,
+  at least:
+  - TTestCastleVectors.TestVectorStr:
+    Vectors (TVector3) are not equal: expected: -Inf -Inf -Inf, actual: 126.162086486816 408.326904296875
+  - TTestCastleStringUtils.TestDeFormat
+    (unspecified assertion failure)
+  For now, do not use DeFormat there, we can avoid it.
+  TODO: workaround properly in CGE.
+  TODO: submit to FPC devs. }
+{$if defined(DARWIN) and defined(CPUAARCH64)}
+  {$define CASTLE_DEFORMAT_BUGGY}
+{$endif}
+
 { Define CASTLE_IOS when appropriate ----------------------------------------- }
 
 { Build tool defines CASTLE_IOS automatically.

@@ -83,7 +83,7 @@ var
 
 implementation
 
-uses SysUtils,
+uses SysUtils, TypInfo,
   CastleLog, CastleUtils, CastleStringUtils;
 
 { TViewMain ----------------------------------------------------------------- }
@@ -140,7 +140,7 @@ begin
     SceneHumanoidWithSkinnedAnim.Node('Neck') as TTransformNode);
 
   { In normal usage, you don't need to access the TSkinNode inside.
-    We access it only to debug whether InternalUsesShaders is true. }
+    We access it only to debug InternalMeshCalculation. }
   SkinNode := SceneHumanoidWithSkinnedAnim.Node('HumanArmature') as TSkinNode;
 
   // change all UI and variables to use SceneHumanoidWithSkinnedAnim and hide SceneHumanoidNoSkinnedAnim
@@ -260,8 +260,8 @@ begin
   LabelFps.Caption := 'FPS: ' + Container.Fps.ToString;
 
   LabelSkinUsesShaders.Caption :=
-    'Skin is calculated using shaders (faster, but not always possible): ' +
-    BoolToStr(SkinNode.InternalUsesShaders, true);
+    'Skin is calculated using: ' +
+    GetEnumName(TypeInfo(TSkinNode.TInternalMeshCalculation), Ord(SkinNode.InternalMeshCalculation));
 
   if AnimationMode in [amHead, amBoth] then
   begin
@@ -358,6 +358,17 @@ const
   ReferencesCount = 3; // Each of InstancesCount^2 will have ReferencesCount^2-1 additional references
   InstanceShift: TVector3 = (X: 2; Y: 0; Z: 0); // shift to avoid colliding with SceneHumanoidWithSkinnedAnim
   InstanceSpread: TVector3 = (X: 1.5; Y: 0; Z: -1.5);
+  { Animations of female model that look good as looping animations. }
+  FemaleLoopingAnimations: array [0..7] of String = (
+    'Female_Clapping',
+    'Female_Jump',
+    'Female_Punch',
+    'Female_Roll',
+    'Female_Run',
+    'Female_RunningJump',
+    'Female_SwordSlash',
+    'walk'
+  );
 var
   X, Z, TX, TZ: Integer;
   NewScene: TCastleScene;
@@ -383,17 +394,22 @@ begin
         InstanceShift +
         InstanceSpread * Vector3(X, 0, Z);
       NewScene.CastShadows := CheckboxCastShadows.Checked;
+      // assigning nice name is optional, but makes it easier to debug, various log messages may use it
+      NewScene.Name := Format('SceneForCrowd_%d_%d', [X, Z]);
 
       //NewScene.PlayAnimation('walk', true);
       Params := TPlayAnimationParameters.Create;
       try
-        Params.Name := 'walk';
+        Params.Name := //'walk';
+          // choose random animation, to show that we can play different animations
+          //NewScene.AnimationsList[Random(NewScene.AnimationsList.Count)];
+          FemaleLoopingAnimations[Random(Length(FemaleLoopingAnimations))];
         Params.Loop := true;
         { Randomize start a bit, to have each instance start at different time,
           to show this is more powerful than TCastleTransformReference
           as all instances of TCastleTransformReference can play different
           animation. }
-        Params.InitialTime := Random * NewScene.AnimationDuration('walk') * 0.75;
+        Params.InitialTime := Random * NewScene.AnimationDuration(Params.Name) * 0.75;
         NewScene.PlayAnimation(Params);
       finally FreeAndNil(Params) end;
 

@@ -130,19 +130,24 @@ type
     procedure TestImageFromDataUri;
     procedure TestRemoveRoute;
 
-    { VRML 1.0 loads/save matrix per-column. }
+    { VRML 1.0 save/load matrix.
+      See tests/data/matrix_vrml_x3d_format/README.md . }
     procedure TestSaveLoadMatrix_Vrml1;
 
-    { VRML 2.0 loads/save matrix just like VRML 1.0.
+    { VRML 2.0 save/load matrix.
       See tests/data/matrix_vrml_x3d_format/README.md . }
     procedure TestSaveLoadMatrix_Vrml2;
 
-    { X3D loads/save matrix per-row. }
+    { X3D save/load matrix.
+      See tests/data/matrix_vrml_x3d_format/README.md . }
     procedure TestSaveLoadMatrix_X3DClassic;
     procedure TestSaveLoadMatrix_X3DXml;
 
     procedure TestNodeListAutoRemove;
     procedure TestGltfSkinnedAnimationBBox;
+    procedure TestRouteNodesPositions;
+    procedure TestNoFailMultiTexture;
+    procedure TestNodeDestructionNotificationList;
   end;
 
 implementation
@@ -1370,9 +1375,9 @@ begin
 
     { make sure loaded from string Ok }
     AssertTrue(Node.HasForceVersion);
-    AssertTrue(Node.ForceVersion.Major = 3);
-    AssertTrue(Node.ForceVersion.Minor = 1);
-    AssertTrue(Node.Profile = 'Immersive');
+    AssertEquals(3, Node.ForceVersion.Major);
+    AssertEquals(1, Node.ForceVersion.Minor);
+    AssertEquals('Immersive', Node.Profile);
     AssertTrue(Node.Components.Count = 2);
     AssertTrue(Node.Components['NURBS'] = 2);
     AssertTrue(Node.Components['Shaders'] = 1);
@@ -1388,19 +1393,20 @@ begin
 
     { make sure saved and loaded back Ok }
     AssertTrue(Node.HasForceVersion);
-    AssertTrue(Node.ForceVersion.Major = 3);
-    AssertTrue(Node.ForceVersion.Minor = 1);
-    AssertTrue(Node.Profile = 'Immersive');
+    AssertEquals(3, Node.ForceVersion.Major);
+    AssertEquals(1, Node.ForceVersion.Minor);
+    AssertEquals('Immersive', Node.Profile);
     AssertTrue(Node.Components.Count = 2);
     AssertTrue(Node.Components['NURBS'] = 2);
     AssertTrue(Node.Components['Shaders'] = 1);
-    AssertTrue(Node.Meta.Count = 2);
+    AssertEquals(2, Node.Meta.Count);
     AssertTrue(Node.Meta['test''''key'] = 'test"value');
     AssertTrue(Node.Meta['generator'] = 'testgenerator and & weird '' chars " test');
 
     { tweak some Meta }
     Node.Meta['test''''key'] := 'newvalue';
     Node.Meta['testkey2'] := 'newvalue2';
+    AssertEquals(3, Node.Meta.Count);
 
     { replace Node with DeepCopy of itself (should preserve everything) }
     NewNode := Node.DeepCopy as TX3DRootNode;
@@ -1411,6 +1417,7 @@ begin
     { tweak some Meta more }
     Node.Meta['testkey2'] := 'evennewervalue2';
     Node.Meta['testkey3'] := 'newvalue3';
+    AssertEquals(4, Node.Meta.Count);
 
     { save and load again. During Save3D tweak meta generator and source }
     TempStream.Position := 0;
@@ -1421,19 +1428,19 @@ begin
 
     { make sure saved and loaded back Ok }
     AssertTrue(Node.HasForceVersion);
-    AssertTrue(Node.ForceVersion.Major = 3);
-    AssertTrue(Node.ForceVersion.Minor = 1);
-    AssertTrue(Node.Profile = 'Immersive');
-    AssertTrue(Node.Components.Count = 2);
-    AssertTrue(Node.Components['NURBS'] = 2);
-    AssertTrue(Node.Components['Shaders'] = 1);
-    AssertTrue(Node.Meta.Count = 6);
-    AssertTrue(Node.Meta['test''''key'] = 'newvalue');
-    AssertTrue(Node.Meta['testkey2'] = 'evennewervalue2');
-    AssertTrue(Node.Meta['testkey3'] = 'newvalue3');
-    AssertTrue(Node.Meta['generator'] = 'newgenerator');
-    AssertTrue(Node.Meta['generator-previous'] = 'testgenerator and & weird '' chars " test');
-    AssertTrue(Node.Meta['source'] = 'newsource');
+    AssertEquals(3, Node.ForceVersion.Major);
+    AssertEquals(1, Node.ForceVersion.Minor);
+    AssertEquals('Immersive', Node.Profile);
+    AssertEquals(2, Node.Components.Count);
+    AssertEquals(2, Node.Components['NURBS']);
+    AssertEquals(1, Node.Components['Shaders']);
+    AssertEquals(6, Node.Meta.Count);
+    AssertEquals('newvalue', Node.Meta['test''''key']);
+    AssertEquals('evennewervalue2', Node.Meta['testkey2']);
+    AssertEquals('newvalue3', Node.Meta['testkey3']);
+    AssertEquals('newgenerator', Node.Meta['generator']);
+    AssertEquals('testgenerator and & weird '' chars " test', Node.Meta['generator-previous']);
+    AssertEquals('newsource', Node.Meta['source']);
 
     { save and load again, this time going through XML }
     TempStream.Position := 0;
@@ -3349,6 +3356,111 @@ begin
     AssertEquals(5, Skin.FdShapes.Count);
     AssertTrue(Skin.Skeleton <> nil);
   finally FreeAndNil(StagRoot) end;
+end;
+
+procedure TTestX3DNodes.TestRouteNodesPositions;
+var
+  Root: TX3DRootNode;
+  TempStream: TMemoryStream;
+begin
+  Root := LoadNode('castle-data:/x3d_xml_routes_nodes_mixed.x3d');
+  try
+    ApplicationProperties.OnWarning.Add({$ifdef FPC}@{$endif}OnWarningRaiseException);
+    try
+      TempStream := TMemoryStream.Create;
+      SaveNode(Root, TempStream, 'model/x3d+vrml', '', '');
+      FreeAndNil(TempStream);
+
+      TempStream := TMemoryStream.Create;
+      SaveNode(Root, TempStream, 'model/x3d+xml', '', '');
+      FreeAndNil(TempStream);
+    finally
+      ApplicationProperties.OnWarning.Remove({$ifdef FPC}@{$endif}OnWarningRaiseException);
+    end;
+  finally FreeAndNil(Root) end;
+end;
+
+procedure TTestX3DNodes.TestNoFailMultiTexture;
+var
+  Root: TX3DRootNode;
+begin
+  Root := LoadNode('castle-data:/multi_texture_pbr.x3dv');
+  try
+  finally FreeAndNil(Root) end;
+end;
+
+type
+  TSomeClass = class
+    procedure Foo(const Node: TX3DNode);
+  end;
+
+procedure TSomeClass.Foo(const Node: TX3DNode);
+begin
+end;
+
+procedure TTestX3DNodes.TestNodeDestructionNotificationList;
+
+  procedure AssertMethodsEqual(const M1, M2: TNodeDestructionNotification);
+  begin
+    AssertTrue(TMethod(M1).Code = TMethod(M2).Code);
+    AssertTrue(TMethod(M1).Data = TMethod(M2).Data);
+  end;
+
+var
+  List: TNodeDestructionNotificationList;
+  C1, C2, C3: TSomeClass;
+  M: TNodeDestructionNotification;
+begin
+  C1 := TSomeClass.Create;
+  C2 := TSomeClass.Create;
+  C3 := TSomeClass.Create;
+
+  List := TNodeDestructionNotificationList.Create;
+  try
+    List.Add({$ifdef FPC}@{$endif}C1.Foo);
+    List.Add({$ifdef FPC}@{$endif}C2.Foo);
+    List.Add({$ifdef FPC}@{$endif}C2.Foo);
+
+    AssertEquals(3, List.Count);
+    M := {$ifdef FPC}@{$endif}C1.Foo;
+    AssertMethodsEqual(List[0], M);
+    M := {$ifdef FPC}@{$endif}C2.Foo;
+    AssertMethodsEqual(List[1], M);
+    AssertMethodsEqual(List[2], M);
+
+    List.Delete(2);
+
+    AssertEquals(2, List.Count);
+    M := {$ifdef FPC}@{$endif}C1.Foo;
+    AssertMethodsEqual(List[0], M);
+    M := {$ifdef FPC}@{$endif}C2.Foo;
+    AssertMethodsEqual(List[1], M);
+
+    AssertEquals(0, List.IndexOf({$ifdef FPC}@{$endif}C1.Foo));
+    AssertEquals(1, List.IndexOf({$ifdef FPC}@{$endif}C2.Foo));
+
+    // same results with M
+    M := {$ifdef FPC}@{$endif}C1.Foo;
+    AssertEquals(0, List.IndexOf(M));
+    M := {$ifdef FPC}@{$endif}C2.Foo;
+    AssertEquals(1, List.IndexOf(M));
+
+    AssertEquals(-1, List.IndexOf({$ifdef FPC}@{$endif}C3.Foo));
+
+    List.Remove({$ifdef FPC}@{$endif}C1.Foo);
+    AssertEquals(1, List.Count);
+    M := {$ifdef FPC}@{$endif}C2.Foo;
+    AssertMethodsEqual(List[0], M);
+
+    List.Remove({$ifdef FPC}@{$endif}C3.Foo); // does nothing, no such item
+    AssertEquals(1, List.Count);
+    M := {$ifdef FPC}@{$endif}C2.Foo;
+    AssertMethodsEqual(List[0], M);
+  finally FreeAndNil(List) end;
+
+  C1.Free;
+  C2.Free;
+  C3.Free;
 end;
 
 initialization

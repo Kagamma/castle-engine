@@ -221,6 +221,7 @@ begin
     '  Textures non-power-of-2: ' + BoolToStr(GLFeatures.TextureNonPowerOfTwo, true) + NL +
     '  Blend constant parameter: ' + BoolToStr(GLFeatures.BlendConstant, true) + NL +
     '  Float textures: ' + BoolToStr(GLFeatures.TextureFloat, true) + NL +
+    '  Linear filtering of float textures: ' + BoolToStr(GLFeatures.TextureFloatLinear, true) + NL +
     '  Depth textures: ' + BoolToStr(GLFeatures.TextureDepth, true) + NL +
     '  Shadow samplers (necessary for shadow maps): ' + BoolToStr(GLFeatures.TextureDepthCompare, true) + NL +
     '  Packed depth + stencil: ' + BoolToStr(GLFeatures.PackedDepthStencil, true) + NL +
@@ -289,8 +290,7 @@ begin
     '  Max line width: ' + GLFeatures.LineWidth.ToString + NL +
     '  Max fragment uniform components: ' + IntToStr(GLFeatures.MaxFragmentUniformComponents) + NL +
     '  Max vertex uniform components: ' + IntToStr(GLFeatures.MaxVertexUniformComponents) + NL +
-    '  Estimated maximum number of joints for skinning on GPU: ' + IntToStr(GLFeatures.MaxSkinJointsShaders) + NL +
-    '  Used number of joints for skinning on GPU (above limited by MaxPossibleSkinJointsShaders): ' + IntToStr(Min(MaxPossibleSkinJointsShaders, GLFeatures.MaxSkinJointsShaders)) + NL +
+    '  Max skin joints in uniforms: ' + IntToStr(GLFeatures.MaxSkinJointsInUniforms) + NL +
     NL +
 
     Section + NL +

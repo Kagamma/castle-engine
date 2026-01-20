@@ -1,6 +1,6 @@
 {%MainUnit x3dfields.pas}
 {
-  Copyright 2002-2024 Michalis Kamburelis.
+  Copyright 2002-2025 Michalis Kamburelis.
 
   This file is part of "Castle Game Engine".
 
@@ -360,7 +360,23 @@
     procedure Send(const AValue: Int32); override;
   end;
 
+  { Should we define and use generic TSFGenericMatrix.
+
+    FPC can build the version with and without CASTLE_USE_TSFGenericMatrix.
+
+    Delphi can only build the version without CASTLE_USE_TSFGenericMatrix.
+
+    For now, we maintain both versions, and toggling CASTLE_USE_TSFGenericMatrix
+    is useful to test with FPC both versions.
+    Maybe in the future we'll drop CASTLE_USE_TSFGenericMatrix,
+    since it's easier to maintain 1 version than 2 (alas, it means maintaining
+    the worse version, with code duplication; we would prefer to use one day
+    CASTLE_USE_TSFGenericMatrix with Delphi...) }
   {$ifdef FPC}
+    {$define CASTLE_USE_TSFGenericMatrix}
+  {$endif}
+
+  {$ifdef CASTLE_USE_TSFGenericMatrix}
   { Generic class for an X3D field containing a single matrix value. }
   {$ifdef FPC}generic{$endif}
   TSFGenericMatrix<
@@ -396,14 +412,14 @@
 
     class function CreateEvent(const AParentNode: TX3DFileItem; const AName: String; const AInEvent: boolean): TX3DEvent; override;
   end;
-  {$endif}
+  {$endif CASTLE_USE_TSFGenericMatrix}
 
   { X3D field containing a 3x3 matrix with Single precision. }
-  TSFMatrix3f = class({$ifdef FPC}{$ifdef FPC}specialize{$endif} TSFGenericMatrix<
+  TSFMatrix3f = class({$ifdef CASTLE_USE_TSFGenericMatrix}{$ifdef FPC}specialize{$endif} TSFGenericMatrix<
     TMatrix3,
     TVector3,
     TSFMatrix3fEvent>{$else}TX3DSingleField{$endif})
-  {$ifndef FPC}
+  {$ifndef CASTLE_USE_TSFGenericMatrix}
   strict private
     FValue: TMatrix3;
     DefaultValue: TMatrix3;
@@ -413,7 +429,7 @@
     procedure SaveToStreamValue(Writer: TX3DWriter); override;
   {$endif}
   public
-    {$ifndef FPC}
+    {$ifndef CASTLE_USE_TSFGenericMatrix}
     constructor Create(const AParentNode: TX3DFileItem;
       const AExposed: boolean; const AName: String; const AValue: TMatrix3);
 
@@ -439,11 +455,11 @@
   end;
 
   { X3D field containing a 3x3 matrix with Double precision. }
-  TSFMatrix3d = class({$ifdef FPC}{$ifdef FPC}specialize{$endif} TSFGenericMatrix<
+  TSFMatrix3d = class({$ifdef CASTLE_USE_TSFGenericMatrix}{$ifdef FPC}specialize{$endif} TSFGenericMatrix<
     TMatrix3Double,
     TVector3Double,
     TSFMatrix3dEvent>{$else}TX3DSingleField{$endif})
-  {$ifndef FPC}
+  {$ifndef CASTLE_USE_TSFGenericMatrix}
   strict private
     FValue: TMatrix3Double;
     DefaultValue: TMatrix3Double;
@@ -453,7 +469,7 @@
     procedure SaveToStreamValue(Writer: TX3DWriter); override;
   {$endif}
   public
-    {$ifndef FPC}
+    {$ifndef CASTLE_USE_TSFGenericMatrix}
     constructor Create(const AParentNode: TX3DFileItem;
       const AExposed: boolean; const AName: String; const AValue: TMatrix3Double);
 
@@ -479,11 +495,11 @@
   end;
 
   { X3D field containing a 4x4 matrix with Single precision. }
-  TSFMatrix4f = class({$ifdef FPC}{$ifdef FPC}specialize{$endif} TSFGenericMatrix<
+  TSFMatrix4f = class({$ifdef CASTLE_USE_TSFGenericMatrix}{$ifdef FPC}specialize{$endif} TSFGenericMatrix<
     TMatrix4,
     TVector4,
     TSFMatrix4fEvent>{$else}TX3DSingleField{$endif})
-  {$ifndef FPC}
+  {$ifndef CASTLE_USE_TSFGenericMatrix}
   strict private
     FValue: TMatrix4;
     DefaultValue: TMatrix4;
@@ -493,7 +509,7 @@
     procedure SaveToStreamValue(Writer: TX3DWriter); override;
   {$endif}
   public
-    {$ifndef FPC}
+    {$ifndef CASTLE_USE_TSFGenericMatrix}
     constructor Create(const AParentNode: TX3DFileItem;
       const AExposed: boolean; const AName: String; const AValue: TMatrix4);
 
@@ -519,11 +535,11 @@
   end;
 
   { X3D field containing a 4x4 matrix with Double precision. }
-  TSFMatrix4d = class({$ifdef FPC}{$ifdef FPC}specialize{$endif} TSFGenericMatrix<
+  TSFMatrix4d = class({$ifdef CASTLE_USE_TSFGenericMatrix}{$ifdef FPC}specialize{$endif} TSFGenericMatrix<
     TMatrix4Double,
     TVector4Double,
     TSFMatrix4dEvent>{$else}TX3DSingleField{$endif})
-  {$ifndef FPC}
+  {$ifndef CASTLE_USE_TSFGenericMatrix}
   strict private
     FValue: TMatrix4Double;
     DefaultValue: TMatrix4Double;
@@ -533,7 +549,7 @@
     procedure SaveToStreamValue(Writer: TX3DWriter); override;
   {$endif}
   public
-    {$ifndef FPC}
+    {$ifndef CASTLE_USE_TSFGenericMatrix}
     constructor Create(const AParentNode: TX3DFileItem;
       const AExposed: boolean; const AName: String; const AValue: TMatrix4Double);
 
@@ -1725,23 +1741,7 @@ end;
 
 { TSFGenericMatrix ---------------------------------------------------------------------------- }
 
-{ VRML 1.0 and X3D specifications differ in how to load / save matrix.
-
-  See tests/data/matrix_vrml_x3d_format/README.md
-  for details.
-
-  This routine decides which format to use.
-  - For VRML 1.0 and 2.0, we load/save one column after another
-    (returns @false).
-  - For X3D, we load/save one row after another
-    (returns @true; optimize for this, as the modern recommended format).
-}
-function MatrixFormatPerRow(const Version: TX3DVersion): Boolean;
-begin
-  Result := Version.Major >= 3;
-end;
-
-{$ifdef FPC}
+{$ifdef CASTLE_USE_TSFGenericMatrix}
 constructor TSFGenericMatrix{$ifndef FPC}<
   TItem,
   TItemColumn,
@@ -1759,74 +1759,35 @@ procedure TSFGenericMatrix{$ifndef FPC}<
   TItemColumn,
   TEvent>{$endif} .
   ParseValue(Lexer: TX3DLexer; Reader: TX3DReader);
-
-  { TODO: Calling here global MatrixFormatPerRow causes FPC 3.2.2 error:
-    "Error: Global Generic template references static symtable".
-    Submit FPC bug.
-    Workaround: inline MatrixFormatPerRow. }
-  function MatrixFormatPerRow(const Version: TX3DVersion): Boolean;
-  begin
-    Result := Version.Major >= 3;
-  end;
-
-  { Read matrix to Result assuming MatrixFormatPerRow = true. }
-  function ReadMatrix: TItem;
-  var
-    Column, Row: integer;
+var
+  Column, Row: integer;
+begin
+  for Column := 0 to MatrixSize - 1 do
   begin
     for Row := 0 to MatrixSize - 1 do
     begin
-      for Column := 0 to MatrixSize - 1 do
-      begin
-        Lexer.CheckTokenIs(TokenNumbers, 'float number');
-        Result.Data[Column, Row] := Lexer.TokenFloat;
-        Lexer.NextToken;
-      end;
+      Lexer.CheckTokenIs(TokenNumbers, 'float number');
+      FValue.Data[Column, Row] := Lexer.TokenFloat;
+      Lexer.NextToken;
     end;
   end;
-
-begin
-  if MatrixFormatPerRow(Reader.Version) then
-    FValue := ReadMatrix
-  else
-    FValue := ReadMatrix.Transpose;
 end;
 
 procedure TSFGenericMatrix.SaveToStreamValue(Writer: TX3DWriter);
-
-  { TODO: Calling here global MatrixFormatPerRow causes FPC 3.2.2 error:
-    "Error: Global Generic template references static symtable".
-    Submit FPC bug.
-    Workaround: inline MatrixFormatPerRow. }
-  function MatrixFormatPerRow(const Version: TX3DVersion): Boolean;
-  begin
-    Result := Version.Major >= 3;
-  end;
-
-  { Save matrix to Writer (X3D classic encoding / VRML)
-    assuming MatrixFormatPerRow = true. }
-  procedure SaveMatrix(const Matrix: TItem);
-  var
-    V: TItemColumn;
-    Row: Integer;
-  begin
-    V := Matrix.Rows[0];
-    Writer.Writeln(V.ToRawString(FloatOutputFormat));
-
-    Writer.IncIndent;
-    for Row := 1 to MatrixSize - 1 do
-    begin
-      V := Matrix.Rows[Row];
-      Writer.WritelnIndent(V.ToRawString(FloatOutputFormat));
-    end;
-    Writer.DecIndent;
-  end;
-
+var
+  V: TItemColumn;
+  Column: Integer;
 begin
-  if MatrixFormatPerRow(Writer.Version) then
-    SaveMatrix(FValue)
-  else
-    SaveMatrix(FValue.Transpose);
+  V := FValue.Columns[0];
+  Writer.Writeln(V.ToRawString(FloatOutputFormat));
+
+  Writer.IncIndent;
+  for Column := 1 to MatrixSize - 1 do
+  begin
+    V := FValue.Columns[Column];
+    Writer.WritelnIndent(V.ToRawString(FloatOutputFormat));
+  end;
+  Writer.DecIndent;
 end;
 
 function TSFGenericMatrix.Equals(SecondValue: TX3DField): boolean;
@@ -1911,7 +1872,7 @@ begin
     Send(FieldValue);
   finally FreeAndNil(FieldValue) end;
 end;
-{$endif}
+{$endif CASTLE_USE_TSFGenericMatrix}
 
 { TSFMatrix3f ------------------------------------------------------------------ }
 
@@ -1920,7 +1881,7 @@ begin
   Result := 'SFMatrix3f';
 end;
 
-{$ifndef FPC}
+{$ifndef CASTLE_USE_TSFGenericMatrix}
 constructor TSFMatrix3f.Create(const AParentNode: TX3DFileItem;
     const AExposed: boolean; const AName: String; const AValue: TMatrix3);
 begin
@@ -1930,56 +1891,35 @@ begin
 end;
 
 procedure TSFMatrix3f.ParseValue(Lexer: TX3DLexer; Reader: TX3DReader);
-
-  { Read matrix to Result assuming MatrixFormatPerRow = true. }
-  function ReadMatrix: TMatrix3;
-  var
-    Column, Row: integer;
+var
+  Column, Row: integer;
+begin
+  for Column := 0 to MatrixSize - 1 do
   begin
     for Row := 0 to MatrixSize - 1 do
     begin
-      for Column := 0 to MatrixSize - 1 do
-      begin
-        Lexer.CheckTokenIs(TokenNumbers, 'float number');
-        Result.Data[Column, Row] := Lexer.TokenFloat;
-        Lexer.NextToken;
-      end;
+      Lexer.CheckTokenIs(TokenNumbers, 'float number');
+      FValue.Data[Column, Row] := Lexer.TokenFloat;
+      Lexer.NextToken;
     end;
   end;
-
-begin
-  if MatrixFormatPerRow(Reader.Version) then
-    FValue := ReadMatrix
-  else
-    FValue := ReadMatrix.Transpose;
 end;
 
 procedure TSFMatrix3f.SaveToStreamValue(Writer: TX3DWriter);
-
-  { Save matrix to Writer (X3D classic encoding / VRML)
-    assuming MatrixFormatPerRow = true. }
-  procedure SaveMatrix(const Matrix: TMatrix3);
-  var
-    V: TVector3;
-    Row: Integer;
-  begin
-    V := Matrix.Rows[0];
-    Writer.Writeln(V.ToRawString(FloatOutputFormat));
-
-    Writer.IncIndent;
-    for Row := 1 to MatrixSize - 1 do
-    begin
-      V := Matrix.Rows[Row];
-      Writer.WritelnIndent(V.ToRawString(FloatOutputFormat));
-    end;
-    Writer.DecIndent;
-  end;
-
+var
+  V: TVector3;
+  Column: Integer;
 begin
-  if MatrixFormatPerRow(Writer.Version) then
-    SaveMatrix(FValue)
-  else
-    SaveMatrix(FValue.Transpose);
+  V := FValue.Columns[0];
+  Writer.Writeln(V.ToRawString(FloatOutputFormat));
+
+  Writer.IncIndent;
+  for Column := 1 to MatrixSize - 1 do
+  begin
+    V := FValue.Columns[Column];
+    Writer.WritelnIndent(V.ToRawString(FloatOutputFormat));
+  end;
+  Writer.DecIndent;
 end;
 
 function TSFMatrix3f.Equals(SecondValue: TX3DField): boolean;
@@ -2064,8 +2004,7 @@ begin
     Send(FieldValue);
   finally FreeAndNil(FieldValue) end;
 end;
-{$endif}
-
+{$endif not CASTLE_USE_TSFGenericMatrix}
 
 { TSFMatrix3d ------------------------------------------------------------------ }
 
@@ -2074,7 +2013,7 @@ begin
   Result := 'SFMatrix3d';
 end;
 
-{$ifndef FPC}
+{$ifndef CASTLE_USE_TSFGenericMatrix}
 constructor TSFMatrix3d.Create(const AParentNode: TX3DFileItem;
     const AExposed: boolean; const AName: String; const AValue: TMatrix3Double);
 begin
@@ -2084,56 +2023,35 @@ begin
 end;
 
 procedure TSFMatrix3d.ParseValue(Lexer: TX3DLexer; Reader: TX3DReader);
-
-  { Read matrix to Result assuming MatrixFormatPerRow = true. }
-  function ReadMatrix: TMatrix3Double;
-  var
-    Column, Row: integer;
+var
+  Column, Row: integer;
+begin
+  for Column := 0 to MatrixSize - 1 do
   begin
     for Row := 0 to MatrixSize - 1 do
     begin
-      for Column := 0 to MatrixSize - 1 do
-      begin
-        Lexer.CheckTokenIs(TokenNumbers, 'float number');
-        Result.Data[Column, Row] := Lexer.TokenFloat;
-        Lexer.NextToken;
-      end;
+      Lexer.CheckTokenIs(TokenNumbers, 'float number');
+      FValue.Data[Column, Row] := Lexer.TokenFloat;
+      Lexer.NextToken;
     end;
   end;
-
-begin
-  if MatrixFormatPerRow(Reader.Version) then
-    FValue := ReadMatrix
-  else
-    FValue := ReadMatrix.Transpose;
 end;
 
 procedure TSFMatrix3d.SaveToStreamValue(Writer: TX3DWriter);
-
-  { Save matrix to Writer (X3D classic encoding / VRML)
-    assuming MatrixFormatPerRow = true. }
-  procedure SaveMatrix(const Matrix: TMatrix3Double);
-  var
-    V: TVector3Double;
-    Row: Integer;
-  begin
-    V := Matrix.Rows[0];
-    Writer.Writeln(V.ToRawString(FloatOutputFormat));
-
-    Writer.IncIndent;
-    for Row := 1 to MatrixSize - 1 do
-    begin
-      V := Matrix.Rows[Row];
-      Writer.WritelnIndent(V.ToRawString(FloatOutputFormat));
-    end;
-    Writer.DecIndent;
-  end;
-
+var
+  V: TVector3Double;
+  Column: Integer;
 begin
-  if MatrixFormatPerRow(Writer.Version) then
-    SaveMatrix(FValue)
-  else
-    SaveMatrix(FValue.Transpose);
+  V := FValue.Columns[0];
+  Writer.Writeln(V.ToRawString(FloatOutputFormat));
+
+  Writer.IncIndent;
+  for Column := 1 to MatrixSize - 1 do
+  begin
+    V := FValue.Columns[Column];
+    Writer.WritelnIndent(V.ToRawString(FloatOutputFormat));
+  end;
+  Writer.DecIndent;
 end;
 
 function TSFMatrix3d.Equals(SecondValue: TX3DField): boolean;
@@ -2218,7 +2136,7 @@ begin
     Send(FieldValue);
   finally FreeAndNil(FieldValue) end;
 end;
-{$endif}
+{$endif not CASTLE_USE_TSFGenericMatrix}
 
 { TSFMatrix4f ------------------------------------------------------------------ }
 
@@ -2227,7 +2145,7 @@ begin
   Result := 'SFMatrix4f';
 end;
 
-{$ifndef FPC}
+{$ifndef CASTLE_USE_TSFGenericMatrix}
 constructor TSFMatrix4f.Create(const AParentNode: TX3DFileItem;
     const AExposed: boolean; const AName: String; const AValue: TMatrix4);
 begin
@@ -2237,56 +2155,35 @@ begin
 end;
 
 procedure TSFMatrix4f.ParseValue(Lexer: TX3DLexer; Reader: TX3DReader);
-
-  { Read matrix to Result assuming MatrixFormatPerRow = true. }
-  function ReadMatrix: TMatrix4;
-  var
-    Column, Row: integer;
+var
+  Column, Row: integer;
+begin
+  for Column := 0 to MatrixSize - 1 do
   begin
     for Row := 0 to MatrixSize - 1 do
     begin
-      for Column := 0 to MatrixSize - 1 do
-      begin
-        Lexer.CheckTokenIs(TokenNumbers, 'float number');
-        Result.Data[Column, Row] := Lexer.TokenFloat;
-        Lexer.NextToken;
-      end;
+      Lexer.CheckTokenIs(TokenNumbers, 'float number');
+      FValue.Data[Column, Row] := Lexer.TokenFloat;
+      Lexer.NextToken;
     end;
   end;
-
-begin
-  if MatrixFormatPerRow(Reader.Version) then
-    FValue := ReadMatrix
-  else
-    FValue := ReadMatrix.Transpose;
 end;
 
 procedure TSFMatrix4f.SaveToStreamValue(Writer: TX3DWriter);
-
-  { Save matrix to Writer (X3D classic encoding / VRML)
-    assuming MatrixFormatPerRow = true. }
-  procedure SaveMatrix(const Matrix: TMatrix4);
-  var
-    V: TVector4;
-    Row: Integer;
-  begin
-    V := Matrix.Rows[0];
-    Writer.Writeln(V.ToRawString(FloatOutputFormat));
-
-    Writer.IncIndent;
-    for Row := 1 to MatrixSize - 1 do
-    begin
-      V := Matrix.Rows[Row];
-      Writer.WritelnIndent(V.ToRawString(FloatOutputFormat));
-    end;
-    Writer.DecIndent;
-  end;
-
+var
+  V: TVector4;
+  Column: Integer;
 begin
-  if MatrixFormatPerRow(Writer.Version) then
-    SaveMatrix(FValue)
-  else
-    SaveMatrix(FValue.Transpose);
+  V := FValue.Columns[0];
+  Writer.Writeln(V.ToRawString(FloatOutputFormat));
+
+  Writer.IncIndent;
+  for Column := 1 to MatrixSize - 1 do
+  begin
+    V := FValue.Columns[Column];
+    Writer.WritelnIndent(V.ToRawString(FloatOutputFormat));
+  end;
+  Writer.DecIndent;
 end;
 
 function TSFMatrix4f.Equals(SecondValue: TX3DField): boolean;
@@ -2371,8 +2268,7 @@ begin
     Send(FieldValue);
   finally FreeAndNil(FieldValue) end;
 end;
-{$endif}
-
+{$endif not CASTLE_USE_TSFGenericMatrix}
 
 { TSFMatrix4d ------------------------------------------------------------------ }
 
@@ -2381,7 +2277,7 @@ begin
   Result := 'SFMatrix4d';
 end;
 
-{$ifndef FPC}
+{$ifndef CASTLE_USE_TSFGenericMatrix}
 constructor TSFMatrix4d.Create(const AParentNode: TX3DFileItem;
     const AExposed: boolean; const AName: String; const AValue: TMatrix4Double);
 begin
@@ -2391,56 +2287,35 @@ begin
 end;
 
 procedure TSFMatrix4d.ParseValue(Lexer: TX3DLexer; Reader: TX3DReader);
-
-  { Read matrix to Result assuming MatrixFormatPerRow = true. }
-  function ReadMatrix: TMatrix4Double;
-  var
-    Column, Row: integer;
+var
+  Column, Row: integer;
+begin
+  for Column := 0 to MatrixSize - 1 do
   begin
     for Row := 0 to MatrixSize - 1 do
     begin
-      for Column := 0 to MatrixSize - 1 do
-      begin
-        Lexer.CheckTokenIs(TokenNumbers, 'float number');
-        Result.Data[Column, Row] := Lexer.TokenFloat;
-        Lexer.NextToken;
-      end;
+      Lexer.CheckTokenIs(TokenNumbers, 'float number');
+      FValue.Data[Column, Row] := Lexer.TokenFloat;
+      Lexer.NextToken;
     end;
   end;
-
-begin
-  if MatrixFormatPerRow(Reader.Version) then
-    FValue := ReadMatrix
-  else
-    FValue := ReadMatrix.Transpose;
 end;
 
 procedure TSFMatrix4d.SaveToStreamValue(Writer: TX3DWriter);
-
-  { Save matrix to Writer (X3D classic encoding / VRML)
-    assuming MatrixFormatPerRow = true. }
-  procedure SaveMatrix(const Matrix: TMatrix4Double);
-  var
-    V: TVector4Double;
-    Row: Integer;
-  begin
-    V := Matrix.Rows[0];
-    Writer.Writeln(V.ToRawString(FloatOutputFormat));
-
-    Writer.IncIndent;
-    for Row := 1 to MatrixSize - 1 do
-    begin
-      V := Matrix.Rows[Row];
-      Writer.WritelnIndent(V.ToRawString(FloatOutputFormat));
-    end;
-    Writer.DecIndent;
-  end;
-
+var
+  V: TVector4Double;
+  Column: Integer;
 begin
-  if MatrixFormatPerRow(Writer.Version) then
-    SaveMatrix(FValue)
-  else
-    SaveMatrix(FValue.Transpose);
+  V := FValue.Columns[0];
+  Writer.Writeln(V.ToRawString(FloatOutputFormat));
+
+  Writer.IncIndent;
+  for Column := 1 to MatrixSize - 1 do
+  begin
+    V := FValue.Columns[Column];
+    Writer.WritelnIndent(V.ToRawString(FloatOutputFormat));
+  end;
+  Writer.DecIndent;
 end;
 
 function TSFMatrix4d.Equals(SecondValue: TX3DField): boolean;
@@ -2525,8 +2400,7 @@ begin
     Send(FieldValue);
   finally FreeAndNil(FieldValue) end;
 end;
-{$endif}
-
+{$endif not CASTLE_USE_TSFGenericMatrix}
 
 { TSFMatrix ------------------------------------------------------------------ }
 

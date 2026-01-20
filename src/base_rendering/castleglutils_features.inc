@@ -81,7 +81,8 @@ type
     procedure Refresh;
 
     { Detect GPUs with low texture memory.
-      Looks at @link(CurrentAvailableVideoMemory) or @link(CurrentTexture), whichever is available.
+      Looks at @link(CurrentAvailableVideoMemory) or @link(TextureFreeMemory),
+      whichever is available.
 
       This is useful to detect at runtime when to use e.g. compressed textures
       (S3TC and such) or downscaled textures (using @link(GLTextureScale) or
@@ -211,6 +212,7 @@ type
     FVertexArrayObject: Boolean;
     FBlendConstant: Boolean;
     FTextureFloat: Boolean;
+    FTextureFloatLinear: Boolean;
     FTextureDepth, FTextureDepthCompare: Boolean;
     FShaders: Boolean;
     FEnableFixedFunction: Boolean;
@@ -227,7 +229,6 @@ type
     FTransformFeedbackVaryings: Boolean;
     FMaxFragmentUniformComponents: Cardinal;
     FMaxVertexUniformComponents: Cardinal;
-    FMaxSkinJointsShaders: Cardinal;
     class var
       FRequestCapabilities: TGLRequestCapabilities;
       FDebug: Boolean;
@@ -421,8 +422,27 @@ type
     { glBlendColor and GL_CONSTANT_ALPHA support. }
     property BlendConstant: Boolean read FBlendConstant;
 
-    { Support for float texture formats for glTexImage2d. }
+    { Support for float texture formats. }
     property TextureFloat: Boolean read FTextureFloat;
+
+    { Support for linear filtering of float texture formats.
+      Can only be @true when @link(TextureFloat) is @true.
+
+      OpenGL ES and WebGL require separate extension to enable linear filtering,
+      and the distinction is important for us as sometimes float textures
+      with nearest filtering are enough: e.g. to pass TSkinNode joints
+      information, we use nearest filtering.
+
+      See:
+
+      @unorderedList(
+        @item https://registry.khronos.org/OpenGL/extensions/OES/OES_texture_float.txt
+        @item https://registry.khronos.org/OpenGL/extensions/OES/OES_texture_float_linear.txt
+
+        @item (only for WebGL1!) https://developer.mozilla.org/en-US/docs/Web/API/OES_texture_float
+        @item https://developer.mozilla.org/en-US/docs/Web/API/OES_texture_float_linear
+      ) }
+    property TextureFloatLinear: Boolean read FTextureFloatLinear;
 
     { Support for depth texture formats for glTexImage2d. }
     property TextureDepth: Boolean read FTextureDepth;
@@ -601,9 +621,8 @@ type
       0 if @link(Shaders) is @false. }
     property MaxVertexUniformComponents: Cardinal read FMaxVertexUniformComponents;
 
-    { Estimated maximum possible number of joints for skinning on GPU.
-      Based on @link(MaxVertexUniformComponents). }
-    property MaxSkinJointsShaders: Cardinal read FMaxSkinJointsShaders;
+    { Maximum number of TSkinNode joints that can be passed in uniforms. }
+    function MaxSkinJointsInUniforms: Cardinal;
   end;
 
 { Initialize GLVersion and GLFeatures. }
@@ -1221,10 +1240,24 @@ begin
     {$endif};
 
   FTextureFloat :=
-    {$if defined(CASTLE_WEBGL)} HasExtension('GL_OES_texture_float')
-    {$elseif defined(OpenGLES)} false
+    { On WebGL 2, no need for any extension, according to tests and to
+      https://developer.mozilla.org/en-US/docs/Web/API/OES_texture_float :
+      """Note: This extension is only available to WebGL1 contexts.
+      In WebGL2, the functionality of this extension is available on the WebGL2
+      context by default.
+      """
+    }
+    {$if defined(CASTLE_WEBGL)} VersionWebGL_2 or HasExtension('GL_OES_texture_float')
+    {$elseif defined(OpenGLES)} HasExtension('GL_OES_texture_float')
     {$else} HasExtension('GL_ATI_texture_float') or HasExtension('GL_ARB_texture_float')
     {$endif};
+
+  FTextureFloatLinear := FTextureFloat and (
+    {$if defined(CASTLE_WEBGL)} HasExtension('GL_OES_texture_float_linear')
+    {$elseif defined(OpenGLES)} HasExtension('GL_OES_texture_float_linear')
+    {$else} true
+    {$endif}
+  );
 
   FTextureDepth :=
     {$if defined(CASTLE_WEBGL)}
@@ -1364,16 +1397,10 @@ begin
   begin
     FMaxFragmentUniformComponents := glGetInteger(GL_MAX_FRAGMENT_UNIFORM_COMPONENTS);
     FMaxVertexUniformComponents := glGetInteger(GL_MAX_VERTEX_UNIFORM_COMPONENTS);
-    FMaxSkinJointsShaders := (MaxVertexUniformComponents -
-        { very rough estimation of the rest of uniforms }
-        4 * 10)
-        { each joint is mat4 uniform }
-        div 16;
   end else
   begin
     FMaxFragmentUniformComponents := 0;
     FMaxVertexUniformComponents := 0;
-    FMaxSkinJointsShaders := 0;
   end;
 
   // set GLFeatures singleton, TGLMemoryInfo.Create and TGLMemoryInfo.Refresh depend on it
@@ -1449,6 +1476,25 @@ begin
     if GLFeatures <> nil then
       raise Exception.CreateFmt(SCannotChangeAfterContextInitialized, ['TGLFeatures.Debug']);
     FDebug := Value;
+  end;
+end;
+
+function TGLFeatures.MaxSkinJointsInUniforms: Cardinal;
+const
+  // very rough estimation of the rest of uniforms
+  OtherUniformsSize = 4 * 20;
+begin
+  if MaxVertexUniformComponents < OtherUniformsSize then
+    Result := 0
+  else
+  begin
+    Result := (MaxVertexUniformComponents - OtherUniformsSize)
+      { each joint is mat4 uniform }
+      div 16;
+    { Cap at 128, avoids conan Skin (testcase from Aaon) failing with
+      "Internal error: assembly compile error for vertex shader at offset 1832:"
+      at "NVIDIA GeForce RTX 3050 Ti Laptop GPU/PCIe/SSE2". }
+    MinVar(Result, 128);
   end;
 end;
 

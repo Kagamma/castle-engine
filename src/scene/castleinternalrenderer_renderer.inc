@@ -140,6 +140,9 @@
     procedure RenderShapeLineProperties(const Shape: TX3DRendererShape;
       const RenderOptions: TCastleRenderOptions;
       const Shader: TShader);
+    procedure RenderShapePointProperties(const Shape: TX3DRendererShape;
+      const RenderOptions: TCastleRenderOptions;
+      const Shader: TShader);
     procedure RenderShapeMaterials(const Shape: TX3DRendererShape;
       const RenderOptions: TCastleRenderOptions;
       const Shader: TShader);
@@ -425,7 +428,7 @@ var
 begin
   { Restore defaults, for other rendering code outside of TRenderer.
 
-    These RenderContext properties are always set before rendering every shape,
+    These RenderContext properties are always set before rendering any shape,
     so ClassRenderBegin doesn't care to set them to any value,
     and we just reset them in ClassRenderEnd. }
   RenderContext.CullFace := false;
@@ -437,8 +440,11 @@ begin
 
   { Restore defaults, for other rendering code outside of TRenderer.
 
-    These RenderContext properties are always set in InitializeFromRenderOptions,
-    so they are constant for each shape.
+    These RenderContext properties are always set before rendering any shape, in
+    - InitializeFromRenderOptions,
+    - RenderShapeLineProperties,
+    - RenderShapePointProperties
+    and later they remain constant during shape rendering.
     So ClassRenderBegin doesn't care to set them to any value,
     and we just reset them in ClassRenderEnd. }
   RenderContext.PointSize := 1;
@@ -714,6 +720,35 @@ begin
     RenderContext.LineWidth := RenderOptions.LineWidth;
     RenderContext.LineType := ltSolid;
   end;
+
+  RenderShapePointProperties(Shape, RenderOptions, Shader);
+end;
+
+procedure TRenderer.RenderShapePointProperties(const Shape: TX3DRendererShape;
+  const RenderOptions: TCastleRenderOptions;
+  const Shader: TShader);
+var
+  PP: TPointPropertiesNode;
+  PointSize: Single;
+begin
+  if Shape.State.Appearance <> nil then
+    PP := Shape.State.Appearance.PointProperties
+  else
+    PP := nil;
+
+  // calculate PointSize
+  PointSize := RenderOptions.PointSize;
+  if PP <> nil then
+    PointSize := PointSize * Clamped(
+      PP.FdPointSizeScaleFactor.Value,
+      PP.FdPointSizeMinValue.Value,
+      PP.FdPointSizeMaxValue.Value);
+
+  { set RenderContext.PointSize.
+    Do this once PointSize is fully calculated, as this changes GL state
+    (if RenderContext.PointSize changes) so avoid changing RenderContext.PointSize
+    multiple times. }
+  RenderContext.PointSize := PointSize;
 
   RenderShapeMaterials(Shape, RenderOptions, Shader);
 end;
@@ -1307,6 +1342,45 @@ procedure TRenderer.RenderShapeTextures(const Shape: TX3DRendererShape;
     end;
   end;
 
+  procedure EnableSkinJointTexture(var ABoundTextureUnits: Cardinal; const Shader: TShader);
+  var
+    JointTextureNode: TPixelTextureNode;
+    Res: TTextureResource;
+    Skin: TSkinNode;
+  begin
+    Skin := Shape.State.Skin;
+    if (Skin <> nil) and
+       (Skin.InternalMeshCalculation = mcGpuTexture) and
+       { Checking Skin.InternalJointMatrix makes sure that
+         TSkinNode.Update has actually run, so we started some skinned animation,
+         and we should have InternalJointMatrix and InternalJointTexture valid. }
+       (Skin.InternalJointMatrix <> nil) and
+       (Skin.InternalJointMatrix.Count = Skin.FdJoints.Count) then
+    begin
+      JointTextureNode := Skin.InternalJointTexture;
+      if JointTextureNode = nil then
+      begin
+        WritelnWarning('Skin', 'Skin "%s" has InternalMeshCalculation = mcGpuTexture but InternalJointTexture = nil, so we do not have texture to use', [
+          Shape.State.Skin.NiceName
+        ]);
+        Exit;
+      end;
+
+      Res := TTextureResources.Get(JointTextureNode);
+      if Res = nil then
+      begin
+        WritelnWarning('Skin', 'Skin "%s" has no renderer texture resource for joint texture, cannot use it', [
+          Skin.NiceName
+        ]);
+        Exit;
+      end;
+
+      Shader.SkinJointTextureUnit := ABoundTextureUnits;
+      Res.Bind(ABoundTextureUnits);
+      Inc(ABoundTextureUnits);
+    end;
+  end;
+
   function GetAlphaCutoff(const Shape: TShape): Single;
   begin
     if Shape.State.Appearance <> nil then
@@ -1378,6 +1452,7 @@ procedure TRenderer.RenderShapeTextures(const Shape: TX3DRendererShape;
 
       if Shape.InternalShadowMaps <> nil then
         EnableShadowMaps(Shape.InternalShadowMaps, BoundTextureUnits, Shader);
+      EnableSkinJointTexture(BoundTextureUnits, Shader);
 
       { If there is special texture like a normalmap, enable it. }
       BumpMappingEnable(Shape, RenderOptions, BoundTextureUnits, TexCoordsNeeded, Shader);
@@ -1432,6 +1507,11 @@ procedure TRenderer.RenderShapeInside(const Shape: TX3DRendererShape;
     case RenderingCamera.Target of
       rtVarianceShadowMap:
         begin
+          { TODO: If we enable plugs in shadow_map_generate, then we could
+            make shadow maps shader cooperate with skinned animation on shaders,
+            and thus be optimal and also correct with Variance Shadow Maps. }
+          if Shader.NeedsSkinWeightsJoints then
+            WritelnWarning('TODO: rtVarianceShadowMap is not correct togetehr with skinned animation on shaders');
           if VarianceShadowMapsShaders = nil then
             VarianceShadowMapsShaders := TCustomShaders.Create(
               '#define VARIANCE_SHADOW_MAPS' + NL + {$I shadow_map_generate.vs.inc},
@@ -1440,11 +1520,29 @@ procedure TRenderer.RenderShapeInside(const Shape: TX3DRendererShape;
         end;
       rtShadowMap:
         begin
-          if ShadowMapsShaders = nil then
-            ShadowMapsShaders := TCustomShaders.Create(
-              {$I shadow_map_generate.vs.inc},
-              {$I shadow_map_generate.fs.inc});
-          MeshRenderer.CustomShaders := ShadowMapsShaders;
+          { Do not assign MeshRenderer.CustomShaders when we make skinned animation.
+            We need to do full shader then, to apply skinned animation on GPU,
+            and thus render animated mesh to a shadow map.
+            Test below is a subset of tests before doing Shader.EnableSkinnedAnimation
+            in TSkinnedRenderer.RenderCoordinateBegin .
+            Testcase that this is necessary:
+            https://forum.castle-engine.io/t/shadow-map-not-updating-from-an-animated-tcastlescene/2062/4 .
+
+            TODO: This could be more optimal, if we enable shadow_map_generate.vs
+            to have plugs and expose PLUG_vertex_object_space_change .
+            Then we could still have special minimal shader,
+            but doing skinned animation on GPU. }
+          if not (
+            Shape.State.SkinnedAnimatedShape and
+            (Shape.State.Skin.InternalMeshCalculation <> mcCpu)
+          ) then
+          begin
+            if ShadowMapsShaders = nil then
+              ShadowMapsShaders := TCustomShaders.Create(
+                {$I shadow_map_generate.vs.inc},
+                {$I shadow_map_generate.fs.inc});
+            MeshRenderer.CustomShaders := ShadowMapsShaders;
+          end;
         end;
       else
         begin

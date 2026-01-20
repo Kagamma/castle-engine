@@ -38,7 +38,7 @@ jobs:
     # See https://hub.docker.com/r/kambi/castle-engine-cloud-builds-tools/ .
     container: kambi/castle-engine-cloud-builds-tools:${{ matrix.docker-tag }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       # Set env CASTLE_ENGINE_PATH following
       # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#environment-files
       # https://brandur.org/fragments/github-actions-env-vars-in-env-vars
@@ -75,7 +75,7 @@ jobs:
     runs-on: ubuntu-latest
     container: kambi/castle-engine-cloud-builds-tools:cge-none
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Set environment
         run: echo "CASTLE_ENGINE_PATH=$GITHUB_WORKSPACE" >> $GITHUB_ENV
       - name: Build Examples
@@ -96,7 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     container: kambi/castle-engine-cloud-builds-tools:cge-none
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Set environment
         run: echo "CASTLE_ENGINE_PATH=$GITHUB_WORKSPACE" >> $GITHUB_ENV
 
@@ -140,8 +140,8 @@ jobs:
       matrix:
         pack-job-name: [
           win64-x86_64,
-          win32-i386,
           linux-x86_64,
+          win32-i386-bundle,
           win64-x86_64-bundle,
           linux-x86_64-bundle
         ]
@@ -150,14 +150,15 @@ jobs:
             os: win64
             cpu: x86_64
             bundle: false
-          - pack-job-name: win32-i386
-            os: win32
-            cpu: i386
-            bundle: false
           - pack-job-name: linux-x86_64
             os: linux
             cpu: x86_64
             bundle: false
+
+          - pack-job-name: win32-i386-bundle
+            os: win32
+            cpu: i386
+            bundle: true
           - pack-job-name: win64-x86_64-bundle
             os: win64
             cpu: x86_64
@@ -167,32 +168,45 @@ jobs:
             cpu: x86_64
             bundle: true
     steps:
-      - uses: actions/checkout@v5
-      - name: Set environment
-        run: echo "CASTLE_ENGINE_PATH=$GITHUB_WORKSPACE" >> $GITHUB_ENV
+      - uses: actions/checkout@v6
+        # Using CASTLE_PACK_GHA_DISK_SPACE_SAVE=true assumes that
+        # - we have dir named exactly "castle_game_engine"
+        # - parent dir of it is writeable.
+        # So checkout into castle_game_engine/ subdirectory.
+        with:
+          path: castle_game_engine
 
-      # Not really necessary since this runs on GH-hosted runners that are always cleaned at start.
+      - name: Set environment
+        run: echo "CASTLE_ENGINE_PATH=$GITHUB_WORKSPACE/castle_game_engine" >> $GITHUB_ENV
+
+      # Remove previous output.
+      # Not necessary in practice, since this runs on GH-hosted runners that are
+      # always cleaned at start, but also doesn't hurt.
       - name: Remove previous artifacts
         run: rm -f castle-engine*.zip
 
-      - name: Download bundled FPC
-        if: ${{ matrix.bundle }}
-        uses: robinraju/release-downloader@v1.12
-        with:
-          repository: "castle-engine/cge-fpc"
-          latest: true
-          # Docs suggest we need a wildcard to get all files: https://github.com/marketplace/actions/release-downloader
-          fileName: "*"
+      # No need to download fpc-xxx.zip here anymore,
+      # this is downloaded from pack_release.sh if necessary.
+      # - name: Download bundled FPC
+      #   if: ${{ matrix.bundle }}
+      #   uses: robinraju/release-downloader@v1.12
+      #   with:
+      #     repository: "castle-engine/castle-fpc"
+      #     latest: true
+      #     fileName: "fpc-${{ matrix.os }}-${{ matrix.cpu }}.zip"
 
       - name: Define CGE_PACK_BUNDLE
         if: ${{ matrix.bundle }}
-        run: echo "CGE_PACK_BUNDLE=true" >> $GITHUB_ENV
+        run: echo "CGE_PACK_BUNDLE=yes" >> $GITHUB_ENV
+
+      - name: Define CGE_PACK_GHA_DISK_SPACE_SAVE
+        run: echo "CASTLE_PACK_GHA_DISK_SPACE_SAVE=true" >> $GITHUB_ENV
 
       - name: Pack
-        run: ./tools/internal/pack_release/pack_release.sh ${{ matrix.os }} ${{ matrix.cpu }}
+        run: ./castle_game_engine/tools/internal/pack_release/pack_release.sh ${{ matrix.os }} ${{ matrix.cpu }}
 
       - name: Archive Artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: release-from-docker-${{ matrix.pack-job-name }}
           path: "castle-engine*.zip"

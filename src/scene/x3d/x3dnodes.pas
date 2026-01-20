@@ -255,7 +255,7 @@ type
 
 implementation
 
-uses Math, StrUtils, URIParser,
+uses Math, StrUtils, URIParser, TypInfo,
   CastleTextureFont_Default3d_Sans,
   X3DLoad, CastleInternalZStream, X3DCameraUtils,
   CastleFilesUtils, CastleUriUtils, CastleUnicode, CastleCurves,
@@ -489,6 +489,7 @@ uses Math, StrUtils, URIParser,
 {$I auto_generated_node_helpers/x3dnodes_planesensor.inc}
 {$I auto_generated_node_helpers/x3dnodes_pointlight.inc}
 {$I auto_generated_node_helpers/x3dnodes_pointlight_1.inc}
+{$I auto_generated_node_helpers/x3dnodes_pointproperties.inc}
 {$I auto_generated_node_helpers/x3dnodes_pointset.inc}
 {$I auto_generated_node_helpers/x3dnodes_pointset_1.inc}
 {$I auto_generated_node_helpers/x3dnodes_polyline2d.inc}

@@ -1982,6 +1982,7 @@ begin
   RowSize := PixelSize * Width;
   TmpRow := GetMem(RowSize);
   try
+    if Height <= 2 then Exit; // avoids EIntOverflow for Height = 1
     for Y := 0 to Height div 2 - 1 do
     begin
       Row1 := RowPtr(Y);
@@ -2587,7 +2588,7 @@ end;
 
 type
   { List of TLoadImageEvent methods. }
-  TLoadImageEventList = class({$ifdef FPC}specialize{$endif} TList<TLoadImageEvent>)
+  TLoadImageEventList = class({$ifdef FPC}specialize{$endif} TMethodList<TLoadImageEvent>)
     procedure Execute(var Url: String);
   end;
 

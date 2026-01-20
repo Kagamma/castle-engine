@@ -1013,7 +1013,9 @@ begin
   inherited;
 
   if State.SkinnedAnimatedShape and
-     (State.Skin.InternalUsesShaders) and
+     (State.Skin.InternalMeshCalculation <> mcCpu) and
+     { Checking State.Skin.InternalJointMatrix makes sure that
+       TSkinNode.Update has actually run, so we started some skinned animation. }
      (State.Skin.InternalJointMatrix <> nil) and
      (State.Skin.InternalJointMatrix.Count = State.Skin.FdJoints.Count) and
      (Geometry.SkinWeightsJoints(Weights0, Joints0)) then

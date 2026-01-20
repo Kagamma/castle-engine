@@ -62,7 +62,7 @@ ORIGINAL_CASTLE_ENGINE_PATH="${CASTLE_ENGINE_PATH}"
 # - We make it unique, using process ID, just in case multiple jobs run in parallel.
 # - This cannot be subdirectory of CI workspace (like ${GITHUB_WORKSPACE})
 #   as then we'll have "cp -R ..." fail "we cannot copy directory into itself".
-#   To clean it up, we use bash trap.
+# - To clean it up, we use bash trap.
 TEMP_PARENT="/tmp/castle-engine-release-$$/"
 
 cleanup_temp ()
@@ -84,10 +84,15 @@ check_fpc_version ()
   echo "FPC version: ${FPC_VERSION}"
 
   local REQUIRED_FPC_VERSION='3.2.2'
+  # Raspberry Pi and macOS need now 3.2.3, see
+  # https://github.com/castle-engine/castle-fpc/blob/4ceb9a6472760d0e9d063fd98b6677f26eee8598/build_fpc#L81
+  local REQUIRED_FPC_VERSION_2='3.2.3'
 
   if [ "${CASTLE_PACK_DISABLE_FPC_VERSION_CHECK:-}" '!=' 'true' ]; then
-    if [ "${FPC_VERSION}" '!=' "${REQUIRED_FPC_VERSION}" ]; then
-      echo "pack_release: Expected FPC version ${REQUIRED_FPC_VERSION}, but got ${FPC_VERSION}"
+    if [ "${FPC_VERSION}" '!=' "${REQUIRED_FPC_VERSION}" -a \
+         "${FPC_VERSION}" '!=' "${REQUIRED_FPC_VERSION_2}" \
+       ]; then
+      echo "pack_release: Expected FPC version ${REQUIRED_FPC_VERSION} or ${REQUIRED_FPC_VERSION_2}, but got ${FPC_VERSION}"
       exit 1
     fi
   fi
@@ -109,22 +114,19 @@ check_lazarus_version ()
        "${LAZARUS_VERSION}" '!=' '3.4' -a \
        "${LAZARUS_VERSION}" '!=' '3.5' -a \
        "${LAZARUS_VERSION}" '!=' '3.6' -a \
-       "${LAZARUS_VERSION}" '!=' '3.7' ]; then
+       "${LAZARUS_VERSION}" '!=' '3.7' -a \
+       "${LAZARUS_VERSION}" '!=' '4.4' ]; then
     echo "pack_release: Incorrect Lazarus version to pack release, we have ${LAZARUS_VERSION}"
     exit 1
   fi
 
   # To avoid https://gitlab.com/freepascal.org/lazarus/lazarus/-/merge_requests/291
   # we need Lazarus >= 3.5 on macOS.
-  #
-  # Note that using https://github.com/gcarreno/setup-lazarus with "lazarus-version: stable"
-  # results now in Lazarus version 3.7. This seems to be what the download
-  # https://sourceforge.net/projects/lazarus/files/Lazarus%20macOS%20x86-64/Lazarus%203.6/Lazarus-3.6-macosx-x86_64.pkg/download
-  # reports.
   if [ "`uname -s`" '=' 'Darwin' ]; then
     if [ "${LAZARUS_VERSION}" '!=' '3.5' -a \
          "${LAZARUS_VERSION}" '!=' '3.6' -a \
-         "${LAZARUS_VERSION}" '!=' '3.7' ]; then
+         "${LAZARUS_VERSION}" '!=' '3.7' -a \
+         "${LAZARUS_VERSION}" '!=' '4.4' ]; then
       echo "pack_release: macOS: Incorrect Lazarus version to pack release, we have ${LAZARUS_VERSION}"
       exit 1
     fi
@@ -185,10 +187,11 @@ detect_platform ()
   echo "Using sed: ${SED}" `${SED} --version | head -n 1`
 }
 
-# Compile build tool, put it on $PATH
+# Compile build tool (castle-engine executable), put it on $PATH .
+# Makes it for the *host* OS/CPU, so it's e.g. castle-engine Linux binary
+# if we run on Linux, even if we're cross-compiling for Windows.
 prepare_build_tool ()
 {
-
   if [ "${VERBOSE}" '!=' 'true' ]; then
     CASTLE_FPC_OPTIONS="-vi-"
   fi
@@ -197,7 +200,11 @@ prepare_build_tool ()
   tools/build-tool/castle-engine_compile.sh
   local BIN_TEMP_PATH="${TEMP_PARENT}bin/"
   mkdir -p "${BIN_TEMP_PATH}"
-  cp "tools/build-tool/castle-engine${HOST_EXE_EXTENSION}" "${BIN_TEMP_PATH}"
+  # Below move, not copy, the castle-engine[.exe] binary.
+  # This way we avoid packaging host-specific castle-engine[.exe] binary,
+  # e.g. we don't want to package Linux castle-engine into Windows release
+  # just because we built it on Linux.
+  mv "tools/build-tool/castle-engine${HOST_EXE_EXTENSION}" "${BIN_TEMP_PATH}"
   export PATH="${BIN_TEMP_PATH}:${PATH}"
 
   # sanity checks
@@ -239,15 +246,28 @@ lazbuild_twice ()
   fi
 }
 
+# unzip $@
+do_unzip ()
+{
+  # Using -q avoids long output in CI logs.
+  unzip -q "$@"
+}
+
 # Download URL $1 into filename $2.
 download ()
 {
-  # Both wget and curl should work OK.
-  # But on my Cygwin (possibly some problem specific on Michalis Windows machine), wget fails with "GnuTLS: The request is invalid."
-  if which cygpath.exe > /dev/null; then
-    curl "$1" > "$2"
+  # prefer wget, downloading using curl releases from GH like
+  #   curl https://github.com/castle-engine/castle-fpc/releases/download/snapshot/fpc-win64-x86_64.zip
+  #   curl https://github.com/castle-engine/castle-engine/releases/download/v7.0-alpha.3/castle-engine-7.0-alpha.3-darwin-x86_64.zip
+  # seems to fail (with no relevant message, also in -v, curl just stops
+  # downloaded nothing).
+
+  if which wget > /dev/null 2>&1; then
+    # Using --progress=bar:force:noscroll looks nicer in CI logs.
+    wget  --progress=bar:force:noscroll \
+      "$1" --output-document "$2"
   else
-    wget "$1" --output-document "$2"
+    curl "$1" > "$2"
   fi
 }
 
@@ -272,13 +292,13 @@ add_external_tool ()
   mkdir -p "${TEMP_PATH_TOOL}"
   cd "${TEMP_PATH_TOOL}"
   download "https://codeload.github.com/castle-engine/${GITHUB_NAME}/zip/${TOOL_BRANCH_NAME}" "${GITHUB_NAME}".zip
-  unzip "${GITHUB_NAME}".zip
+  do_unzip "${GITHUB_NAME}".zip
   cd "${GITHUB_NAME}-${TOOL_BRANCH_NAME}"
 
   # special exceptional addition for pascal-language-server, that has jsonstream as a submodule
   if [ "${GITHUB_NAME}" = 'pascal-language-server' ]; then
     download https://codeload.github.com/Isopod/jsonstream/zip/master jsonstream.zip
-    unzip jsonstream.zip
+    do_unzip jsonstream.zip
     rm -Rf server/deps/jsonstream # zip contains empty dir with it
     mv jsonstream-master server/deps/jsonstream
     lazbuild_twice $CASTLE_LAZBUILD_OPTIONS server/deps/jsonstream/pascal/package/jsonstreampkg.lpk
@@ -361,6 +381,11 @@ cge_clean_all ()
   # Made by "make examples-laz", not cleaned up by "make clean".
   rm -f examples/audio/test_sound_source_allocator/mainf.lrs \
         examples/lazarus/model_3d_with_2d_controls/model_3d_with_2d_controls.obj
+
+  # Sometimes made by "make prepare-examples", not cleaned up by "make clean"
+  # (as may contain user data, API keys, that is also not auto-generated).
+  rm -f examples/network/ask_openai_assistant/code/openai_config.inc \
+        examples/network/random_image_from_unsplash/code/unsplash_secrets.inc
 }
 
 # Prepare directory with precompiled CGE.
@@ -370,9 +395,23 @@ cge_clean_all ()
 # - $2: CPU
 #
 # Output:
-# - $TEMP_PATH: absolute directory that contains castle_game_engine subdir
-#   (guaranteed to end with path delimiter,
+#
+# - $TEMP_PATH: absolute directory that contains various temp stuff.
+#   Clean it afterwards.
+#
+# - $CASTLE_ENGINE_PATH: absolute path to dir with compiled engine,
+#   always named 'castle_game_engine',
+#   ready to be packed in to zip / installer etc.
+#
+#   Note that, depending on $CASTLE_PACK_GHA_DISK_SPACE_SAVE,
+#   this is either:
+#   - transformed original CASTLE_ENGINE_PATH
+#     (when $CASTLE_PACK_GHA_DISK_SPACE_SAVE=true)
+#   - or subdirectory of $TEMP_PATH, named castle_game_engine
+#
+#   (This CASTLE_ENGINE_PATH is guaranteed to end with path delimiter,
 #   i.e. slash on Unix or backslash on Windows).
+#
 # - $ARCHIVE_NAME_BUNDLE: empty string or '-bundle',
 #   depending on whether CGE_PACK_BUNDLE was defined.
 pack_platform_dir ()
@@ -387,6 +426,10 @@ pack_platform_dir ()
   # restore CGE path, otherwise it points to a temporary (and no longer existing)
   # dir after one execution of do_pack_platform
   export CASTLE_ENGINE_PATH="${ORIGINAL_CASTLE_ENGINE_PATH}"
+  if [ ! -d "${CASTLE_ENGINE_PATH}" ]; then
+    echo "Error: CASTLE_ENGINE_PATH does not point to a valid directory: ${CASTLE_ENGINE_PATH}."
+    exit 1
+  fi
 
   case "$OS" in
     win32|win64) local EXE_EXTENSION='.exe' ;;
@@ -419,7 +462,32 @@ pack_platform_dir ()
   fi
   mkdir -p "$TEMP_PATH"
   local TEMP_PATH_CGE="${TEMP_PATH}castle_game_engine/"
-  cp -R "${CASTLE_ENGINE_PATH}" "${TEMP_PATH_CGE}"
+
+  if [ "${CASTLE_PACK_GHA_DISK_SPACE_SAVE:-}" = 'true' ]; then
+    # Instead of copying, which uses 2x disk space, just reuse existing dir.
+    # This dir will be cleaned and transformed into release contents.
+    # So the CASTLE_PACK_GHA_DISK_SPACE_SAVE is only good to make 1 release
+    # (for 1 OS/CPU) after which the directory should be discarded,
+    # which happens when we use GitHub Actions + GH-hosted runner
+    # with just 1 platform per job.
+    TEMP_PATH_CGE="${CASTLE_ENGINE_PATH}/"
+  else
+    cp -R "${CASTLE_ENGINE_PATH}" "${TEMP_PATH_CGE}"
+  fi
+
+  # Do some checks:
+  # - TEMP_PATH_CGE, determined above,
+  #   must end with / . It will be used for new CASTLE_ENGINE_PATH
+  #   which we gaurantee ends with / .
+  # - TEMP_PATH_CGE last subdir must be castle_game_engine .
+  if [ "`basename \"${TEMP_PATH_CGE}\"`" '!=' 'castle_game_engine' ]; then
+    echo "Error: TEMP_PATH_CGE last subdir must be castle_game_engine. But TEMP_PATH_CGE is ${TEMP_PATH_CGE}"
+    exit 1
+  fi
+  if [ "${TEMP_PATH_CGE: -1}" '!=' '/' ]; then
+    echo "Error: TEMP_PATH_CGE must end with /. But TEMP_PATH_CGE is ${TEMP_PATH_CGE}"
+    exit 1
+  fi
 
   cd "${TEMP_PATH_CGE}"
 
@@ -545,15 +613,30 @@ pack_platform_dir ()
 
   # Add bundled tools (FPC)
   ARCHIVE_NAME_BUNDLE=''
-  if [ "${CGE_PACK_BUNDLE:-}" == 'yes' ]; then
-    cd "${TEMP_PATH_CGE}"tools/contrib/
-    unzip "${ORIGINAL_CASTLE_ENGINE_PATH}/fpc-${OS}-${CPU}.zip"
-    ARCHIVE_NAME_BUNDLE='-bundle'
-    mv "${TEMP_PATH_CGE}"bin/fpc-cge"${EXE_EXTENSION}" "${TEMP_PATH_CGE}"tools/contrib/fpc/bin
-  else
-    # remove useless fpc-cge in this case
-    rm -f "${TEMP_PATH_CGE}"tools/contrib/fpc/bin/fpc-cge"${EXE_EXTENSION}"
-  fi
+  case "${CGE_PACK_BUNDLE:-}" in
+    'yes')
+      cd "${TEMP_PATH_CGE}"tools/contrib/
+      # gh release download --repo castle-engine/castle-fpc --pattern "fpc-${OS}-${CPU}.zip"
+      # Better than "gh", use wget / curl (in "download" bash function) as it doesn't require GH_TOKEN.
+      download https://github.com/castle-engine/castle-fpc/releases/download/snapshot/fpc-"${OS}"-"${CPU}".zip \
+        fpc-dist.zip
+      do_unzip fpc-dist.zip
+      rm -f fpc-dist.zip # remove as soon as no longer needed, to save disk space, important for GHA on GH-hosted runners
+      ARCHIVE_NAME_BUNDLE='-bundle'
+      mv "${TEMP_PATH_CGE}"bin/fpc-cge"${EXE_EXTENSION}" "${TEMP_PATH_CGE}"tools/contrib/fpc/bin
+      ;;
+    'no'|'')
+      # remove useless fpc-cge in this case
+      rm -f "${TEMP_PATH_CGE}"tools/contrib/fpc/bin/fpc-cge"${EXE_EXTENSION}"
+      ;;
+    *)
+      # Clearly fail when CGE_PACK_BUNDLE is invalid, to avoid situation
+      # that bundle releases are silently not updated, see
+      # https://forum.castle-engine.io/t/cant-unpack-latest-release-of-cge/2052/2
+      echo "Unknown CGE_PACK_BUNDLE value: ${CGE_PACK_BUNDLE}"
+      exit 1
+      ;;
+  esac
 }
 
 # Prepare zip with precompiled CGE.
@@ -571,10 +654,23 @@ pack_platform_zip ()
 
   local ARCHIVE_NAME="castle-engine-${CGE_VERSION}-${OS}-${CPU}${ARCHIVE_NAME_BUNDLE}.zip"
 
-  cd "${TEMP_PATH}"
+  cd "${CASTLE_ENGINE_PATH}"/..
   rm -f "${ARCHIVE_NAME}"
   zip -r "${ARCHIVE_NAME}" castle_game_engine/
-  mv -f "${ARCHIVE_NAME}" "${OUTPUT_DIRECTORY}"
+
+  # move ARCHIVE_NAME to OUTPUT_DIRECTORY
+  local CURRENT_DIRECTORY=`pwd`
+  if which cygpath.exe > /dev/null; then
+    CURRENT_DIRECTORY="`cygpath --mixed \"${CURRENT_DIRECTORY}\"`"
+  fi
+  # Do not try to move if archive is already in OUTPUT_DIRECTORY.
+  # This can happen when CASTLE_PACK_GHA_DISK_SPACE_SAVE=true,
+  # then zip is not created in /tmp/... but in parent of castle_game_engine,
+  # which may be exactly OUTPUT_DIRECTORY.
+  if [ "${CURRENT_DIRECTORY}" '!=' "${OUTPUT_DIRECTORY}" ]; then
+    mv -f "${ARCHIVE_NAME}" "${OUTPUT_DIRECTORY}"
+  fi
+
   # seems to sometimes fail with "rm: fts_read failed: No such file or directory" on GH hosted windows runner
   set +e
   rm -Rf "${TEMP_PATH}"
@@ -600,13 +696,18 @@ pack_windows_installer ()
     INNO_SETUP_CLI='c:/Program Files (x86)/Inno Setup 6/iscc.exe'
   fi
 
+  # Remove trailing slash from CASTLE_ENGINE_PATH, to be safe it's good for
+  # MyAppSrcDir. This is just paranoid, possibly original CASTLE_ENGINE_PATH
+  # would be handled OK as well.
+  CASTLE_ENGINE_PATH_STRIP_FINAL_SLASH="${CASTLE_ENGINE_PATH%/}"
+
   # See https://jrsoftware.org/ishelp/index.php?topic=compilercmdline
   # and https://jrsoftware.org/ispphelp/index.php?topic=isppcc (for preprocessor additional options).
   "${INNO_SETUP_CLI}" \
-    "${ORIGINAL_CASTLE_ENGINE_PATH}/tools/internal/pack_release/cge-windows-setup.iss" \
+    "${CASTLE_ENGINE_PATH}/tools/internal/pack_release/cge-windows-setup.iss" \
     "/O${OUTPUT_DIRECTORY}" \
     "/F${ARCHIVE_NAME}" \
-    "/DMyAppSrcDir=${TEMP_PATH}castle_game_engine" \
+    "/DMyAppSrcDir=${CASTLE_ENGINE_PATH_STRIP_FINAL_SLASH}" \
     "/DMyAppVersion=${CGE_VERSION}"
 
   # cleanup to save disk space
