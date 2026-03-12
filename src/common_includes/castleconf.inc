@@ -37,16 +37,14 @@
 
 { Compiler version check ----------------------------------------------------- }
 
-{$ifndef PASDOC} // Avoid Pasdoc warnings, as Pasdoc cannot calculate $if below
-  {$ifdef FPC}
-    {$if defined(VER2) or defined(VER3_0)}
-      {$fatal You need FPC version >= 3.2.0 to compile Castle Game Engine. See https://castle-engine.io/supported_compilers.php}
-    {$endif}
-  {$else}
-    // See http://delphi.wikia.com/wiki/CompilerVersion_Constant
-    {$if CompilerVersion < 32}
-      {$message fatal 'Use Delphi >= 10.2.1 to compile Castle Game Engine. See https://castle-engine.io/delphi'}
-    {$endif}
+{$ifdef FPC}
+  {$if defined(VER2) or defined(VER3_0)}
+    {$fatal You need FPC version >= 3.2.0 to compile Castle Game Engine. See https://castle-engine.io/supported_compilers.php}
+  {$endif}
+{$else}
+  // See http://delphi.wikia.com/wiki/CompilerVersion_Constant
+  {$if CompilerVersion < 32}
+    {$message fatal 'Use Delphi >= 10.2.1 to compile Castle Game Engine. See https://castle-engine.io/delphi'}
   {$endif}
 {$endif}
 
@@ -169,10 +167,8 @@
   Delphi, even when Extended = Double, still treats Extended
   like a different type, for choosing overloads.
   It even requires Extended overloads e.g. for MinVar(Extended, ...). }
-{$ifndef PASDOC}
-  {$if not (defined(FPC) and defined(EXTENDED_EQUALS_DOUBLE))}
-    {$define EXTENDED_OVERLOADS}
-  {$endif}
+{$if not (defined(FPC) and defined(EXTENDED_EQUALS_DOUBLE))}
+  {$define EXTENDED_OVERLOADS}
 {$endif}
 
 { We used to disable inline functions/methods when compiling from
@@ -220,23 +216,13 @@
 { If GENERICS_CONSTREF is defined, then various routines used with Generics.Collections
   (like callbacks we pass to TComparer, or OnNotify callback or Notify virtual method)
   should have "constref" parameter, not "const".
-  This was the case of FPC<= 3.2.0, FPC changed it in
-  https://gitlab.com/freepascal.org/fpc/source/-/commit/693491048bf2c6f9122a0d8b044ad0e55382354d }
+  This was the case in FPC <= 3.2.0.
+  FPC changed constref->const in
+  https://gitlab.com/freepascal.org/fpc/source/-/commit/693491048bf2c6f9122a0d8b044ad0e55382354d
+  and the change is present in FPC fixes branch 3.2.3 and later 3.2.4(rc1). }
 {$ifdef VER3_0} {$define GENERICS_CONSTREF} {$endif}
-{$ifdef VER3_2} {$define GENERICS_CONSTREF} {$endif}
-{$if defined(VER3_2_3) or
-     defined(VER3_2_4) or
-     defined(VER3_2_5) or
-     defined(VER3_2_6)}
-  { FPC 3.2.3 (fixes_3_2 branch, as of 2023-12-23) no longer uses "constref".
-    Confirmed on Linux/Arm32, Linux/Arm64(Aarch64), Linux/x86_64,
-    see also sources:
-    https://gitlab.com/freepascal.org/fpc/source/-/blob/fixes_3_2/packages/rtl-generics/src/generics.collections.pas?ref_type=heads.
-
-    2025-06-24, testing FPC 3.2.4 release candidate, it also doesn't use
-    "constref" in Generics.Collections. }
-  {$undef GENERICS_CONSTREF}
-{$endif}
+{$ifdef VER3_2_0} {$define GENERICS_CONSTREF} {$endif}
+{$ifdef VER3_2_2} {$define GENERICS_CONSTREF} {$endif}
 
 { FPC 3.2.3 on 32-bit ARM (Raspberry Pi) has wrong List.IndexOf by default
   (due to constref / const changes in the Generics.Collections ?), workaround.
@@ -290,15 +276,13 @@
 {$ifdef VER3_0} {$undef HAS_SEPARATE_IOS} {$endif}
 {$ifdef VER3_2_0} {$undef HAS_SEPARATE_IOS} {$endif}
 
-{$ifndef PASDOC} // Avoid Pasdoc warnings, as Pasdoc cannot calculate $if below
-  {$ifdef HAS_SEPARATE_IOS}
-    {$if defined(iPHONESIM) or defined(iOS)}
-      {$define CASTLE_IOS}
-    {$endif}
-  {$else}
-    {$if defined(iPHONESIM) or (defined(DARWIN) and (defined(CPUARM) or defined(CPUAARCH64)))}
-      {$define CASTLE_IOS}
-    {$endif}
+{$ifdef HAS_SEPARATE_IOS}
+  {$if defined(iPHONESIM) or defined(iOS)}
+    {$define CASTLE_IOS}
+  {$endif}
+{$else}
+  {$if defined(iPHONESIM) or (defined(DARWIN) and (defined(CPUARM) or defined(CPUAARCH64)))}
+    {$define CASTLE_IOS}
   {$endif}
 {$endif}
 
@@ -518,22 +502,19 @@
     automatically uses this flag when necessary.
 }
 
-{$ifndef PASDOC} // Avoid Pasdoc warnings, as Pasdoc cannot calculate $if below
+{ On most platforms, try dynamic libpng (will fallback on FpImage at runtime).
+  Except on platforms where we know it would not work. }
+{$if not (defined(CASTLE_IOS) or defined(CASTLE_NINTENDO_SWITCH))}
+  {$define CASTLE_PNG_DYNAMIC}
+{$endif}
 
-  { On most platforms, try dynamic libpng (will fallback on FpImage at runtime).
-    Except on platforms where we know it would not work. }
-  {$if not (defined(CASTLE_IOS) or defined(CASTLE_NINTENDO_SWITCH))}
-    {$define CASTLE_PNG_DYNAMIC}
-  {$endif}
+{$if defined(CASTLE_PNG_DYNAMIC) and defined(CASTLE_PNG_STATIC)}
+  {$error Cannot define both CASTLE_PNG_DYNAMIC and CASTLE_PNG_STATIC. Define at most one of them.}
+{$endif}
 
-  {$if defined(CASTLE_PNG_DYNAMIC) and defined(CASTLE_PNG_STATIC)}
-    {$error Cannot define both CASTLE_PNG_DYNAMIC and CASTLE_PNG_STATIC. Define at most one of them.}
-  {$endif}
-
-  {$if defined(CASTLE_DISABLE_LIBPNG)}
-    {$undef CASTLE_PNG_DYNAMIC}
-    {$undef CASTLE_PNG_STATIC}
-  {$endif}
+{$if defined(CASTLE_DISABLE_LIBPNG)}
+  {$undef CASTLE_PNG_DYNAMIC}
+  {$undef CASTLE_PNG_STATIC}
 {$endif}
 
 { LIBPNG_CDECL is relevant only if we use libpng (dynamic or static).

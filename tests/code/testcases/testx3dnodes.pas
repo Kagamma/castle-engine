@@ -148,6 +148,7 @@ type
     procedure TestRouteNodesPositions;
     procedure TestNoFailMultiTexture;
     procedure TestNodeDestructionNotificationList;
+    procedure TestGltfUnusedMaterials;
   end;
 
 implementation
@@ -360,7 +361,7 @@ procedure TTestX3DNodes.TestParseSaveToFile;
 
       Node := LoadX3DClassic(FileName, false);
       NewFile := InclPathDelim(GetTempDirectory) + 'test_castle_game_engine.x3dv';
-      SaveNode(Node, NewFile, ApplicationName, '');
+      SaveNode(Node, NewFile);
 
       Second := TX3DTokenInfoList.Create;
       Second.ReadFromFile(NewFile);
@@ -1354,6 +1355,7 @@ procedure TTestX3DNodes.TestRootNodeMeta;
 var
   Node, NewNode: TX3DRootNode;
   TempStream: TMemoryStream;
+  TempSaveOptions: TCastleSceneSaveOptions;
 begin
   {$ifdef WASI} // TODO: web: why fails here?
   AbortTest;
@@ -1386,7 +1388,7 @@ begin
     AssertTrue(Node.Meta['generator'] = 'testgenerator and & weird '' chars " test');
 
     { save and load again }
-    SaveNode(Node, TempStream, 'model/x3d+vrml', '', '');
+    SaveNode(Node, TempStream, 'model/x3d+vrml');
     FreeAndNil(Node);
     TempStream.Position := 0;
     Node := LoadX3DClassicStream(TempStream);
@@ -1421,7 +1423,14 @@ begin
 
     { save and load again. During Save3D tweak meta generator and source }
     TempStream.Position := 0;
-    SaveNode(Node, TempStream, 'model/x3d+vrml', 'newgenerator', 'newsource');
+    begin
+      TempSaveOptions := TCastleSceneSaveOptions.Create(nil);
+      try
+        TempSaveOptions.Generator := 'newgenerator';
+        TempSaveOptions.Source := 'newsource';
+        SaveNode(Node, TempStream, 'model/x3d+vrml', TempSaveOptions);
+      finally FreeAndNil(TempSaveOptions) end;
+    end;
     FreeAndNil(Node);
     TempStream.Position := 0;
     Node := LoadX3DClassicStream(TempStream);
@@ -1444,7 +1453,7 @@ begin
 
     { save and load again, this time going through XML }
     TempStream.Position := 0;
-    SaveNode(Node, TempStream, 'model/x3d+xml', '', '');
+    SaveNode(Node, TempStream, 'model/x3d+xml');
     FreeAndNil(Node);
     TempStream.Position := 0;
     Node := LoadX3DXmlStream(TempStream);
@@ -1497,7 +1506,7 @@ begin
     { save to XML }
     TempStream.Position := 0;
     TempStream.Size := 0;
-    SaveNode(Node, TempStream, 'model/x3d+xml', '', '');
+    SaveNode(Node, TempStream, 'model/x3d+xml');
     FreeAndNil(Node);
 
     { check that loading it back results in 3.1 }
@@ -1510,7 +1519,7 @@ begin
     { save to clasic }
     TempStream.Position := 0;
     TempStream.Size := 0;
-    SaveNode(Node, TempStream, 'model/x3d+vrml', '', '');
+    SaveNode(Node, TempStream, 'model/x3d+vrml');
     FreeAndNil(Node);
 
     { check that loading it back results in 3.1 }
@@ -1530,7 +1539,7 @@ begin
     { save to XML }
     TempStream.Position := 0;
     TempStream.Size := 0;
-    SaveNode(Node, TempStream, 'model/x3d+xml', '', '');
+    SaveNode(Node, TempStream, 'model/x3d+xml');
     FreeAndNil(Node);
 
     { check that loading it back results in X3D (4.0 now)
@@ -1551,7 +1560,7 @@ begin
     { save to classic }
     TempStream.Position := 0;
     TempStream.Size := 0;
-    SaveNode(Node, TempStream, 'model/vrml', '', '');
+    SaveNode(Node, TempStream, 'model/vrml');
     FreeAndNil(Node);
 
     { check that loading it back results in 2.0
@@ -1573,7 +1582,7 @@ begin
     { save to classic }
     TempStream.Position := 0;
     TempStream.Size := 0;
-    SaveNode(Node, TempStream, 'model/x3d+vrml', '', '');
+    SaveNode(Node, TempStream, 'model/x3d+vrml');
     FreeAndNil(Node);
 
     { check that loading it back results in X3D (4.0 now)
@@ -1658,7 +1667,7 @@ begin
 
     TempStream.Position := 0;
     TempStream.Size := 0;
-    SaveNode(Node, TempStream, 'model/x3d+vrml', '', '');
+    SaveNode(Node, TempStream, 'model/x3d+vrml');
     FreeAndNil(Node);
 
     //Writeln(StreamToString(TempStream)); // useful to debug
@@ -1669,7 +1678,7 @@ begin
 
     TempStream.Position := 0;
     TempStream.Size := 0;
-    SaveNode(Node, TempStream, 'model/x3d+xml', '', '');
+    SaveNode(Node, TempStream, 'model/x3d+xml');
     FreeAndNil(Node);
 
     //Writeln(StreamToString(TempStream)); // useful to debug
@@ -2487,14 +2496,21 @@ procedure TTestX3DNodes.TestConversionDot;
     Node: TX3DRootNode;
     OutputStr, ExpectedOutputStr: String;
     OutputStream: TStringStream;
+    TempSaveOptions: TCastleSceneSaveOptions;
   begin
     { Convert Node to MIME-type OutputMime, save result in OutputStr }
     Node := LoadNode(InputUrl);
     try
       OutputStream := TStringStream.Create('');
       try
-        SaveNode(Node, OutputStream,
-          OutputMime, 'castle_tester', ExtractURIName(InputUrl));
+        begin
+          TempSaveOptions := TCastleSceneSaveOptions.Create(nil);
+          try
+            TempSaveOptions.Generator := 'castle_tester';
+            TempSaveOptions.Source := ExtractURIName(InputUrl);
+            SaveNode(Node, OutputStream, OutputMime, TempSaveOptions);
+          finally FreeAndNil(TempSaveOptions) end;
+        end;
         OutputStr := OutputStream.DataString;
         // Make sure it has Unix line-endings
         StringReplaceAllVar(OutputStr, #13, '', false);
@@ -2601,7 +2617,7 @@ procedure TTestX3DNodes.TestConversionPrecision;
     try
       OutputStream := TStringStream.Create('');
       try
-        SaveNode(Node, OutputStream, OutputMime, '', '');
+        SaveNode(Node, OutputStream, OutputMime);
         // useful to generate correct output (of course you have to manually check is it correct)
         //StringToFile(OutputModelDefaultPrecision, OutputStream.DataString);
         {
@@ -2622,7 +2638,7 @@ procedure TTestX3DNodes.TestConversionPrecision;
 
         OutputStream := TStringStream.Create('');
         try
-          SaveNode(Node, OutputStream, OutputMime, '', '');
+          SaveNode(Node, OutputStream, OutputMime);
           // useful to generate correct output (of course you have to manually check is it correct)
           //StringToFile(OutputModelPrecision3, OutputStream.DataString);
           AssertEqualsIgnoreNewlines(
@@ -3090,7 +3106,7 @@ begin
       AssertMatrixEquals(Matrix, GoodMatrix, 0.01);
 
       // save and load again
-      SaveNode(RootNode, Stream, 'model/vrml', '', '');
+      SaveNode(RootNode, Stream, 'model/vrml');
     finally FreeAndNil(RootNode) end;
 
     Stream.Position := 0;
@@ -3144,7 +3160,7 @@ begin
       GoodMatrix.Columns[3] := Vector4(13, 14, 15, 16);
       AssertMatrixEquals(Matrix, GoodMatrix, 0.01);
 
-      SaveNode(RootNode, Stream, 'model/vrml', '', '');
+      SaveNode(RootNode, Stream, 'model/vrml');
     finally FreeAndNil(RootNode) end;
 
     Stream.Position := 0;
@@ -3199,7 +3215,7 @@ begin
       GoodMatrix.Rows[2] := Vector4(9, 10, 11, 12);
       GoodMatrix.Rows[3] := Vector4(13, 14, 15, 16);
       AssertMatrixEquals(Matrix, GoodMatrix, 0.01);
-      SaveNode(RootNode, Stream, 'model/x3d+vrml', '', '');
+      SaveNode(RootNode, Stream, 'model/x3d+vrml');
     finally FreeAndNil(RootNode) end;
 
     Stream.Position := 0;
@@ -3254,7 +3270,7 @@ begin
       GoodMatrix.Rows[2] := Vector4(9, 10, 11, 12);
       GoodMatrix.Rows[3] := Vector4(13, 14, 15, 16);
       AssertMatrixEquals(Matrix, GoodMatrix, 0.01);
-      SaveNode(RootNode, Stream, 'model/x3d+xml', '', '');
+      SaveNode(RootNode, Stream, 'model/x3d+xml');
     finally FreeAndNil(RootNode) end;
 
     Stream.Position := 0;
@@ -3368,11 +3384,11 @@ begin
     ApplicationProperties.OnWarning.Add({$ifdef FPC}@{$endif}OnWarningRaiseException);
     try
       TempStream := TMemoryStream.Create;
-      SaveNode(Root, TempStream, 'model/x3d+vrml', '', '');
+      SaveNode(Root, TempStream, 'model/x3d+vrml');
       FreeAndNil(TempStream);
 
       TempStream := TMemoryStream.Create;
-      SaveNode(Root, TempStream, 'model/x3d+xml', '', '');
+      SaveNode(Root, TempStream, 'model/x3d+xml');
       FreeAndNil(TempStream);
     finally
       ApplicationProperties.OnWarning.Remove({$ifdef FPC}@{$endif}OnWarningRaiseException);
@@ -3461,6 +3477,30 @@ begin
   C1.Free;
   C2.Free;
   C3.Free;
+end;
+
+procedure TTestX3DNodes.TestGltfUnusedMaterials;
+var
+  Root: TX3DRootNode;
+  TempStream: TMemoryStream;
+begin
+  Root := LoadNode('castle-data:/gltf/khronos/SheenChair.glb');
+  try
+    // save to temporary stream, just to check that saving works without errors
+    TempStream := TMemoryStream.Create;
+    try
+      SaveNode(Root, TempStream, 'model/x3d+xml');
+    finally FreeAndNil(TempStream) end;
+  finally FreeAndNil(Root) end;
+
+  Root := LoadNode('castle-data:/gltf/khronos/chair_inline.x3d');
+  try
+    // save to temporary stream, just to check that saving works without errors
+    TempStream := TMemoryStream.Create;
+    try
+      SaveNode(Root, TempStream, 'model/x3d+xml');
+    finally FreeAndNil(TempStream) end;
+  finally FreeAndNil(Root) end;
 end;
 
 initialization
